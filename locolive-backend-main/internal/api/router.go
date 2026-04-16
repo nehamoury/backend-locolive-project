@@ -9,7 +9,7 @@ func (server *Server) setupRouter() {
 	router := gin.Default()
 
 	// CORS Middleware
-	router.Use(corsMiddleware())
+	router.Use(corsMiddleware(server.config.FrontendURL))
 
 	// Enable gzip compression (70% bandwidth reduction)
 	router.Use(gzip.Gzip(gzip.DefaultCompression))

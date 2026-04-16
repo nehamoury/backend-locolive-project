@@ -94,15 +94,35 @@ func adminMiddleware(server *Server) gin.HandlerFunc {
 }
 
 // corsMiddleware handles the CORS middleware
-func corsMiddleware() gin.HandlerFunc {
+func corsMiddleware(frontendURL string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Handle standard CORS for all requests including WebSocket upgrades
-		origin := c.Request.Header.Get("Origin")
-		if origin != "" {
-			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
-		} else {
-			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		// Allowed origins for CORS
+		allowedOrigins := map[string]bool{
+			"http://localhost:5173": true, // Vite dev server
+			"http://localhost:3000": true, // Alternative dev port
+			"http://localhost:8080": true, // Backend serving frontend
+			"http://127.0.0.1:5173": true, // Localhost alternative
+			"http://127.0.0.1:3000": true, // Localhost alternative
+			"http://127.0.0.1:8080": true, // Localhost alternative
 		}
+
+		// Add production frontend URL if configured
+		if frontendURL != "" {
+			allowedOrigins[frontendURL] = true
+		}
+
+		origin := c.Request.Header.Get("Origin")
+		if allowedOrigins[origin] {
+			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+		} else if origin == "" {
+			// For requests without origin (same-origin requests)
+			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+		} else {
+			// For disallowed origins, still set a generic header
+			// This prevents CORS errors but restricts actual access
+			c.Writer.Header().Set("Access-Control-Allow-Origin", "")
+		}
+
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE")

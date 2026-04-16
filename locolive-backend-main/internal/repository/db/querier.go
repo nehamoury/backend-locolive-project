@@ -81,6 +81,7 @@ type Querier interface {
 	DeletePasswordResetByToken(ctx context.Context, token string) error
 	DeletePost(ctx context.Context, arg DeletePostParams) error
 	DeletePostComment(ctx context.Context, arg DeletePostCommentParams) (uuid.UUID, error)
+	DeleteReel(ctx context.Context, arg DeleteReelParams) error
 	DeleteReelComment(ctx context.Context, arg DeleteReelCommentParams) (uuid.UUID, error)
 	// Admin: Delete story
 	DeleteStory(ctx context.Context, id uuid.UUID) error

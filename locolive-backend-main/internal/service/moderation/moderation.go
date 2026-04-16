@@ -5,9 +5,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/google/uuid"
 	"privacy-social-backend/internal/repository"
 	"privacy-social-backend/internal/repository/db"
+
+	"github.com/google/uuid"
 )
 
 type Service struct {
@@ -20,7 +21,7 @@ func NewService(store repository.Store) *Service {
 	// Simple initial list of toxic keywords
 	// In production, this would be a much larger list or an external AI call
 	initialKeywords := []string{"spam", "scam", "offensive_word1", "offensive_word2", "toxic", "abuse"}
-	
+
 	return &Service{
 		store:    store,
 		keywords: initialKeywords,

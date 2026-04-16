@@ -966,6 +966,20 @@ func (mr *MockStoreMockRecorder) DeletePostComment(ctx, arg any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeletePostComment", reflect.TypeOf((*MockStore)(nil).DeletePostComment), ctx, arg)
 }
 
+// DeleteReel mocks base method.
+func (m *MockStore) DeleteReel(ctx context.Context, arg db.DeleteReelParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteReel", ctx, arg)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteReel indicates an expected call of DeleteReel.
+func (mr *MockStoreMockRecorder) DeleteReel(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteReel", reflect.TypeOf((*MockStore)(nil).DeleteReel), ctx, arg)
+}
+
 // DeleteReelComment mocks base method.
 func (m *MockStore) DeleteReelComment(ctx context.Context, arg db.DeleteReelCommentParams) (uuid.UUID, error) {
 	m.ctrl.T.Helper()

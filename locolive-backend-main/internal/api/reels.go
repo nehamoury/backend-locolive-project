@@ -608,3 +608,25 @@ func (server *Server) deleteReelComment(ctx *gin.Context) {
 	_ = server.store.DecrementReelComments(ctx, reelID)
 	ctx.JSON(http.StatusOK, gin.H{"message": "comment deleted"})
 }
+
+// deleteReel deletes a reel the user owns.
+func (server *Server) deleteReel(ctx *gin.Context) {
+	reelID, err := uuid.Parse(ctx.Param("id"))
+	if (err != nil) {
+		ctx.JSON(http.StatusBadRequest, errorResponse(fmt.Errorf("invalid reel id")))
+		return
+	}
+
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+
+	err = server.store.DeleteReel(ctx, db.DeleteReelParams{
+		ID:     reelID,
+		UserID: authPayload.UserID,
+	})
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"message": "reel deleted"})
+}

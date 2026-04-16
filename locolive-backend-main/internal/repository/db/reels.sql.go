@@ -685,3 +685,17 @@ func (q *Queries) UnsaveReel(ctx context.Context, arg UnsaveReelParams) error {
 	_, err := q.db.ExecContext(ctx, unsaveReel, arg.ReelID, arg.UserID)
 	return err
 }
+
+const deleteReel = `-- name: DeleteReel :exec
+DELETE FROM reels WHERE id = $1 AND user_id = $2
+`
+
+type DeleteReelParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) DeleteReel(ctx context.Context, arg DeleteReelParams) error {
+	_, err := q.db.ExecContext(ctx, deleteReel, arg.ID, arg.UserID)
+	return err
+}

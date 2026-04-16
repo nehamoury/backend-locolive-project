@@ -125,3 +125,6 @@ RETURNING reel_id;
 
 -- name: DecrementReelComments :exec
 UPDATE reels SET comments_count = GREATEST(0, comments_count - 1) WHERE id = $1;
+
+-- name: DeleteReel :exec
+DELETE FROM reels WHERE id = $1 AND user_id = $2;

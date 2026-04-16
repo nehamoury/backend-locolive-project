@@ -1,0 +1,5 @@
+DROP TABLE IF EXISTS group_members;
+DROP TABLE IF EXISTS groups;
+ALTER TABLE messages DROP CONSTRAINT IF EXISTS chk_receiver_or_group;
+ALTER TABLE messages DROP COLUMN IF EXISTS group_id;
+ALTER TABLE messages ALTER COLUMN receiver_id SET NOT NULL;

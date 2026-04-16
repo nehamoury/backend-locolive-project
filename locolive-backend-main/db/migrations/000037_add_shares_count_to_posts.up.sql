@@ -1,0 +1,1 @@
+ALTER TABLE posts ADD COLUMN shares_count INT NOT NULL DEFAULT 0;

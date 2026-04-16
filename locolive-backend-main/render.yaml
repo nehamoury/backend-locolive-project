@@ -1,0 +1,41 @@
+services:
+  - type: web
+    name: locolive-backend
+    runtime: docker
+    repo: https://github.com/appnitysoftwares/locolive-backend # PLEASE UPDATE THIS
+    plan: free
+    envVars:
+      - key: DB_SOURCE
+        fromDatabase:
+          name: locolive-db
+          property: connectionString
+      - key: REDIS_ADDRESS
+        fromService:
+          type: redis
+          name: locolive-redis
+          property: hostPort
+      - key: ACCESS_TOKEN_DURATION
+        value: 24h
+      - key: REFRESH_TOKEN_DURATION
+        value: 24h
+      - key: SERVER_ADDRESS
+        value: 0.0.0.0:8080
+      # Secrets (You will enter these in Render Dashboard)
+      - key: JWT_SECRET
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+
+databases:
+  - name: locolive-db
+    databaseName: privacy_social
+    user: postgres
+    plan: free
+
+services:
+  - type: redis
+    name: locolive-redis
+    plan: free
+    ipAllowList: [] # Only allow internal connections

@@ -1,0 +1,1 @@
+ALTER TABLE posts ADD COLUMN body_text TEXT;

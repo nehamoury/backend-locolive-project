@@ -1,0 +1,4 @@
+DROP TABLE IF EXISTS reel_saves;
+DROP TABLE IF EXISTS reel_comments;
+DROP TABLE IF EXISTS reel_likes;
+DROP TABLE IF EXISTS reels;

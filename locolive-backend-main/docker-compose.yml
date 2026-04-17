@@ -20,6 +20,8 @@ services:
       - JWT_SECRET=super-secret-key-change-in-production
     volumes:
       - ./uploads:/app/uploads
+    entrypoint: ["sh", "/app/start.sh"]
+    command: ["/app/server"]
     networks:
       - locolive-net
     restart: on-failure

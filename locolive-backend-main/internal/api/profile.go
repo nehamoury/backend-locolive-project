@@ -35,6 +35,7 @@ type ProfileResponse struct {
 	Theme             string     `json:"theme"`
 	ProfileVisibility string     `json:"profile_visibility"`
 	Email             string     `json:"email"`
+	Phone             string     `json:"phone"`
 	IsGhostMode       bool       `json:"is_ghost_mode"`
 	IsPremium         bool       `json:"is_premium"`
 	ActivityStreak    int        `json:"activity_streak"`
@@ -73,6 +74,7 @@ func mapProfileResponse(p db.GetUserProfileRow) ProfileResponse {
 		Theme:             p.Theme.String,
 		ProfileVisibility: p.ProfileVisibility.String,
 		Email:             p.Email.String,
+		Phone:             p.Phone,
 		IsGhostMode:       p.IsGhostMode,
 		IsPremium:         p.IsPremium.Bool,
 		ActivityStreak:    int(streak),

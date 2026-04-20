@@ -251,6 +251,15 @@ func (server *Server) updateConnection(ctx *gin.Context) {
 		return
 	}
 
+	// Remove the 'connection_request' notification as it's now handled
+	err = server.store.DeleteConnectionRequestNotifications(ctx, db.DeleteConnectionRequestNotificationsParams{
+		UserID:        authPayload.UserID,
+		RelatedUserID: uuid.NullUUID{UUID: requesterID, Valid: true},
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("failed to delete connection request notification")
+	}
+
 	// Create notification if connection was accepted
 	if req.Status == "accepted" {
 		accepter, err := server.store.GetUserByID(ctx, authPayload.UserID)

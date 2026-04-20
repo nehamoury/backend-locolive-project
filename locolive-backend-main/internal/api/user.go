@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -43,9 +44,7 @@ type searchUserResponse struct {
 	Username   string    `json:"username"`
 	FullName   string    `json:"full_name"`
 	AvatarUrl  string    `json:"avatar_url"`
-	Bio        string    `json:"bio"`
 	IsVerified bool      `json:"is_verified"`
-	CreatedAt  time.Time `json:"created_at"`
 }
 
 func newUserResponse(user db.User) userResponse {
@@ -202,23 +201,36 @@ func (server *Server) searchUsers(ctx *gin.Context) {
 		return
 	}
 
-	users, err := server.user.SearchUsers(ctx, req.Query)
+	// Trim and sanitize query
+	query := strings.TrimSpace(req.Query)
+	query = strings.TrimPrefix(query, "@")
+	if len(query) < 2 {
+		ctx.JSON(http.StatusOK, []searchUserResponse{})
+		return
+	}
+
+	users, err := server.user.SearchUsers(ctx, query)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
 	}
 
-	rsp := make([]searchUserResponse, len(users))
-	for i, u := range users {
-		rsp[i] = searchUserResponse{
+	// Initialize as empty array to avoid null in JSON
+	rsp := make([]searchUserResponse, 0, len(users))
+	for _, u := range users {
+		// Ensure avatar_url is a relative path starting with /
+		avatarUrl := u.AvatarUrl.String
+		if avatarUrl != "" && !strings.HasPrefix(avatarUrl, "http") && !strings.HasPrefix(avatarUrl, "/") {
+			avatarUrl = "/" + avatarUrl
+		}
+
+		rsp = append(rsp, searchUserResponse{
 			ID:         u.ID,
 			Username:   u.Username,
 			FullName:   u.FullName,
-			AvatarUrl:  u.AvatarUrl.String,
-			Bio:        u.Bio.String,
+			AvatarUrl:  avatarUrl,
 			IsVerified: u.IsVerified,
-			CreatedAt:  u.CreatedAt,
-		}
+		})
 	}
 
 	ctx.JSON(http.StatusOK, rsp)

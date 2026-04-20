@@ -148,7 +148,7 @@ func TestCreateUser(t *testing.T) {
 			data, err := json.Marshal(tc.body)
 			require.NoError(t, err)
 
-			request, err := http.NewRequest(http.MethodPost, "/users", bytes.NewReader(data))
+			request, err := http.NewRequest(http.MethodPost, "/api/users", bytes.NewReader(data))
 			require.NoError(t, err)
 
 			server.router.ServeHTTP(recorder, request)

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -41,6 +42,12 @@ var (
 		Period: 1 * time.Minute,
 		Limit:  200,
 	}
+
+	// Search: 10 requests per second
+	searchRate = limiter.Rate{
+		Period: 1 * time.Second,
+		Limit:  10,
+	}
 )
 
 // createRateLimiter creates a rate limiter with Redis store
@@ -52,13 +59,23 @@ func (server *Server) createRateLimiter(rate limiter.Rate) gin.HandlerFunc {
 		}
 	}
 
-	store, err := sredis.NewStoreWithOptions(server.redis, limiter.StoreOptions{
-		Prefix:   "rate_limit",
-		MaxRetry: 3,
-	})
-	if err != nil {
-		// Fallback to in-memory if Redis fails
+	var store limiter.Store
+	// Check if Redis is actually reachable
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	
+	if err := server.redis.Ping(ctx).Err(); err != nil {
+		// Fallback immediately if Redis fails
 		store = memory.NewStore()
+	} else {
+		var err error
+		store, err = sredis.NewStoreWithOptions(server.redis, limiter.StoreOptions{
+			Prefix:   "rate_limit",
+			MaxRetry: 3,
+		})
+		if err != nil {
+			store = memory.NewStore()
+		}
 	}
 
 	instance := limiter.New(store, rate)
@@ -98,4 +115,9 @@ func (server *Server) locationRateLimiter() gin.HandlerFunc {
 // messageRateLimiter applies rate limiting for messaging
 func (server *Server) messageRateLimiter() gin.HandlerFunc {
 	return server.createRateLimiter(messageRate)
+}
+
+// searchRateLimiter applies rate limiting for user search
+func (server *Server) searchRateLimiter() gin.HandlerFunc {
+	return server.createRateLimiter(searchRate)
 }

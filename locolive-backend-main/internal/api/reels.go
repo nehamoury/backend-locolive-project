@@ -51,6 +51,7 @@ type reelResponse struct {
 	DistanceMeters *float64  `json:"distance_meters,omitempty"`
 	IsLiked        bool      `json:"is_liked"`
 	IsSaved        bool      `json:"is_saved"`
+	ConnectionStatus string    `json:"connection_status,omitempty"`
 }
 
 type reelCommentResponse struct {
@@ -132,6 +133,7 @@ func toReelResponseFromFeed(r db.ListReelsFeedRow) reelResponse {
 		Username:      r.Username,
 		IsLiked:       r.IsLiked,
 		IsSaved:       r.IsSaved,
+		ConnectionStatus: fmt.Sprintf("%v", r.ConnectionStatus),
 	}
 	if r.AvatarUrl.Valid {
 		rsp.AvatarURL = &r.AvatarUrl.String
@@ -159,6 +161,7 @@ func toReelResponseFromNearby(r db.ListNearbyReelsRow) reelResponse {
 		Username:      r.Username,
 		IsLiked:       r.IsLiked,
 		IsSaved:       r.IsSaved,
+		ConnectionStatus: fmt.Sprintf("%v", r.ConnectionStatus),
 	}
 	if r.AvatarUrl.Valid {
 		rsp.AvatarURL = &r.AvatarUrl.String
@@ -189,6 +192,7 @@ func toReelResponseFromUserReels(r db.ListUserReelsRow) reelResponse {
 		Username:      r.Username,
 		IsLiked:       r.IsLiked,
 		IsSaved:       r.IsSaved,
+		ConnectionStatus: fmt.Sprintf("%v", r.ConnectionStatus),
 	}
 	if r.AvatarUrl.Valid {
 		rsp.AvatarURL = &r.AvatarUrl.String

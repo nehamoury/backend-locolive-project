@@ -1,6 +1,8 @@
 # Binaries
 server
 main
+locolive-api
+test_build.exe
 *.exe
 *.exe~
 *.dll

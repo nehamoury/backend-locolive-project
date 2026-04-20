@@ -21,7 +21,8 @@ SELECT
     u.username,
     u.avatar_url,
     EXISTS (SELECT 1 FROM reel_likes rl WHERE rl.reel_id = r.id AND rl.user_id = $1) AS is_liked,
-    EXISTS (SELECT 1 FROM reel_saves rs WHERE rs.reel_id = r.id AND rs.user_id = $1) AS is_saved
+    EXISTS (SELECT 1 FROM reel_saves rs WHERE rs.reel_id = r.id AND rs.user_id = $1) AS is_saved,
+    COALESCE((SELECT status FROM connections c WHERE (c.requester_id = $1 AND c.target_id = r.user_id) OR (c.requester_id = r.user_id AND c.target_id = $1) LIMIT 1)::text, 'none') AS connection_status
 FROM reels r
 JOIN users u ON r.user_id = u.id
 ORDER BY r.created_at DESC
@@ -36,7 +37,8 @@ SELECT
     u.avatar_url,
     ST_Distance(r.geom, ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float, sqlc.arg(lat)::float), 4326)::geography) AS distance_meters,
     EXISTS (SELECT 1 FROM reel_likes rl WHERE rl.reel_id = r.id AND rl.user_id = sqlc.arg(viewer_id)) AS is_liked,
-    EXISTS (SELECT 1 FROM reel_saves rs WHERE rs.reel_id = r.id AND rs.user_id = sqlc.arg(viewer_id)) AS is_saved
+    EXISTS (SELECT 1 FROM reel_saves rs WHERE rs.reel_id = r.id AND rs.user_id = sqlc.arg(viewer_id)) AS is_saved,
+    COALESCE((SELECT status FROM connections c WHERE (c.requester_id = sqlc.arg(viewer_id) AND c.target_id = r.user_id) OR (c.requester_id = r.user_id AND c.target_id = sqlc.arg(viewer_id)) LIMIT 1)::text, 'none') AS connection_status
 FROM reels r
 JOIN users u ON r.user_id = u.id
 WHERE ST_DWithin(r.geom, ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float, sqlc.arg(lat)::float), 4326)::geography, sqlc.arg(radius)::float)
@@ -51,7 +53,8 @@ SELECT
     u.username,
     u.avatar_url,
     EXISTS (SELECT 1 FROM reel_likes rl WHERE rl.reel_id = r.id AND rl.user_id = sqlc.arg(viewer_id)) AS is_liked,
-    EXISTS (SELECT 1 FROM reel_saves rs WHERE rs.reel_id = r.id AND rs.user_id = sqlc.arg(viewer_id)) AS is_saved
+    EXISTS (SELECT 1 FROM reel_saves rs WHERE rs.reel_id = r.id AND rs.user_id = sqlc.arg(viewer_id)) AS is_saved,
+    COALESCE((SELECT status FROM connections c WHERE (c.requester_id = sqlc.arg(viewer_id) AND c.target_id = r.user_id) OR (c.requester_id = r.user_id AND c.target_id = sqlc.arg(viewer_id)) LIMIT 1)::text, 'none') AS connection_status
 FROM reels r
 JOIN users u ON r.user_id = u.id
 WHERE r.user_id = sqlc.arg(user_id)

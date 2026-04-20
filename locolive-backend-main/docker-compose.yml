@@ -11,7 +11,7 @@ services:
       redis:
         condition: service_healthy
     ports:
-      - "8080:8080"
+      - "8081:8080"
     environment:
       - DB_DRIVER=postgres
       - DB_SOURCE=postgresql://postgres:password@postgres:5432/privacy_social?sslmode=disable

@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 	"time"
 
 	"github.com/google/uuid"
@@ -91,6 +92,107 @@ func (q *Queries) GetHeatmapData(ctx context.Context) ([]GetHeatmapDataRow, erro
 	for rows.Next() {
 		var i GetHeatmapDataRow
 		if err := rows.Scan(&i.Longitude, &i.Latitude, &i.Weight); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const getNearbyUsersFromDB = `-- name: GetNearbyUsersFromDB :many
+WITH recent_locations AS (
+  SELECT DISTINCT ON (l.user_id)
+    l.user_id,
+    ST_X(l.geom) as longitude,
+    ST_Y(l.geom) as latitude,
+    ST_Distance(
+      l.geom::geography,
+      ST_SetSRID(ST_MakePoint($1::float8, $2::float8), 4326)::geography
+    ) / 1000.0 as distance_km
+  FROM locations l
+  WHERE l.expires_at > NOW()
+    AND l.user_id != $3
+    AND ST_DWithin(
+      l.geom::geography,
+      ST_SetSRID(ST_MakePoint($1::float8, $2::float8), 4326)::geography,
+      $4* 1000
+    )
+  ORDER BY l.user_id, l.time_bucket DESC
+)
+SELECT 
+  u.id as user_id,
+  u.username,
+  u.full_name,
+  u.avatar_url,
+  u.bio,
+  u.is_ghost_mode,
+  u.is_shadow_banned,
+  u.last_active_at,
+  r.longitude,
+  r.latitude,
+  r.distance_km
+FROM recent_locations r
+JOIN users u ON r.user_id = u.id
+WHERE u.is_ghost_mode = false
+  AND u.is_shadow_banned = false
+ORDER BY r.distance_km ASC
+LIMIT 50
+`
+
+type GetNearbyUsersFromDBParams struct {
+	Lng           float64     `json:"lng"`
+	Lat           float64     `json:"lat"`
+	ExcludeUserID uuid.UUID   `json:"exclude_user_id"`
+	RadiusKm      interface{} `json:"*radius_km"`
+}
+
+type GetNearbyUsersFromDBRow struct {
+	UserID         uuid.UUID      `json:"user_id"`
+	Username       string         `json:"username"`
+	FullName       string         `json:"full_name"`
+	AvatarUrl      sql.NullString `json:"avatar_url"`
+	Bio            sql.NullString `json:"bio"`
+	IsGhostMode    bool           `json:"is_ghost_mode"`
+	IsShadowBanned bool           `json:"is_shadow_banned"`
+	LastActiveAt   sql.NullTime   `json:"last_active_at"`
+	Longitude      interface{}    `json:"longitude"`
+	Latitude       interface{}    `json:"latitude"`
+	DistanceKm     int32          `json:"distance_km"`
+}
+
+func (q *Queries) GetNearbyUsersFromDB(ctx context.Context, arg GetNearbyUsersFromDBParams) ([]GetNearbyUsersFromDBRow, error) {
+	rows, err := q.db.QueryContext(ctx, getNearbyUsersFromDB,
+		arg.Lng,
+		arg.Lat,
+		arg.ExcludeUserID,
+		arg.RadiusKm,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetNearbyUsersFromDBRow
+	for rows.Next() {
+		var i GetNearbyUsersFromDBRow
+		if err := rows.Scan(
+			&i.UserID,
+			&i.Username,
+			&i.FullName,
+			&i.AvatarUrl,
+			&i.Bio,
+			&i.IsGhostMode,
+			&i.IsShadowBanned,
+			&i.LastActiveAt,
+			&i.Longitude,
+			&i.Latitude,
+			&i.DistanceKm,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)

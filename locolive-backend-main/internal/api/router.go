@@ -17,26 +17,26 @@ func (server *Server) setupRouter() {
 	// Apply general rate limiting to all routes
 	router.Use(server.generalRateLimiter())
 
-	// Public routes with strict rate limiting
-	router.GET("/", func(ctx *gin.Context) {
+	// Main API Group
+	api := router.Group("/api")
+
+	// Public routes inside API group
+	api.GET("/", func(ctx *gin.Context) {
 		ctx.JSON(200, gin.H{
 			"status":  "ok",
 			"message": "LocoLiv Backend is live!",
 		})
 	})
-	router.POST("/users", server.authRateLimiter(), server.createUser)
-	router.POST("/users/login", server.authRateLimiter(), server.loginUser)
-	router.POST("/auth/google", server.authRateLimiter(), server.googleLogin)
-	router.GET("/auth/google/callback", server.googleCallback) // New Relay for Expo Go
-	router.POST("/auth/forgot-password", server.authRateLimiter(), server.forgotPassword)
-	router.POST("/auth/verify-reset-token", server.authRateLimiter(), server.verifyResetToken)
-	router.POST("/auth/reset-password", server.authRateLimiter(), server.resetPassword)
+	api.POST("/users", server.authRateLimiter(), server.createUser)
+	api.POST("/users/login", server.authRateLimiter(), server.loginUser)
+	api.POST("/auth/google", server.authRateLimiter(), server.googleLogin)
+	api.GET("/auth/google/callback", server.googleCallback)
+	api.POST("/auth/forgot-password", server.authRateLimiter(), server.forgotPassword)
+	api.POST("/auth/verify-reset-token", server.authRateLimiter(), server.verifyResetToken)
+	api.POST("/auth/reset-password", server.authRateLimiter(), server.resetPassword)
 
-	// Static uploads
-	router.Static("/uploads", "./uploads")
-
-	// Protected routes
-	authRoutes := router.Group("/")
+	// Protected routes (as sub-group of api)
+	authRoutes := api.Group("/")
 	authRoutes.Use(authMiddleware(server.tokenMaker))
 
 	// File upload
@@ -81,7 +81,7 @@ func (server *Server) setupRouter() {
 	authRoutes.PUT("/messages/read/:userId", server.markConversationRead)
 	authRoutes.DELETE("/messages/:id", server.deleteMessage)
 	authRoutes.PUT("/messages/:id", server.editMessage)
-	authRoutes.PUT("/messages/:id/save", server.saveMessage) // Save message to prevent expiry
+	authRoutes.PUT("/messages/:id/save", server.saveMessage)
 	authRoutes.DELETE("/conversations/:userId", server.deleteConversation)
 	authRoutes.POST("/messages/:id/reactions", server.addReaction)
 	authRoutes.DELETE("/messages/:id/reactions", server.removeReaction)
@@ -116,14 +116,14 @@ func (server *Server) setupRouter() {
 	authRoutes.GET("/activity/status", server.getActivityStatus)
 
 	// User Profiles
-	authRoutes.GET("/users/search", server.searchUsers)
+	authRoutes.GET("/users/search", server.searchRateLimiter(), server.searchUsers)
 	authRoutes.GET("/users/nearby", server.getNearbyUsers)
 	authRoutes.GET("/users/:id", server.getUserProfile)
 	authRoutes.GET("/stories/user/:id", server.getUserStories)
 	authRoutes.GET("/profile/me", server.getMyProfile)
 	authRoutes.GET("/profile/visitors", server.getProfileVisitors)
 
-	// Posts (Permanent content)
+	// Posts
 	authRoutes.POST("/posts", server.createPost)
 	authRoutes.GET("/posts/feed", server.getConnectionsFeed)
 	authRoutes.GET("/posts/me", server.getMyPosts)
@@ -136,7 +136,7 @@ func (server *Server) setupRouter() {
 	authRoutes.POST("/posts/:id/share", server.sharePost)
 	authRoutes.DELETE("/posts/:id/comments/:commentId", server.deletePostComment)
 
-	// Reels (Vertical video content)
+	// Reels
 	authRoutes.POST("/reels", server.createReel)
 	authRoutes.GET("/reels/feed", server.getReelsFeed)
 	authRoutes.GET("/reels/nearby", server.getNearbyReels)
@@ -151,7 +151,7 @@ func (server *Server) setupRouter() {
 	authRoutes.DELETE("/reels/:id/save", server.unsaveReel)
 	authRoutes.DELETE("/reels/:id/comments/:commentId", server.deleteReelComment)
 
-	// Highlights (Permanent story collections)
+	// Highlights
 	authRoutes.POST("/highlights", server.createHighlight)
 	authRoutes.GET("/highlights/me", server.getMyHighlights)
 	authRoutes.GET("/users/:id/highlights", server.getHighlights)
@@ -166,8 +166,7 @@ func (server *Server) setupRouter() {
 	authRoutes.GET("/groups/:id/messages", server.getGroupMessages)
 
 	// Admin routes
-
-	adminRoutes := router.Group("/admin")
+	adminRoutes := api.Group("/admin")
 	adminRoutes.Use(authMiddleware(server.tokenMaker))
 	adminRoutes.Use(adminMiddleware(server))
 
@@ -203,6 +202,9 @@ func (server *Server) setupRouter() {
 
 	// Search Users
 	adminRoutes.GET("/users/search", server.searchUsersAdmin)
+
+	// Serve uploaded media files
+	router.Static("/uploads", "./uploads")
 
 	// Frontend static files (SPA with fallback to index.html)
 	router.Static("/assets", "../frontend/dist/assets")

@@ -147,6 +147,20 @@ func (q *Queries) DecrementReelSaves(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
+const deleteReel = `-- name: DeleteReel :exec
+DELETE FROM reels WHERE id = $1 AND user_id = $2
+`
+
+type DeleteReelParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) DeleteReel(ctx context.Context, arg DeleteReelParams) error {
+	_, err := q.db.ExecContext(ctx, deleteReel, arg.ID, arg.UserID)
+	return err
+}
+
 const deleteReelComment = `-- name: DeleteReelComment :one
 DELETE FROM reel_comments WHERE id = $1 AND user_id = $2
 RETURNING reel_id
@@ -310,7 +324,8 @@ SELECT
     u.avatar_url,
     ST_Distance(r.geom, ST_SetSRID(ST_MakePoint($3::float, $4::float), 4326)::geography) AS distance_meters,
     EXISTS (SELECT 1 FROM reel_likes rl WHERE rl.reel_id = r.id AND rl.user_id = $5) AS is_liked,
-    EXISTS (SELECT 1 FROM reel_saves rs WHERE rs.reel_id = r.id AND rs.user_id = $5) AS is_saved
+    EXISTS (SELECT 1 FROM reel_saves rs WHERE rs.reel_id = r.id AND rs.user_id = $5) AS is_saved,
+    COALESCE((SELECT status FROM connections c WHERE (c.requester_id = $5 AND c.target_id = r.user_id) OR (c.requester_id = r.user_id AND c.target_id = $5) LIMIT 1)::text, 'none') AS connection_status
 FROM reels r
 JOIN users u ON r.user_id = u.id
 WHERE ST_DWithin(r.geom, ST_SetSRID(ST_MakePoint($3::float, $4::float), 4326)::geography, $6::float)
@@ -328,26 +343,27 @@ type ListNearbyReelsParams struct {
 }
 
 type ListNearbyReelsRow struct {
-	ID             uuid.UUID      `json:"id"`
-	UserID         uuid.UUID      `json:"user_id"`
-	VideoUrl       string         `json:"video_url"`
-	Caption        sql.NullString `json:"caption"`
-	IsAiGenerated  bool           `json:"is_ai_generated"`
-	LocationName   sql.NullString `json:"location_name"`
-	Geohash        sql.NullString `json:"geohash"`
-	Lat            float64        `json:"lat"`
-	Lng            float64        `json:"lng"`
-	LikesCount     int32          `json:"likes_count"`
-	CommentsCount  int32          `json:"comments_count"`
-	SharesCount    int32          `json:"shares_count"`
-	SavesCount     int32          `json:"saves_count"`
-	CreatedAt      time.Time      `json:"created_at"`
-	UpdatedAt      time.Time      `json:"updated_at"`
-	Username       string         `json:"username"`
-	AvatarUrl      sql.NullString `json:"avatar_url"`
-	DistanceMeters interface{}    `json:"distance_meters"`
-	IsLiked        bool           `json:"is_liked"`
-	IsSaved        bool           `json:"is_saved"`
+	ID               uuid.UUID      `json:"id"`
+	UserID           uuid.UUID      `json:"user_id"`
+	VideoUrl         string         `json:"video_url"`
+	Caption          sql.NullString `json:"caption"`
+	IsAiGenerated    bool           `json:"is_ai_generated"`
+	LocationName     sql.NullString `json:"location_name"`
+	Geohash          sql.NullString `json:"geohash"`
+	Lat              float64        `json:"lat"`
+	Lng              float64        `json:"lng"`
+	LikesCount       int32          `json:"likes_count"`
+	CommentsCount    int32          `json:"comments_count"`
+	SharesCount      int32          `json:"shares_count"`
+	SavesCount       int32          `json:"saves_count"`
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
+	Username         string         `json:"username"`
+	AvatarUrl        sql.NullString `json:"avatar_url"`
+	DistanceMeters   interface{}    `json:"distance_meters"`
+	IsLiked          bool           `json:"is_liked"`
+	IsSaved          bool           `json:"is_saved"`
+	ConnectionStatus interface{}    `json:"connection_status"`
 }
 
 func (q *Queries) ListNearbyReels(ctx context.Context, arg ListNearbyReelsParams) ([]ListNearbyReelsRow, error) {
@@ -387,6 +403,7 @@ func (q *Queries) ListNearbyReels(ctx context.Context, arg ListNearbyReelsParams
 			&i.DistanceMeters,
 			&i.IsLiked,
 			&i.IsSaved,
+			&i.ConnectionStatus,
 		); err != nil {
 			return nil, err
 		}
@@ -463,7 +480,8 @@ SELECT
     u.username,
     u.avatar_url,
     EXISTS (SELECT 1 FROM reel_likes rl WHERE rl.reel_id = r.id AND rl.user_id = $1) AS is_liked,
-    EXISTS (SELECT 1 FROM reel_saves rs WHERE rs.reel_id = r.id AND rs.user_id = $1) AS is_saved
+    EXISTS (SELECT 1 FROM reel_saves rs WHERE rs.reel_id = r.id AND rs.user_id = $1) AS is_saved,
+    COALESCE((SELECT status FROM connections c WHERE (c.requester_id = $1 AND c.target_id = r.user_id) OR (c.requester_id = r.user_id AND c.target_id = $1) LIMIT 1)::text, 'none') AS connection_status
 FROM reels r
 JOIN users u ON r.user_id = u.id
 ORDER BY r.created_at DESC
@@ -477,25 +495,26 @@ type ListReelsFeedParams struct {
 }
 
 type ListReelsFeedRow struct {
-	ID            uuid.UUID      `json:"id"`
-	UserID        uuid.UUID      `json:"user_id"`
-	VideoUrl      string         `json:"video_url"`
-	Caption       sql.NullString `json:"caption"`
-	IsAiGenerated bool           `json:"is_ai_generated"`
-	LocationName  sql.NullString `json:"location_name"`
-	Geohash       sql.NullString `json:"geohash"`
-	Lat           float64        `json:"lat"`
-	Lng           float64        `json:"lng"`
-	LikesCount    int32          `json:"likes_count"`
-	CommentsCount int32          `json:"comments_count"`
-	SharesCount   int32          `json:"shares_count"`
-	SavesCount    int32          `json:"saves_count"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
-	Username      string         `json:"username"`
-	AvatarUrl     sql.NullString `json:"avatar_url"`
-	IsLiked       bool           `json:"is_liked"`
-	IsSaved       bool           `json:"is_saved"`
+	ID               uuid.UUID      `json:"id"`
+	UserID           uuid.UUID      `json:"user_id"`
+	VideoUrl         string         `json:"video_url"`
+	Caption          sql.NullString `json:"caption"`
+	IsAiGenerated    bool           `json:"is_ai_generated"`
+	LocationName     sql.NullString `json:"location_name"`
+	Geohash          sql.NullString `json:"geohash"`
+	Lat              float64        `json:"lat"`
+	Lng              float64        `json:"lng"`
+	LikesCount       int32          `json:"likes_count"`
+	CommentsCount    int32          `json:"comments_count"`
+	SharesCount      int32          `json:"shares_count"`
+	SavesCount       int32          `json:"saves_count"`
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
+	Username         string         `json:"username"`
+	AvatarUrl        sql.NullString `json:"avatar_url"`
+	IsLiked          bool           `json:"is_liked"`
+	IsSaved          bool           `json:"is_saved"`
+	ConnectionStatus interface{}    `json:"connection_status"`
 }
 
 func (q *Queries) ListReelsFeed(ctx context.Context, arg ListReelsFeedParams) ([]ListReelsFeedRow, error) {
@@ -527,6 +546,7 @@ func (q *Queries) ListReelsFeed(ctx context.Context, arg ListReelsFeedParams) ([
 			&i.AvatarUrl,
 			&i.IsLiked,
 			&i.IsSaved,
+			&i.ConnectionStatus,
 		); err != nil {
 			return nil, err
 		}
@@ -549,7 +569,8 @@ SELECT
     u.username,
     u.avatar_url,
     EXISTS (SELECT 1 FROM reel_likes rl WHERE rl.reel_id = r.id AND rl.user_id = $3) AS is_liked,
-    EXISTS (SELECT 1 FROM reel_saves rs WHERE rs.reel_id = r.id AND rs.user_id = $3) AS is_saved
+    EXISTS (SELECT 1 FROM reel_saves rs WHERE rs.reel_id = r.id AND rs.user_id = $3) AS is_saved,
+    COALESCE((SELECT status FROM connections c WHERE (c.requester_id = $3 AND c.target_id = r.user_id) OR (c.requester_id = r.user_id AND c.target_id = $3) LIMIT 1)::text, 'none') AS connection_status
 FROM reels r
 JOIN users u ON r.user_id = u.id
 WHERE r.user_id = $4
@@ -565,25 +586,26 @@ type ListUserReelsParams struct {
 }
 
 type ListUserReelsRow struct {
-	ID            uuid.UUID      `json:"id"`
-	UserID        uuid.UUID      `json:"user_id"`
-	VideoUrl      string         `json:"video_url"`
-	Caption       sql.NullString `json:"caption"`
-	IsAiGenerated bool           `json:"is_ai_generated"`
-	LocationName  sql.NullString `json:"location_name"`
-	Geohash       sql.NullString `json:"geohash"`
-	Lat           float64        `json:"lat"`
-	Lng           float64        `json:"lng"`
-	LikesCount    int32          `json:"likes_count"`
-	CommentsCount int32          `json:"comments_count"`
-	SharesCount   int32          `json:"shares_count"`
-	SavesCount    int32          `json:"saves_count"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
-	Username      string         `json:"username"`
-	AvatarUrl     sql.NullString `json:"avatar_url"`
-	IsLiked       bool           `json:"is_liked"`
-	IsSaved       bool           `json:"is_saved"`
+	ID               uuid.UUID      `json:"id"`
+	UserID           uuid.UUID      `json:"user_id"`
+	VideoUrl         string         `json:"video_url"`
+	Caption          sql.NullString `json:"caption"`
+	IsAiGenerated    bool           `json:"is_ai_generated"`
+	LocationName     sql.NullString `json:"location_name"`
+	Geohash          sql.NullString `json:"geohash"`
+	Lat              float64        `json:"lat"`
+	Lng              float64        `json:"lng"`
+	LikesCount       int32          `json:"likes_count"`
+	CommentsCount    int32          `json:"comments_count"`
+	SharesCount      int32          `json:"shares_count"`
+	SavesCount       int32          `json:"saves_count"`
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
+	Username         string         `json:"username"`
+	AvatarUrl        sql.NullString `json:"avatar_url"`
+	IsLiked          bool           `json:"is_liked"`
+	IsSaved          bool           `json:"is_saved"`
+	ConnectionStatus interface{}    `json:"connection_status"`
 }
 
 func (q *Queries) ListUserReels(ctx context.Context, arg ListUserReelsParams) ([]ListUserReelsRow, error) {
@@ -620,6 +642,7 @@ func (q *Queries) ListUserReels(ctx context.Context, arg ListUserReelsParams) ([
 			&i.AvatarUrl,
 			&i.IsLiked,
 			&i.IsSaved,
+			&i.ConnectionStatus,
 		); err != nil {
 			return nil, err
 		}
@@ -683,19 +706,5 @@ type UnsaveReelParams struct {
 
 func (q *Queries) UnsaveReel(ctx context.Context, arg UnsaveReelParams) error {
 	_, err := q.db.ExecContext(ctx, unsaveReel, arg.ReelID, arg.UserID)
-	return err
-}
-
-const deleteReel = `-- name: DeleteReel :exec
-DELETE FROM reels WHERE id = $1 AND user_id = $2
-`
-
-type DeleteReelParams struct {
-	ID     uuid.UUID `json:"id"`
-	UserID uuid.UUID `json:"user_id"`
-}
-
-func (q *Queries) DeleteReel(ctx context.Context, arg DeleteReelParams) error {
-	_, err := q.db.ExecContext(ctx, deleteReel, arg.ID, arg.UserID)
 	return err
 }

@@ -17,6 +17,12 @@ WHERE user_id = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3;
 
+-- name: DeleteConnectionRequestNotifications :exec
+DELETE FROM notifications
+WHERE user_id = $1 
+  AND type = 'connection_request' 
+  AND related_user_id = $2;
+
 -- name: MarkNotificationAsRead :one
 UPDATE notifications
 SET is_read = true

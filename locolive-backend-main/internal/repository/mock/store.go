@@ -783,6 +783,20 @@ func (mr *MockStoreMockRecorder) DeleteConnection(ctx, arg any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteConnection", reflect.TypeOf((*MockStore)(nil).DeleteConnection), ctx, arg)
 }
 
+// DeleteConnectionRequestNotifications mocks base method.
+func (m *MockStore) DeleteConnectionRequestNotifications(ctx context.Context, arg db.DeleteConnectionRequestNotificationsParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteConnectionRequestNotifications", ctx, arg)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteConnectionRequestNotifications indicates an expected call of DeleteConnectionRequestNotifications.
+func (mr *MockStoreMockRecorder) DeleteConnectionRequestNotifications(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteConnectionRequestNotifications", reflect.TypeOf((*MockStore)(nil).DeleteConnectionRequestNotifications), ctx, arg)
+}
+
 // DeleteConversation mocks base method.
 func (m *MockStore) DeleteConversation(ctx context.Context, arg db.DeleteConversationParams) error {
 	m.ctrl.T.Helper()
@@ -1377,6 +1391,21 @@ func (m *MockStore) GetMyProfileViews(ctx context.Context, viewerID uuid.UUID) (
 func (mr *MockStoreMockRecorder) GetMyProfileViews(ctx, viewerID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMyProfileViews", reflect.TypeOf((*MockStore)(nil).GetMyProfileViews), ctx, viewerID)
+}
+
+// GetNearbyUsersFromDB mocks base method.
+func (m *MockStore) GetNearbyUsersFromDB(ctx context.Context, arg db.GetNearbyUsersFromDBParams) ([]db.GetNearbyUsersFromDBRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNearbyUsersFromDB", ctx, arg)
+	ret0, _ := ret[0].([]db.GetNearbyUsersFromDBRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetNearbyUsersFromDB indicates an expected call of GetNearbyUsersFromDB.
+func (mr *MockStoreMockRecorder) GetNearbyUsersFromDB(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNearbyUsersFromDB", reflect.TypeOf((*MockStore)(nil).GetNearbyUsersFromDB), ctx, arg)
 }
 
 // GetPasswordResetByToken mocks base method.

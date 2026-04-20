@@ -86,6 +86,23 @@ func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotification
 	return i, err
 }
 
+const deleteConnectionRequestNotifications = `-- name: DeleteConnectionRequestNotifications :exec
+DELETE FROM notifications
+WHERE user_id = $1 
+  AND type = 'connection_request' 
+  AND related_user_id = $2
+`
+
+type DeleteConnectionRequestNotificationsParams struct {
+	UserID        uuid.UUID     `json:"user_id"`
+	RelatedUserID uuid.NullUUID `json:"related_user_id"`
+}
+
+func (q *Queries) DeleteConnectionRequestNotifications(ctx context.Context, arg DeleteConnectionRequestNotificationsParams) error {
+	_, err := q.db.ExecContext(ctx, deleteConnectionRequestNotifications, arg.UserID, arg.RelatedUserID)
+	return err
+}
+
 const deleteOldNotifications = `-- name: DeleteOldNotifications :exec
 DELETE FROM notifications
 WHERE created_at < NOW() - INTERVAL '30 days'

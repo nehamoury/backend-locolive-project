@@ -66,6 +66,7 @@ type Querier interface {
 	DeleteAllUserData(ctx context.Context, id uuid.UUID) error
 	DeleteArchivedStory(ctx context.Context, arg DeleteArchivedStoryParams) error
 	DeleteConnection(ctx context.Context, arg DeleteConnectionParams) error
+	DeleteConnectionRequestNotifications(ctx context.Context, arg DeleteConnectionRequestNotificationsParams) error
 	DeleteConversation(ctx context.Context, arg DeleteConversationParams) error
 	DeleteExpiredLocations(ctx context.Context) error
 	DeleteExpiredMessages(ctx context.Context) error
@@ -112,6 +113,7 @@ type Querier interface {
 	GetMessage(ctx context.Context, id uuid.UUID) (Message, error)
 	GetMessageReactions(ctx context.Context, messageID uuid.UUID) ([]GetMessageReactionsRow, error)
 	GetMyProfileViews(ctx context.Context, viewerID uuid.UUID) ([]GetMyProfileViewsRow, error)
+	GetNearbyUsersFromDB(ctx context.Context, arg GetNearbyUsersFromDBParams) ([]GetNearbyUsersFromDBRow, error)
 	GetPasswordResetByToken(ctx context.Context, token string) (PasswordReset, error)
 	GetPostComment(ctx context.Context, id uuid.UUID) (PostComment, error)
 	GetPrivacySettings(ctx context.Context, userID uuid.UUID) (PrivacySetting, error)

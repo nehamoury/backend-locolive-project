@@ -541,7 +541,7 @@ func (q *Queries) GetUserEngagementStats(ctx context.Context, userID uuid.UUID) 
 
 const getUserProfile = `-- name: GetUserProfile :one
 SELECT 
-  u.id, u.username, u.full_name, u.avatar_url, u.bio, u.banner_url, u.theme, u.profile_visibility, u.email, u.is_ghost_mode, u.website_url, u.links, u.interests, u.created_at, u.is_premium, u.last_active_at,
+  u.id, u.username, u.full_name, u.phone, u.avatar_url, u.bio, u.banner_url, u.theme, u.profile_visibility, u.email, u.is_ghost_mode, u.website_url, u.links, u.interests, u.created_at, u.is_premium, u.last_active_at,
   (SELECT COUNT(*) FROM stories WHERE stories.user_id = u.id) as story_count,
   (SELECT COUNT(*) FROM posts WHERE posts.user_id = u.id) as post_count,
   (SELECT COUNT(*) FROM reels WHERE reels.user_id = u.id) as reels_count,
@@ -566,6 +566,7 @@ type GetUserProfileRow struct {
 	ID                uuid.UUID       `json:"id"`
 	Username          string          `json:"username"`
 	FullName          string          `json:"full_name"`
+	Phone             string          `json:"phone"`
 	AvatarUrl         sql.NullString  `json:"avatar_url"`
 	Bio               sql.NullString  `json:"bio"`
 	BannerUrl         sql.NullString  `json:"banner_url"`
@@ -598,6 +599,7 @@ func (q *Queries) GetUserProfile(ctx context.Context, id uuid.UUID) (GetUserProf
 		&i.ID,
 		&i.Username,
 		&i.FullName,
+		&i.Phone,
 		&i.AvatarUrl,
 		&i.Bio,
 		&i.BannerUrl,
@@ -804,14 +806,13 @@ SELECT
   username,
   full_name,
   avatar_url,
-  bio,
-  is_verified,
-  created_at
+  is_verified
 FROM users
 WHERE 
-  (username ILIKE '%' || $1::text || '%' OR full_name ILIKE '%' || $1::text || '%')
+  (username ILIKE '%' || $1::text || '%'
+   OR full_name ILIKE '%' || $1::text || '%')
   AND is_shadow_banned = false
-LIMIT 20
+LIMIT 10
 `
 
 type SearchUsersRow struct {
@@ -819,9 +820,7 @@ type SearchUsersRow struct {
 	Username   string         `json:"username"`
 	FullName   string         `json:"full_name"`
 	AvatarUrl  sql.NullString `json:"avatar_url"`
-	Bio        sql.NullString `json:"bio"`
 	IsVerified bool           `json:"is_verified"`
-	CreatedAt  time.Time      `json:"created_at"`
 }
 
 func (q *Queries) SearchUsers(ctx context.Context, query string) ([]SearchUsersRow, error) {
@@ -838,9 +837,7 @@ func (q *Queries) SearchUsers(ctx context.Context, query string) ([]SearchUsersR
 			&i.Username,
 			&i.FullName,
 			&i.AvatarUrl,
-			&i.Bio,
 			&i.IsVerified,
-			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}

@@ -1,0 +1,37 @@
+# Caddyfile - Automatic HTTPS with Let's Encrypt
+# Place this in your VPS root and run: caddy run
+
+# Your domain
+locolive.io {
+    # Compress responses
+    encode gzip zstd
+
+    # Reverse proxy to Docker app (port 8081 on localhost)
+    reverse_proxy localhost:8081
+
+    # Security headers (Caddy adds some automatically)
+    header {
+        # Remove server header
+        -Server
+    }
+
+    # Rate limiting (optional - requires caddy-rate-limit module)
+    # rate_limit {
+    #     zone static {
+    #         key static
+    #         events 100
+    #         window 1m
+    #     }
+    # }
+}
+
+# Optional: API subdomain
+api.locolive.io {
+    encode gzip zstd
+    reverse_proxy localhost:8081
+}
+
+# Optional: WWW redirect
+www.locolive.io {
+    redir https://locolive.io{uri} permanent
+}

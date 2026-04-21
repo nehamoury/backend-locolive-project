@@ -188,6 +188,7 @@ type Querier interface {
 	ListReelsFeed(ctx context.Context, arg ListReelsFeedParams) ([]ListReelsFeedRow, error)
 	// Admin: List all reports
 	ListReports(ctx context.Context, arg ListReportsParams) ([]ListReportsRow, error)
+	ListSavedReels(ctx context.Context, arg ListSavedReelsParams) ([]ListSavedReelsRow, error)
 	ListSentConnectionRequests(ctx context.Context, requesterID uuid.UUID) ([]ListSentConnectionRequestsRow, error)
 	ListUserReels(ctx context.Context, arg ListUserReelsParams) ([]ListUserReelsRow, error)
 	// Admin Queries

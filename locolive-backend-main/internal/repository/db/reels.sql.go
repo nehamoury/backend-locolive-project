@@ -561,6 +561,97 @@ func (q *Queries) ListReelsFeed(ctx context.Context, arg ListReelsFeedParams) ([
 	return items, nil
 }
 
+const listSavedReels = `-- name: ListSavedReels :many
+SELECT 
+    r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash,
+    COALESCE(ST_Y(r.geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(r.geom::geometry)::float8, 0.0)::float8 AS lng,
+    r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
+    u.username,
+    u.avatar_url,
+    TRUE AS is_saved,
+    EXISTS (SELECT 1 FROM reel_likes rl WHERE rl.reel_id = r.id AND rl.user_id = $1) AS is_liked,
+    COALESCE((SELECT status FROM connections c WHERE (c.requester_id = $1 AND c.target_id = r.user_id) OR (c.requester_id = r.user_id AND c.target_id = $1) LIMIT 1)::text, 'none') AS connection_status
+FROM reels r
+JOIN reel_saves rs ON r.id = rs.reel_id
+JOIN users u ON r.user_id = u.id
+WHERE rs.user_id = $1
+ORDER BY rs.created_at DESC
+LIMIT $2 OFFSET $3
+`
+
+type ListSavedReelsParams struct {
+	UserID uuid.UUID `json:"user_id"`
+	Limit  int32     `json:"limit"`
+	Offset int32     `json:"offset"`
+}
+
+type ListSavedReelsRow struct {
+	ID               uuid.UUID      `json:"id"`
+	UserID           uuid.UUID      `json:"user_id"`
+	VideoUrl         string         `json:"video_url"`
+	Caption          sql.NullString `json:"caption"`
+	IsAiGenerated    bool           `json:"is_ai_generated"`
+	LocationName     sql.NullString `json:"location_name"`
+	Geohash          sql.NullString `json:"geohash"`
+	Lat              float64        `json:"lat"`
+	Lng              float64        `json:"lng"`
+	LikesCount       int32          `json:"likes_count"`
+	CommentsCount    int32          `json:"comments_count"`
+	SharesCount      int32          `json:"shares_count"`
+	SavesCount       int32          `json:"saves_count"`
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
+	Username         string         `json:"username"`
+	AvatarUrl        sql.NullString `json:"avatar_url"`
+	IsSaved          bool           `json:"is_saved"`
+	IsLiked          bool           `json:"is_liked"`
+	ConnectionStatus interface{}    `json:"connection_status"`
+}
+
+func (q *Queries) ListSavedReels(ctx context.Context, arg ListSavedReelsParams) ([]ListSavedReelsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSavedReels, arg.UserID, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSavedReelsRow
+	for rows.Next() {
+		var i ListSavedReelsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.VideoUrl,
+			&i.Caption,
+			&i.IsAiGenerated,
+			&i.LocationName,
+			&i.Geohash,
+			&i.Lat,
+			&i.Lng,
+			&i.LikesCount,
+			&i.CommentsCount,
+			&i.SharesCount,
+			&i.SavesCount,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Username,
+			&i.AvatarUrl,
+			&i.IsSaved,
+			&i.IsLiked,
+			&i.ConnectionStatus,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listUserReels = `-- name: ListUserReels :many
 SELECT 
     r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash,

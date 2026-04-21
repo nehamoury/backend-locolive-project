@@ -119,6 +119,21 @@ SELECT
     u.last_active_at,
     u.created_at,
     COALESCE((
+        SELECT json_agg(json_build_object(
+            'id', mf.id,
+            'username', mf.username,
+            'avatar_url', COALESCE(mf.avatar_url, '')
+        ))
+        FROM users mf
+        WHERE mf.id IN (
+            SELECT CASE WHEN mc.requester_id = u.id THEN mc.target_id ELSE mc.requester_id END
+            FROM connections mc
+            WHERE mc.status = 'accepted' AND (mc.requester_id = u.id OR mc.target_id = u.id)
+            INTERSECT
+            SELECT friend_id FROM my_connections
+        )
+    ), '[]'::json) as mutual_friends,
+    COALESCE((
         SELECT COUNT(*)
         FROM connections c
         WHERE 
@@ -140,15 +155,16 @@ type GetSuggestedConnectionsParams struct {
 }
 
 type GetSuggestedConnectionsRow struct {
-	ID           uuid.UUID      `json:"id"`
-	Username     string         `json:"username"`
-	FullName     string         `json:"full_name"`
-	AvatarUrl    sql.NullString `json:"avatar_url"`
-	Bio          sql.NullString `json:"bio"`
-	IsVerified   bool           `json:"is_verified"`
-	LastActiveAt sql.NullTime   `json:"last_active_at"`
-	CreatedAt    time.Time      `json:"created_at"`
-	MutualCount  int64          `json:"mutual_count"`
+	ID            uuid.UUID      `json:"id"`
+	Username      string         `json:"username"`
+	FullName      string         `json:"full_name"`
+	AvatarUrl     sql.NullString `json:"avatar_url"`
+	Bio           sql.NullString `json:"bio"`
+	IsVerified    bool           `json:"is_verified"`
+	LastActiveAt  sql.NullTime   `json:"last_active_at"`
+	CreatedAt     time.Time      `json:"created_at"`
+	MutualFriends interface{}    `json:"mutual_friends"`
+	MutualCount   int64          `json:"mutual_count"`
 }
 
 func (q *Queries) GetSuggestedConnections(ctx context.Context, arg GetSuggestedConnectionsParams) ([]GetSuggestedConnectionsRow, error) {
@@ -169,6 +185,7 @@ func (q *Queries) GetSuggestedConnections(ctx context.Context, arg GetSuggestedC
 			&i.IsVerified,
 			&i.LastActiveAt,
 			&i.CreatedAt,
+			&i.MutualFriends,
 			&i.MutualCount,
 		); err != nil {
 			return nil, err
@@ -248,6 +265,11 @@ func (q *Queries) ListConnections(ctx context.Context, requesterID uuid.UUID) ([
 }
 
 const listPendingRequests = `-- name: ListPendingRequests :many
+WITH my_connections AS (
+    SELECT c1.target_id as friend_id FROM connections c1 WHERE c1.requester_id = $1 AND c1.status = 'accepted'
+    UNION
+    SELECT c2.requester_id as friend_id FROM connections c2 WHERE c2.target_id = $1 AND c2.status = 'accepted'
+)
 SELECT 
     c.requester_id, 
     c.target_id, 
@@ -255,7 +277,31 @@ SELECT
     c.created_at,
     u.username,
     u.full_name,
-    u.avatar_url
+    u.avatar_url,
+    COALESCE((
+        SELECT json_agg(json_build_object(
+            'id', mf.id,
+            'username', mf.username,
+            'avatar_url', COALESCE(mf.avatar_url, '')
+        ))
+        FROM users mf
+        WHERE mf.id IN (
+            SELECT CASE WHEN mc.requester_id = u.id THEN mc.target_id ELSE mc.requester_id END
+            FROM connections mc
+            WHERE mc.status = 'accepted' AND (mc.requester_id = u.id OR mc.target_id = u.id)
+            INTERSECT
+            SELECT friend_id FROM my_connections
+        )
+    ), '[]'::json) as mutual_friends,
+    COALESCE((
+        SELECT COUNT(*)
+        FROM connections mc
+        WHERE 
+            mc.status = 'accepted' AND (
+                (mc.requester_id = u.id AND mc.target_id IN (SELECT friend_id FROM my_connections)) OR
+                (mc.target_id = u.id AND mc.requester_id IN (SELECT friend_id FROM my_connections))
+            )
+    ), 0)::bigint as mutual_count
 FROM connections c
 JOIN users u ON c.requester_id = u.id
 WHERE c.target_id = $1 
@@ -264,13 +310,15 @@ ORDER BY c.created_at DESC
 `
 
 type ListPendingRequestsRow struct {
-	RequesterID uuid.UUID        `json:"requester_id"`
-	TargetID    uuid.UUID        `json:"target_id"`
-	Status      ConnectionStatus `json:"status"`
-	CreatedAt   time.Time        `json:"created_at"`
-	Username    string           `json:"username"`
-	FullName    string           `json:"full_name"`
-	AvatarUrl   sql.NullString   `json:"avatar_url"`
+	RequesterID   uuid.UUID        `json:"requester_id"`
+	TargetID      uuid.UUID        `json:"target_id"`
+	Status        ConnectionStatus `json:"status"`
+	CreatedAt     time.Time        `json:"created_at"`
+	Username      string           `json:"username"`
+	FullName      string           `json:"full_name"`
+	AvatarUrl     sql.NullString   `json:"avatar_url"`
+	MutualFriends interface{}      `json:"mutual_friends"`
+	MutualCount   int64            `json:"mutual_count"`
 }
 
 func (q *Queries) ListPendingRequests(ctx context.Context, targetID uuid.UUID) ([]ListPendingRequestsRow, error) {
@@ -290,6 +338,8 @@ func (q *Queries) ListPendingRequests(ctx context.Context, targetID uuid.UUID) (
 			&i.Username,
 			&i.FullName,
 			&i.AvatarUrl,
+			&i.MutualFriends,
+			&i.MutualCount,
 		); err != nil {
 			return nil, err
 		}

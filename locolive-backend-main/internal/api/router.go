@@ -11,6 +11,9 @@ func (server *Server) setupRouter() {
 	// CORS Middleware
 	router.Use(corsMiddleware(server.config.FrontendURL))
 
+	// Security headers middleware
+	router.Use(securityHeadersMiddleware())
+
 	// Enable gzip compression (70% bandwidth reduction)
 	router.Use(gzip.Gzip(gzip.DefaultCompression))
 
@@ -140,6 +143,7 @@ func (server *Server) setupRouter() {
 	authRoutes.POST("/reels", server.createReel)
 	authRoutes.GET("/reels/feed", server.getReelsFeed)
 	authRoutes.GET("/reels/nearby", server.getNearbyReels)
+	authRoutes.GET("/reels/saved", server.getSavedReels)
 	authRoutes.GET("/users/:id/reels", server.getUserReels)
 	authRoutes.DELETE("/reels/:id", server.deleteReel)
 	authRoutes.POST("/reels/:id/like", server.likeReel)

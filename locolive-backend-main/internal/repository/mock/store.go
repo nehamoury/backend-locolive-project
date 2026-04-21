@@ -2360,6 +2360,21 @@ func (mr *MockStoreMockRecorder) ListReports(ctx, arg any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListReports", reflect.TypeOf((*MockStore)(nil).ListReports), ctx, arg)
 }
 
+// ListSavedReels mocks base method.
+func (m *MockStore) ListSavedReels(ctx context.Context, arg db.ListSavedReelsParams) ([]db.ListSavedReelsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListSavedReels", ctx, arg)
+	ret0, _ := ret[0].([]db.ListSavedReelsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListSavedReels indicates an expected call of ListSavedReels.
+func (mr *MockStoreMockRecorder) ListSavedReels(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListSavedReels", reflect.TypeOf((*MockStore)(nil).ListSavedReels), ctx, arg)
+}
+
 // ListSentConnectionRequests mocks base method.
 func (m *MockStore) ListSentConnectionRequests(ctx context.Context, requesterID uuid.UUID) ([]db.ListSentConnectionRequestsRow, error) {
 	m.ctrl.T.Helper()

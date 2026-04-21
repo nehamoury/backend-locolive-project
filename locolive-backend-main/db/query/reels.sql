@@ -131,3 +131,20 @@ UPDATE reels SET comments_count = GREATEST(0, comments_count - 1) WHERE id = $1;
 
 -- name: DeleteReel :exec
 DELETE FROM reels WHERE id = $1 AND user_id = $2;
+
+-- name: ListSavedReels :many
+SELECT 
+    r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash,
+    COALESCE(ST_Y(r.geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(r.geom::geometry)::float8, 0.0)::float8 AS lng,
+    r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
+    u.username,
+    u.avatar_url,
+    TRUE AS is_saved,
+    EXISTS (SELECT 1 FROM reel_likes rl WHERE rl.reel_id = r.id AND rl.user_id = $1) AS is_liked,
+    COALESCE((SELECT status FROM connections c WHERE (c.requester_id = $1 AND c.target_id = r.user_id) OR (c.requester_id = r.user_id AND c.target_id = $1) LIMIT 1)::text, 'none') AS connection_status
+FROM reels r
+JOIN reel_saves rs ON r.id = rs.reel_id
+JOIN users u ON r.user_id = u.id
+WHERE rs.user_id = $1
+ORDER BY rs.created_at DESC
+LIMIT $2 OFFSET $3;

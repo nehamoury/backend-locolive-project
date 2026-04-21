@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -25,13 +26,15 @@ type friendResponse struct {
 }
 
 type connectionResponse struct {
-	RequesterID uuid.UUID `json:"requester_id"`
-	TargetID    uuid.UUID `json:"target_id"`
-	Status      string    `json:"status"`
-	CreatedAt   time.Time `json:"created_at"`
-	Username    string    `json:"username"`
-	FullName    string    `json:"full_name"`
-	AvatarUrl   string    `json:"avatar_url"`
+	RequesterID   uuid.UUID        `json:"requester_id"`
+	TargetID      uuid.UUID        `json:"target_id"`
+	Status        string           `json:"status"`
+	CreatedAt     time.Time        `json:"created_at"`
+	Username      string           `json:"username"`
+	FullName      string           `json:"full_name"`
+	AvatarUrl     string           `json:"avatar_url"`
+	MutualFriends []friendResponse `json:"mutual_friends"`
+	MutualCount   int64            `json:"mutual_count"`
 }
 
 func (server *Server) listConnections(ctx *gin.Context) {
@@ -72,14 +75,23 @@ func (server *Server) listPendingRequests(ctx *gin.Context) {
 
 	rsp := make([]connectionResponse, len(requests))
 	for i, r := range requests {
+		var mutualFriends []friendResponse
+		if mfBytes, ok := r.MutualFriends.([]byte); ok && len(mfBytes) > 0 {
+			if err := json.Unmarshal(mfBytes, &mutualFriends); err != nil {
+				log.Error().Err(err).Msg("failed to unmarshal mutual friends")
+			}
+		}
+
 		rsp[i] = connectionResponse{
-			RequesterID: r.RequesterID,
-			TargetID:    r.TargetID,
-			Status:      string(r.Status),
-			CreatedAt:   r.CreatedAt,
-			Username:    r.Username,
-			FullName:    r.FullName,
-			AvatarUrl:   r.AvatarUrl.String,
+			RequesterID:   r.RequesterID,
+			TargetID:      r.TargetID,
+			Status:        string(r.Status),
+			CreatedAt:     r.CreatedAt,
+			Username:      r.Username,
+			FullName:      r.FullName,
+			AvatarUrl:     r.AvatarUrl.String,
+			MutualFriends: mutualFriends,
+			MutualCount:   r.MutualCount,
 		}
 	}
 
@@ -247,6 +259,10 @@ func (server *Server) updateConnection(ctx *gin.Context) {
 		Status:      db.ConnectionStatus(req.Status),
 	})
 	if err != nil {
+		if err == sql.ErrNoRows {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "connection request not found or already handled"})
+			return
+		}
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
 	}
@@ -324,16 +340,17 @@ func (server *Server) deleteConnection(ctx *gin.Context) {
 }
 
 type suggestedConnectionResponse struct {
-	ID           uuid.UUID  `json:"id"`
-	Username     string     `json:"username"`
-	FullName     string     `json:"full_name"`
-	AvatarUrl    string     `json:"avatar_url"`
-	MutualCount  int64      `json:"mutual_count"`
-	Bio          string     `json:"bio"`
-	Distance     float64    `json:"distance_km"`
-	IsVerified   bool       `json:"is_verified"`
-	LastActiveAt *time.Time `json:"last_active_at"`
-	CreatedAt    time.Time  `json:"created_at"`
+	ID            uuid.UUID        `json:"id"`
+	Username      string           `json:"username"`
+	FullName      string           `json:"full_name"`
+	AvatarUrl     string           `json:"avatar_url"`
+	MutualFriends []friendResponse `json:"mutual_friends"`
+	MutualCount   int64            `json:"mutual_count"`
+	Bio           string           `json:"bio"`
+	Distance      float64          `json:"distance_km"`
+	IsVerified    bool             `json:"is_verified"`
+	LastActiveAt  *time.Time       `json:"last_active_at"`
+	CreatedAt     time.Time        `json:"created_at"`
 }
 
 func (server *Server) getSuggestedConnections(ctx *gin.Context) {
@@ -353,16 +370,25 @@ func (server *Server) getSuggestedConnections(ctx *gin.Context) {
 			if s.LastActiveAt.Valid {
 				lastActive = &s.LastActiveAt.Time
 			}
+
+			var mutualFriends []friendResponse
+			if mfBytes, ok := s.MutualFriends.([]byte); ok && len(mfBytes) > 0 {
+				if err := json.Unmarshal(mfBytes, &mutualFriends); err != nil {
+					log.Error().Err(err).Msg("failed to unmarshal mutual friends")
+				}
+			}
+
 			rsp = append(rsp, suggestedConnectionResponse{
-				ID:           s.ID,
-				Username:     s.Username,
-				FullName:     s.FullName,
-				AvatarUrl:    s.AvatarUrl.String,
-				MutualCount:  s.MutualCount,
-				Bio:          s.Bio.String,
-				IsVerified:   s.IsVerified,
-				LastActiveAt: lastActive,
-				CreatedAt:    s.CreatedAt,
+				ID:            s.ID,
+				Username:      s.Username,
+				FullName:      s.FullName,
+				AvatarUrl:     s.AvatarUrl.String,
+				MutualFriends: mutualFriends,
+				MutualCount:   s.MutualCount,
+				Bio:           s.Bio.String,
+				IsVerified:    s.IsVerified,
+				LastActiveAt:  lastActive,
+				CreatedAt:     s.CreatedAt,
 			})
 		}
 	}

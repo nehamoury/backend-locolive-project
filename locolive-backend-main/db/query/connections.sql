@@ -39,6 +39,11 @@ WHERE (c.requester_id = $1 OR c.target_id = $1)
   AND c.status = 'accepted';
 
 -- name: ListPendingRequests :many
+WITH my_connections AS (
+    SELECT c1.target_id as friend_id FROM connections c1 WHERE c1.requester_id = $1 AND c1.status = 'accepted'
+    UNION
+    SELECT c2.requester_id as friend_id FROM connections c2 WHERE c2.target_id = $1 AND c2.status = 'accepted'
+)
 SELECT 
     c.requester_id, 
     c.target_id, 
@@ -46,7 +51,31 @@ SELECT
     c.created_at,
     u.username,
     u.full_name,
-    u.avatar_url
+    u.avatar_url,
+    COALESCE((
+        SELECT json_agg(json_build_object(
+            'id', mf.id,
+            'username', mf.username,
+            'avatar_url', COALESCE(mf.avatar_url, '')
+        ))
+        FROM users mf
+        WHERE mf.id IN (
+            SELECT CASE WHEN mc.requester_id = u.id THEN mc.target_id ELSE mc.requester_id END
+            FROM connections mc
+            WHERE mc.status = 'accepted' AND (mc.requester_id = u.id OR mc.target_id = u.id)
+            INTERSECT
+            SELECT friend_id FROM my_connections
+        )
+    ), '[]'::json) as mutual_friends,
+    COALESCE((
+        SELECT COUNT(*)
+        FROM connections mc
+        WHERE 
+            mc.status = 'accepted' AND (
+                (mc.requester_id = u.id AND mc.target_id IN (SELECT friend_id FROM my_connections)) OR
+                (mc.target_id = u.id AND mc.requester_id IN (SELECT friend_id FROM my_connections))
+            )
+    ), 0)::bigint as mutual_count
 FROM connections c
 JOIN users u ON c.requester_id = u.id
 WHERE c.target_id = $1 
@@ -95,6 +124,21 @@ SELECT
     u.is_verified,
     u.last_active_at,
     u.created_at,
+    COALESCE((
+        SELECT json_agg(json_build_object(
+            'id', mf.id,
+            'username', mf.username,
+            'avatar_url', COALESCE(mf.avatar_url, '')
+        ))
+        FROM users mf
+        WHERE mf.id IN (
+            SELECT CASE WHEN mc.requester_id = u.id THEN mc.target_id ELSE mc.requester_id END
+            FROM connections mc
+            WHERE mc.status = 'accepted' AND (mc.requester_id = u.id OR mc.target_id = u.id)
+            INTERSECT
+            SELECT friend_id FROM my_connections
+        )
+    ), '[]'::json) as mutual_friends,
     COALESCE((
         SELECT COUNT(*)
         FROM connections c

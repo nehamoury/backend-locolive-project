@@ -115,12 +115,16 @@ func corsMiddleware(frontendURL string) gin.HandlerFunc {
 		if allowedOrigins[origin] {
 			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
 		} else if origin == "" {
-			// For requests without origin (same-origin requests)
-			c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
+			// For requests without origin (same-origin requests or non-browser clients)
+			// Use the frontend URL if configured, otherwise omit header
+			if frontendURL != "" {
+				c.Writer.Header().Set("Access-Control-Allow-Origin", frontendURL)
+			}
+			// If no origin and no frontendURL configured, don't set header
+			// Browser will handle same-origin requests normally
 		} else {
-			// For disallowed origins, still set a generic header
-			// This prevents CORS errors but restricts actual access
-			c.Writer.Header().Set("Access-Control-Allow-Origin", "")
+			// For disallowed origins: don't set Access-Control-Allow-Origin
+			// This will cause browser to block the request (correct security behavior)
 		}
 
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
@@ -130,6 +134,39 @@ func corsMiddleware(frontendURL string) gin.HandlerFunc {
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(204)
 			return
+		}
+
+		c.Next()
+	}
+}
+
+// securityHeadersMiddleware adds essential security headers to all responses
+func securityHeadersMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// Prevent MIME type sniffing
+		c.Writer.Header().Set("X-Content-Type-Options", "nosniff")
+
+		// Prevent clickjacking
+		c.Writer.Header().Set("X-Frame-Options", "DENY")
+
+		// Referrer policy
+		c.Writer.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+
+		// CSP (IMPORTANT) - Prevents XSS by controlling resource loading
+		c.Writer.Header().Set("Content-Security-Policy",
+			"default-src 'self'; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline'")
+
+		// XSS protection (legacy browsers)
+		c.Writer.Header().Set("X-XSS-Protection", "1; mode=block")
+
+		// Permissions policy (disable unused browser features)
+		c.Writer.Header().Set("Permissions-Policy",
+			"camera=(), microphone=(), geolocation=(self)")
+
+		// HSTS (only HTTPS in production)
+		if gin.Mode() == gin.ReleaseMode {
+			c.Writer.Header().Set("Strict-Transport-Security",
+				"max-age=31536000; includeSubDomains; preload")
 		}
 
 		c.Next()

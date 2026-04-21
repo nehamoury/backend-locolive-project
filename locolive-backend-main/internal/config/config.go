@@ -21,9 +21,16 @@ type Config struct {
 	R2SecretKey          string        `mapstructure:"R2_SECRET_KEY"`
 	R2BucketName         string        `mapstructure:"R2_BUCKET_NAME"`
 	ExpoRedirectURL      string        `mapstructure:"EXPO_REDIRECT_URL"`
-	SendGridAPIKey       string        `mapstructure:"SENDGRID_API_KEY"`
-	FromEmail            string        `mapstructure:"FROM_EMAIL"`
 	FrontendURL          string        `mapstructure:"FRONTEND_URL"`
+	EmailSenderName      string        `mapstructure:"EMAIL_SENDER_NAME"`
+	EmailSenderAddress   string        `mapstructure:"EMAIL_SENDER_ADDRESS"`
+	EmailSenderPassword  string        `mapstructure:"EMAIL_SENDER_PASSWORD"`
+	SMTPHost             string        `mapstructure:"SMTP_HOST"`
+	SMTPPort             string        `mapstructure:"SMTP_PORT"`
+	// TLS Configuration (optional - for HTTPS)
+	TLSCertFile          string        `mapstructure:"TLS_CERT_FILE"`
+	TLSKeyFile           string        `mapstructure:"TLS_KEY_FILE"`
+	ForceHTTPS           bool          `mapstructure:"FORCE_HTTPS"`
 }
 
 func LoadConfig(path string) (config Config, err error) {

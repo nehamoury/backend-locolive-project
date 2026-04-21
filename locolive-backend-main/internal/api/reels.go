@@ -634,3 +634,57 @@ func (server *Server) deleteReel(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, gin.H{"message": "reel deleted"})
 }
+
+// getSavedReels returns reels bookmarked by the user.
+func (server *Server) getSavedReels(ctx *gin.Context) {
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+
+	page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(ctx.DefaultQuery("page_size", "12"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 50 {
+		pageSize = 12
+	}
+
+	reels, err := server.store.ListSavedReels(ctx, db.ListSavedReelsParams{
+		UserID: authPayload.UserID,
+		Limit:  int32(pageSize),
+		Offset: int32((page - 1) * pageSize),
+	})
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	rsp := make([]reelResponse, len(reels))
+	for i, r := range reels {
+		rsp[i] = reelResponse{
+			ID:               r.ID,
+			UserID:           r.UserID,
+			VideoURL:         r.VideoUrl,
+			Caption:          nullStrToPtr(r.Caption),
+			IsAiGenerated:    r.IsAiGenerated,
+			LocationName:     nullStrToPtr(r.LocationName),
+			Geohash:          nullStrToPtr(r.Geohash),
+			Lat:              r.Lat,
+			Lng:              r.Lng,
+			LikesCount:       r.LikesCount,
+			CommentsCount:    r.CommentsCount,
+			SharesCount:      r.SharesCount,
+			SavesCount:       r.SavesCount,
+			CreatedAt:        r.CreatedAt,
+			UpdatedAt:        r.UpdatedAt,
+			Username:         r.Username,
+			IsLiked:          r.IsLiked,
+			IsSaved:          r.IsSaved,
+			ConnectionStatus: fmt.Sprintf("%v", r.ConnectionStatus),
+		}
+		if r.AvatarUrl.Valid {
+			rsp[i].AvatarURL = &r.AvatarUrl.String
+		}
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"reels": rsp, "page": page, "page_size": pageSize})
+}

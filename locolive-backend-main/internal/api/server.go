@@ -83,6 +83,25 @@ func NewServer(
 	modService := moderation.NewService(store)
 
 
+	// Initialize SMTP Mailer (recommended for Gmail App Passwords)
+	host := config.SMTPHost
+	if host == "" {
+		host = "smtp.gmail.com"
+	}
+	port := config.SMTPPort
+	if port == "" {
+		port = "587"
+	}
+	mailer := util.NewGmailMailer(
+		config.EmailSenderName,
+		config.EmailSenderAddress,
+		config.EmailSenderPassword,
+		host,
+		port,
+		config.FrontendURL,
+	)
+	log.Info().Str("host", host).Msg("Email Service Initialized (SMTP)")
+
 	server := &Server{
 		config:     config,
 		store:      store,
@@ -96,16 +115,27 @@ func NewServer(
 		admin:      adminService,
 		storage:    storageService,
 		moderation: modService,
-		mailer:     util.NewSendGridMailer(config.SendGridAPIKey, config.FromEmail, config.FrontendURL),
+		mailer:     mailer,
 	}
 
 	server.setupRouter()
 	return server, nil
 }
 
-// Start runs the HTTP server on a specific address
+// Start runs the HTTP/HTTPS server on a specific address
 func (server *Server) Start(address string) error {
-	// Force HTTP for localtunnel compatibility
+	// Check if TLS certificates are configured
+	if server.config.TLSCertFile != "" && server.config.TLSKeyFile != "" {
+		fmt.Printf("Starting HTTPS server on %s\n", address)
+		fmt.Printf("TLS Cert: %s\n", server.config.TLSCertFile)
+		fmt.Printf("TLS Key: %s\n", server.config.TLSKeyFile)
+		return server.router.RunTLS(address, server.config.TLSCertFile, server.config.TLSKeyFile)
+	}
+
+	// HTTP mode (development only - production should use HTTPS)
+	if gin.Mode() == gin.ReleaseMode {
+		fmt.Println("WARNING: Running HTTP in production mode. Set TLS_CERT_FILE and TLS_KEY_FILE for HTTPS.")
+	}
 	fmt.Printf("Starting HTTP server on %s\n", address)
 	return server.router.Run(address)
 }

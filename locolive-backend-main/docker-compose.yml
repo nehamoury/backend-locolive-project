@@ -17,6 +17,8 @@ services:
       - SERVER_ADDRESS=0.0.0.0:8080
       - REDIS_ADDRESS=redis://:${REDIS_PASSWORD}@redis:6379
       - JWT_SECRET=${JWT_SECRET}
+      - TLS_CERT_FILE=
+      - TLS_KEY_FILE=
       - FORCE_HTTPS=false
       - GIN_MODE=release
     volumes:

@@ -4,7 +4,7 @@
 # This script configures the Host Nginx and directories. Run this ONLY ONCE.
 
 # --- Configuration ---
-DOMAIN="api.locolive.com"  # Change this to your domain or VPS IP
+DOMAIN="http://46.28.44.37:8090"  # Change this to your domain or VPS IP
 PROJECT_DIR="/var/www/locolive"
 NGINX_CONF_PATH="/etc/nginx/sites-available/locolive"
 

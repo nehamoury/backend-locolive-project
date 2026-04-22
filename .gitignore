@@ -14,7 +14,7 @@ dist-ssr
 *.local
 
 # Binaries
-server
+/server
 main
 *.exe
 *.exe~
@@ -49,7 +49,7 @@ uploads/*
 tmp/
 coverage.out
 loadtest
-server
+/server
 server.log
 ngrok.log
 localtunnel.log

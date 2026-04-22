@@ -42,8 +42,7 @@ services:
     image: nginx:stable-alpine
     container_name: locolive-nginx
     ports:
-      - "80:80"
-      - "443:443"
+      - "8090:80" # Map to 8090 to avoid conflict with port 80 on host
     volumes:
       - ./nginx.conf:/etc/nginx/nginx.conf:ro
       - ./certs:/etc/nginx/certs:ro
@@ -57,6 +56,8 @@ services:
   postgres:
     image: postgis/postgis:15-3.3-alpine
     container_name: locolive-postgres
+    ports:
+      - "5433:5432" # Map to 5433 if host port 5432 is already in use
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
@@ -75,6 +76,8 @@ services:
   redis:
     image: redis:7-alpine
     container_name: locolive-redis
+    ports:
+      - "6380:6379" # Map to 6380 if host port 6379 is already in use
     command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data

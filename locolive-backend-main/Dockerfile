@@ -36,13 +36,13 @@ COPY --from=builder /app/server .
 # We will use environment variables in Docker Compose, but copying app.env 
 # as a fallback or template is good practice.
 # Copy app.env.example as app.env so Viper has a file to read
-# Actual values will be overridden by environment variables injected by Render
+# Actual values will be overridden by environment variables injected by Docker/Render
 COPY app.env.example app.env
 COPY db/migrations ./db/migrations
 COPY start.sh .
 
-# Ensure start script is executable
-RUN chmod +x start.sh
+# Ensure start script is executable and fix Windows line endings (CRLF -> LF)
+RUN sed -i 's/\r$//' start.sh && chmod +x start.sh
 
 EXPOSE 8080
 

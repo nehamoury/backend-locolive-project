@@ -104,10 +104,8 @@ func corsMiddleware(frontendURL string) gin.HandlerFunc {
 					return
 				}
 			} else {
-				// In development, allow localhost for flexibility
-				if strings.HasPrefix(origin, "http://localhost") || strings.HasPrefix(origin, "http://127.0.0.1") || origin == frontendURL {
-					c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
-				}
+				// In development, allow localhost and any other origin for flexibility
+				c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
 			}
 		}
 
@@ -137,11 +135,11 @@ func securityHeadersMiddleware() gin.HandlerFunc {
 		// Allows external assets like Mapbox, Google Fonts, and local dev assets.
 		csp := strings.Join([]string{
 			"default-src 'self'",
-			"img-src 'self' data: https: blob: http://localhost:8081", // Allow local uploads
+			"img-src 'self' data: https: blob: *", // Allow all image sources (or narrow down to your media domain)
 			"script-src 'self' 'unsafe-inline' https://api.mapbox.com",
 			"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://api.mapbox.com",
 			"font-src 'self' https://fonts.gstatic.com",
-			"connect-src 'self' https://api.mapbox.com https://*.tiles.mapbox.com ws://localhost:8081 http://localhost:8081",
+			"connect-src 'self' https://api.mapbox.com https://*.tiles.mapbox.com *", // Allow all connections (or narrow down to your API domain)
 			"worker-src 'self' blob:",
 		}, "; ")
 		c.Writer.Header().Set("Content-Security-Policy", csp)

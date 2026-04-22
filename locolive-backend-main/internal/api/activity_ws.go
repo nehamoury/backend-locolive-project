@@ -13,10 +13,9 @@ import (
 func (server *Server) activityWebSocket(ctx *gin.Context) {
 	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
 
-	// User must be admin or moderator
-	user, err := server.store.GetUserByID(ctx, authPayload.UserID)
-	if err != nil || (user.Role != "admin" && user.Role != "moderator") {
-		ctx.AbortWithStatusJSON(http.StatusForbidden, errorResponse(ErrNotAdmin))
+	// User must be admin or moderator (Optimized: Check Role directly from JWT payload)
+	if authPayload.Role != "admin" && authPayload.Role != "moderator" {
+		ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "access denied: administrative privileges required"})
 		return
 	}
 

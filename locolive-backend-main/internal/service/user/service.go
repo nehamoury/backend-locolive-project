@@ -109,12 +109,12 @@ func (s *ServiceImpl) LoginUser(ctx context.Context, req LoginUserParams) (*Logi
 		return nil, errors.New("incorrect password")
 	}
 
-	accessToken, accessPayload, err := s.tokenMaker.CreateToken(user.Username, user.ID, s.config.AccessTokenDuration)
+	accessToken, accessPayload, err := s.tokenMaker.CreateToken(user.Username, user.ID, string(user.Role), s.config.AccessTokenDuration)
 	if err != nil {
 		return nil, err
 	}
 
-	refreshToken, refreshPayload, err := s.tokenMaker.CreateToken(user.Username, user.ID, s.config.RefreshTokenDuration)
+	refreshToken, refreshPayload, err := s.tokenMaker.CreateToken(user.Username, user.ID, string(user.Role), s.config.RefreshTokenDuration)
 	if err != nil {
 		return nil, err
 	}

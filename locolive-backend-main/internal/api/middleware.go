@@ -1,9 +1,7 @@
 package api
 
 import (
-	"database/sql"
 	"errors"
-	"fmt"
 	"net/http"
 	"strings"
 
@@ -21,42 +19,44 @@ const (
 // authMiddleware creates a gin middleware for authorization
 func authMiddleware(tokenMaker token.Maker) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		authorizationHeader := ctx.GetHeader(authorizationHeaderKey)
+		var accessToken string
 
-		// Check for query parameter (for WebSockets)
-		if len(authorizationHeader) == 0 {
-			tokenParam := ctx.Query("token")
-			if len(tokenParam) > 0 {
-				fmt.Printf("[DEBUG] authMiddleware: found token in query param\n")
-				authorizationHeader = "Bearer " + tokenParam
+		// 1. Try Authorization Header (Preferred)
+		authorizationHeader := ctx.GetHeader(authorizationHeaderKey)
+		if len(authorizationHeader) > 0 {
+			fields := strings.Fields(authorizationHeader)
+			if len(fields) >= 2 && strings.ToLower(fields[0]) == authorizationTypeBearer {
+				accessToken = fields[1]
 			}
 		}
 
-		if len(authorizationHeader) == 0 {
-			fmt.Printf("[DEBUG] authMiddleware: no authorization header or token param\n")
-			err := errors.New("authorization header is not provided")
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, errorResponse(err))
+		// 2. Try httpOnly Cookie (Browser Security)
+		if accessToken == "" {
+			cookie, err := ctx.Cookie("access_token")
+			if err == nil {
+				accessToken = cookie
+			}
+		}
+
+		// 3. Try Query Param - STRICTLY LIMITED to WebSockets (/ws/*)
+		// This prevents tokens from leaking into logs via normal GET requests
+		if accessToken == "" && strings.HasPrefix(ctx.Request.URL.Path, "/api/ws") {
+			accessToken = ctx.Query("token")
+		}
+
+		if accessToken == "" {
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
 			return
 		}
 
-		fields := strings.Fields(authorizationHeader)
-		if len(fields) < 2 {
-			err := errors.New("invalid authorization header format")
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, errorResponse(err))
-			return
-		}
-
-		authorizationType := strings.ToLower(fields[0])
-		if authorizationType != authorizationTypeBearer {
-			err := fmt.Errorf("unsupported authorization type %s", authorizationType)
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, errorResponse(err))
-			return
-		}
-
-		accessToken := fields[1]
+		// Verify Token and handle errors safely (no raw leaks)
 		payload, err := tokenMaker.VerifyToken(accessToken)
 		if err != nil {
-			ctx.AbortWithStatusJSON(http.StatusUnauthorized, errorResponse(err))
+			msg := "invalid or expired token"
+			if errors.Is(err, token.ErrExpiredToken) {
+				msg = "token has expired"
+			}
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msg})
 			return
 		}
 
@@ -65,27 +65,21 @@ func authMiddleware(tokenMaker token.Maker) gin.HandlerFunc {
 	}
 }
 
-var ErrNotAdmin = errors.New("user is not an admin")
-
 // adminMiddleware verifies that the user has admin role
-func adminMiddleware(server *Server) gin.HandlerFunc {
+// OPTIMIZED: Uses the Role embedded in JWT payload to avoid DB queries on every request.
+func adminMiddleware() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
-		authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
-
-		// Get user from database to check role
-		user, err := server.store.GetUserByID(ctx, authPayload.UserID)
-		if err != nil {
-			if err == sql.ErrNoRows {
-				ctx.AbortWithStatusJSON(http.StatusUnauthorized, errorResponse(ErrNotAdmin))
-				return
-			}
-			ctx.AbortWithStatusJSON(http.StatusInternalServerError, errorResponse(err))
+		payload, exists := ctx.Get(authorizationPayloadKey)
+		if !exists {
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
 			return
 		}
 
-		// Check if user is admin or moderator
-		if user.Role != "admin" && user.Role != "moderator" {
-			ctx.AbortWithStatusJSON(http.StatusForbidden, errorResponse(ErrNotAdmin))
+		authPayload := payload.(*token.Payload)
+
+		// Check role directly from JWT payload
+		if authPayload.Role != "admin" && authPayload.Role != "moderator" {
+			ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "access denied: administrative privileges required"})
 			return
 		}
 
@@ -93,38 +87,28 @@ func adminMiddleware(server *Server) gin.HandlerFunc {
 	}
 }
 
-// corsMiddleware handles the CORS middleware
+// corsMiddleware handles the CORS middleware with production-safe logic
 func corsMiddleware(frontendURL string) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Allowed origins for CORS
-		allowedOrigins := map[string]bool{
-			"http://localhost:5173": true, // Vite dev server
-			"http://localhost:3000": true, // Alternative dev port
-			"http://localhost:8080": true, // Backend serving frontend
-			"http://127.0.0.1:5173": true, // Localhost alternative
-			"http://127.0.0.1:3000": true, // Localhost alternative
-			"http://127.0.0.1:8080": true, // Localhost alternative
-		}
-
-		// Add production frontend URL if configured
-		if frontendURL != "" {
-			allowedOrigins[frontendURL] = true
-		}
-
 		origin := c.Request.Header.Get("Origin")
-		if allowedOrigins[origin] {
-			c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
-		} else if origin == "" {
-			// For requests without origin (same-origin requests or non-browser clients)
-			// Use the frontend URL if configured, otherwise omit header
-			if frontendURL != "" {
-				c.Writer.Header().Set("Access-Control-Allow-Origin", frontendURL)
+		isRelease := gin.Mode() == gin.ReleaseMode
+
+		if origin != "" {
+			// In production, strictly match the configured frontend URL. DO NOT allow wildcard.
+			if isRelease {
+				if origin == frontendURL {
+					c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+				} else {
+					// Disallowed origin
+					c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "CORS policy: origin not allowed"})
+					return
+				}
+			} else {
+				// In development, allow localhost for flexibility
+				if strings.HasPrefix(origin, "http://localhost") || strings.HasPrefix(origin, "http://127.0.0.1") || origin == frontendURL {
+					c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+				}
 			}
-			// If no origin and no frontendURL configured, don't set header
-			// Browser will handle same-origin requests normally
-		} else {
-			// For disallowed origins: don't set Access-Control-Allow-Origin
-			// This will cause browser to block the request (correct security behavior)
 		}
 
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
@@ -140,33 +124,31 @@ func corsMiddleware(frontendURL string) gin.HandlerFunc {
 	}
 }
 
-// securityHeadersMiddleware adds essential security headers to all responses
+// securityHeadersMiddleware adds essential security headers and polished CSP
 func securityHeadersMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// Prevent MIME type sniffing
 		c.Writer.Header().Set("X-Content-Type-Options", "nosniff")
-
-		// Prevent clickjacking
 		c.Writer.Header().Set("X-Frame-Options", "DENY")
-
-		// Referrer policy
 		c.Writer.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-
-		// CSP (IMPORTANT) - Prevents XSS by controlling resource loading
-		c.Writer.Header().Set("Content-Security-Policy",
-			"default-src 'self'; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline'")
-
-		// XSS protection (legacy browsers)
 		c.Writer.Header().Set("X-XSS-Protection", "1; mode=block")
+		c.Writer.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)")
 
-		// Permissions policy (disable unused browser features)
-		c.Writer.Header().Set("Permissions-Policy",
-			"camera=(), microphone=(), geolocation=(self)")
+		// Polished Content-Security-Policy (CSP)
+		// Allows external assets like Mapbox, Google Fonts, and local dev assets.
+		csp := strings.Join([]string{
+			"default-src 'self'",
+			"img-src 'self' data: https: blob: http://localhost:8081", // Allow local uploads
+			"script-src 'self' 'unsafe-inline' https://api.mapbox.com",
+			"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://api.mapbox.com",
+			"font-src 'self' https://fonts.gstatic.com",
+			"connect-src 'self' https://api.mapbox.com https://*.tiles.mapbox.com ws://localhost:8081 http://localhost:8081",
+			"worker-src 'self' blob:",
+		}, "; ")
+		c.Writer.Header().Set("Content-Security-Policy", csp)
 
-		// HSTS (only HTTPS in production)
-		if gin.Mode() == gin.ReleaseMode {
-			c.Writer.Header().Set("Strict-Transport-Security",
-				"max-age=31536000; includeSubDomains; preload")
+		// HSTS (Only enabled in production when using HTTPS)
+		if gin.Mode() == gin.ReleaseMode && c.Request.TLS != nil {
+			c.Writer.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload")
 		}
 
 		c.Next()

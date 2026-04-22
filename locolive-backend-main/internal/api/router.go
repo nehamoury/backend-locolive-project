@@ -44,6 +44,7 @@ func (server *Server) setupRouter() {
 
 	// File upload
 	authRoutes.POST("/upload", server.uploadFile)
+	authRoutes.POST("/logout", server.logoutUser)
 
 	authRoutes.POST("/location/ping", server.locationRateLimiter(), server.updateLocation)
 	authRoutes.GET("/location/heatmap", server.getHeatmap)
@@ -172,7 +173,7 @@ func (server *Server) setupRouter() {
 	// Admin routes
 	adminRoutes := api.Group("/admin")
 	adminRoutes.Use(authMiddleware(server.tokenMaker))
-	adminRoutes.Use(adminMiddleware(server))
+	adminRoutes.Use(adminMiddleware())
 
 	adminRoutes.GET("/users", server.listUsers)
 	adminRoutes.POST("/users/ban", server.banUser)

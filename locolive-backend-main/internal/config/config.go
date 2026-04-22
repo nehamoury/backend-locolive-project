@@ -22,6 +22,7 @@ type Config struct {
 	R2BucketName         string        `mapstructure:"R2_BUCKET_NAME"`
 	ExpoRedirectURL      string        `mapstructure:"EXPO_REDIRECT_URL"`
 	FrontendURL          string        `mapstructure:"FRONTEND_URL"`
+	Environment          string        `mapstructure:"ENVIRONMENT"`
 	EmailSenderName      string        `mapstructure:"EMAIL_SENDER_NAME"`
 	EmailSenderAddress   string        `mapstructure:"EMAIL_SENDER_ADDRESS"`
 	EmailSenderPassword  string        `mapstructure:"EMAIL_SENDER_PASSWORD"`

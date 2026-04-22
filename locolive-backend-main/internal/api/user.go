@@ -93,13 +93,13 @@ func (server *Server) createUser(ctx *gin.Context) {
 	}
 
 	// Generate Tokens for Auto-Login
-	accessToken, accessPayload, err := server.tokenMaker.CreateToken(user.Username, user.ID, server.config.AccessTokenDuration)
+	accessToken, accessPayload, err := server.tokenMaker.CreateToken(user.Username, user.ID, string(user.Role), server.config.AccessTokenDuration)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
 	}
 
-	refreshToken, refreshPayload, err := server.tokenMaker.CreateToken(user.Username, user.ID, server.config.RefreshTokenDuration)
+	refreshToken, refreshPayload, err := server.tokenMaker.CreateToken(user.Username, user.ID, string(user.Role), server.config.RefreshTokenDuration)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
@@ -118,6 +118,29 @@ func (server *Server) createUser(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
 	}
+
+	// Set Access Token in Cookie
+	isProduction := server.config.Environment == "production"
+	ctx.SetCookie(
+		"access_token",
+		accessToken,
+		int(server.config.AccessTokenDuration.Seconds()),
+		"/",
+		"",           // domain (empty means current host)
+		isProduction, // secure (only HTTPS in production)
+		true,         // httpOnly
+	)
+
+	// Set Refresh Token in Cookie
+	ctx.SetCookie(
+		"refresh_token",
+		refreshToken,
+		int(server.config.RefreshTokenDuration.Seconds()),
+		"/api/users/renew_access", // only send to renewal endpoint
+		"",
+		isProduction,
+		true,
+	)
 
 	rsp := loginUserResponse{
 		SessionID:             session.ID,
@@ -179,6 +202,29 @@ func (server *Server) loginUser(ctx *gin.Context) {
 		return
 	}
 
+	// Set Access Token in Cookie
+	isProduction := server.config.Environment == "production"
+	ctx.SetCookie(
+		"access_token",
+		result.AccessToken,
+		int(server.config.AccessTokenDuration.Seconds()),
+		"/",
+		"",
+		isProduction,
+		true,
+	)
+
+	// Set Refresh Token in Cookie
+	ctx.SetCookie(
+		"refresh_token",
+		result.RefreshToken,
+		int(server.config.RefreshTokenDuration.Seconds()),
+		"/api/users/renew_access",
+		"",
+		isProduction,
+		true,
+	)
+
 	rsp := loginUserResponse{
 		SessionID:             result.SessionID,
 		AccessToken:           result.AccessToken,
@@ -188,6 +234,12 @@ func (server *Server) loginUser(ctx *gin.Context) {
 		User:                  newUserResponse(result.User),
 	}
 	ctx.JSON(http.StatusOK, rsp)
+}
+
+func (server *Server) logoutUser(ctx *gin.Context) {
+	ctx.SetCookie("access_token", "", -1, "/", "", false, true)
+	ctx.SetCookie("refresh_token", "", -1, "/api/users/renew_access", "", false, true)
+	ctx.JSON(http.StatusOK, gin.H{"message": "logged out successfully"})
 }
 
 type searchUsersRequest struct {

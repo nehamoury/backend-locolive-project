@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
-	"privacy-social-backend/internal/util"
 
 	"github.com/gabriel-vasile/mimetype"
 	"github.com/gin-gonic/gin"
@@ -108,22 +107,14 @@ func (server *Server) uploadFile(ctx *gin.Context) {
 	// Reset file position for saving
 	file.Seek(0, 0)
 
-	// Generate safe filename: random string + sanitized original name
-	safeFilename := sanitizeFilename(fileHeader.Filename)
-	if safeFilename == "" || safeFilename == "." {
-		safeFilename = "file" + ext
-	}
-	filename := util.RandomString(16) + "_" + safeFilename
-	dst := filepath.Join("./uploads", filename)
-
-	if err := ctx.SaveUploadedFile(fileHeader, dst); err != nil {
-		ctx.JSON(http.StatusInternalServerError, errorResponse(fmt.Errorf("failed to save file")))
+	// Use the storage service (S3/R2 or local)
+	fileURL, err := server.storage.UploadFile(ctx, file, fileHeader)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{"success": false, "error": fmt.Sprintf("upload failed: %v", err)})
 		return
 	}
 
-	publicURL := "/uploads/" + filename
-
 	ctx.JSON(http.StatusOK, uploadResponse{
-		URL: publicURL,
+		URL: fileURL,
 	})
 }

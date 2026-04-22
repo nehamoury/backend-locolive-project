@@ -1,4 +1,4 @@
-# Build Stage
+# Build Stage - Locolive Backend
 FROM golang:1.24-alpine AS builder
 
 WORKDIR /app

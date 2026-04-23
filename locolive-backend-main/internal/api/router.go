@@ -30,6 +30,11 @@ func (server *Server) setupRouter() {
 			"message": "LocoLiv Backend is live!",
 		})
 	})
+	api.GET("/health", func(ctx *gin.Context) {
+		ctx.JSON(200, gin.H{
+			"status": "healthy",
+		})
+	})
 	api.POST("/users", server.authRateLimiter(), server.createUser)
 	api.POST("/users/login", server.authRateLimiter(), server.loginUser)
 	api.POST("/auth/google", server.authRateLimiter(), server.googleLogin)
@@ -218,6 +223,9 @@ func (server *Server) setupRouter() {
 	router.StaticFile("/pwa-192x192.png", "../frontend/dist/pwa-192x192.png")
 	router.StaticFile("/pwa-512x512.png", "../frontend/dist/pwa-512x512.png")
 	router.StaticFile("/favicon.svg", "../frontend/dist/favicon.svg")
+	router.GET("/favicon.ico", func(c *gin.Context) {
+		c.Status(204)
+	})
 
 	// SPA fallback: serve index.html for all unmatched routes (allows client-side routing)
 	router.NoRoute(func(c *gin.Context) {

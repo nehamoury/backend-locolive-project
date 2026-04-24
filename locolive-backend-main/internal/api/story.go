@@ -357,8 +357,23 @@ func (server *Server) getUserStories(ctx *gin.Context) {
 		return
 	}
 
-	// For now, we reuse the GetMyStories logic but for a targeted user.
-	// In a real app, this would filter by visibility (public/connections).
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+
+	canView, reason, err := server.canViewContent(ctx, authPayload.UserID, userID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+	if !canView {
+		if reason == "blocked" {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		// If private, return empty array
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "This account is private"})
+		return
+	}
+
 	stories, err := server.story.GetMyStories(ctx, userID)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))

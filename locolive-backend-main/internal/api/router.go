@@ -126,6 +126,7 @@ func (server *Server) setupRouter() {
 	// Privacy features
 	authRoutes.GET("/privacy", server.getPrivacySettings)
 	authRoutes.PUT("/privacy", server.updatePrivacySettings)
+	authRoutes.PATCH("/user/privacy", server.updateAccountPrivacy)
 	authRoutes.POST("/users/block", server.blockUser)
 	authRoutes.DELETE("/users/block/:id", server.unblockUser)
 	authRoutes.GET("/users/blocked", server.getBlockedUsers)

@@ -55,6 +55,7 @@ type ProfileResponse struct {
 	Links             []UserLink `json:"links"`
 	Interests         []string   `json:"interests"`
 	DistanceKm        *float64   `json:"distance_km,omitempty"`
+	IsPrivate         bool       `json:"is_private"`
 }
 
 func mapProfileResponse(p db.GetUserProfileRow) ProfileResponse {
@@ -93,6 +94,7 @@ func mapProfileResponse(p db.GetUserProfileRow) ProfileResponse {
 		WebsiteURL:        p.WebsiteUrl.String,
 		Links:             links,
 		Interests:         p.Interests,
+		IsPrivate:         p.IsPrivate,
 	}
 }
 
@@ -129,29 +131,67 @@ func (server *Server) getUserProfile(ctx *gin.Context) {
 	// Try Redis cache first
 	cacheKey := "profile:" + userID.String()
 	cachedData, err := server.redis.Get(context.Background(), cacheKey).Result()
+	
+	var rsp ProfileResponse
+	fromCache := false
+
 	if err == nil && cachedData != "" {
-		ctx.Header("X-Cache", "HIT")
-		ctx.Data(http.StatusOK, "application/json", []byte(cachedData))
-		return
+		if err := json.Unmarshal([]byte(cachedData), &rsp); err == nil {
+			fromCache = true
+			ctx.Header("X-Cache", "HIT")
+		}
 	}
 
-	profile, err := server.store.GetUserProfile(ctx, userID)
-	if err != nil {
-		if err == sql.ErrNoRows {
-			ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+	if !fromCache {
+		profile, err := server.store.GetUserProfile(ctx, userID)
+		if err != nil {
+			if err == sql.ErrNoRows {
+				ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+				return
+			}
+			ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 			return
 		}
-		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
-		return
+
+		rsp = mapProfileResponse(profile)
+		rsp.ViewsCount = profile.TotalViews
+		rsp.CrossingsCount = profile.CrossingsCount
+
+		// Cache for future requests
+		if rspJSON, err := json.Marshal(rsp); err == nil {
+			server.redis.Set(context.Background(), cacheKey, rspJSON, 5*time.Minute)
+		}
+		ctx.Header("X-Cache", "MISS")
 	}
 
-	rsp := mapProfileResponse(profile)
-	rsp.ViewsCount = profile.TotalViews
-	rsp.CrossingsCount = profile.CrossingsCount
-
-	// Calculate distance if user is authenticated and viewing different profile
+	// Enforce Privacy Settings (Whether from cache or DB)
 	if exists && authPayload != nil {
 		payload := authPayload.(*token.Payload)
+		canView, reason, err := server.canViewContent(ctx, payload.UserID, userID)
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+			return
+		}
+		if !canView {
+			switch reason {
+			case "blocked":
+				ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+				return
+			case "private":
+				// Blank out private information
+				rsp.StoryCount = 0
+				rsp.PostCount = 0
+				rsp.ReelsCount = 0
+				rsp.FollowingCount = 0
+				rsp.FollowersCount = 0
+				rsp.ConnectionCount = 0
+				rsp.ViewsCount = 0
+				rsp.CrossingsCount = 0
+				// Still allow them to see avatar, username, full_name, and bio
+			}
+		}
+
+		// Calculate distance if user is authenticated and viewing different profile
 		if payload.UserID != userID {
 			if viewerLat, viewerLng, viewerExists, err := server.location.GetUserLocation(context.Background(), payload.UserID); err == nil && viewerExists {
 				if profileLat, profileLng, profileExists, err := server.location.GetUserLocation(context.Background(), userID); err == nil && profileExists {
@@ -160,13 +200,18 @@ func (server *Server) getUserProfile(ctx *gin.Context) {
 				}
 			}
 		}
+	} else if rsp.IsPrivate {
+		// If unauthenticated and private
+		rsp.StoryCount = 0
+		rsp.PostCount = 0
+		rsp.ReelsCount = 0
+		rsp.FollowingCount = 0
+		rsp.FollowersCount = 0
+		rsp.ConnectionCount = 0
+		rsp.ViewsCount = 0
+		rsp.CrossingsCount = 0
 	}
 
-	// Cache the result
-	responseJSON, _ := json.Marshal(rsp)
-	server.redis.Set(context.Background(), cacheKey, responseJSON, profileCacheTTL)
-
-	ctx.Header("X-Cache", "MISS")
 	ctx.JSON(http.StatusOK, rsp)
 }
 

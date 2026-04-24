@@ -7,28 +7,74 @@ package db
 
 import (
 	"context"
-	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
+const addReservedUsername = `-- name: AddReservedUsername :exec
+INSERT INTO reserved_usernames (username, reason) VALUES ($1, $2)
+`
+
+type AddReservedUsernameParams struct {
+	Username string `json:"username"`
+	Reason   string `json:"reason"`
+}
+
+// Add a new reserved username (admin only)
+func (q *Queries) AddReservedUsername(ctx context.Context, arg AddReservedUsernameParams) error {
+	_, err := q.db.ExecContext(ctx, addReservedUsername, arg.Username, arg.Reason)
+	return err
+}
+
 const checkUsernameExists = `-- name: CheckUsernameExists :one
--- Check if a username exists (case-insensitive)
 SELECT EXISTS(SELECT 1 FROM users WHERE LOWER(username) = LOWER($1)) as exists
 `
 
-func (q *Queries) CheckUsernameExists(ctx context.Context, username string) (bool, error) {
-	row := q.db.QueryRowContext(ctx, checkUsernameExists, username)
+// Check if a username exists (case-insensitive)
+func (q *Queries) CheckUsernameExists(ctx context.Context, lower string) (bool, error) {
+	row := q.db.QueryRowContext(ctx, checkUsernameExists, lower)
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
 }
 
+const findSimilarUsernames = `-- name: FindSimilarUsernames :many
+SELECT username FROM users
+WHERE username ILIKE '%' || $1::text || '%'
+LIMIT 10
+`
+
+// Find usernames similar to the given pattern (for suggestions)
+// Uses trigram similarity if available, otherwise simple LIKE
+func (q *Queries) FindSimilarUsernames(ctx context.Context, pattern string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, findSimilarUsernames, pattern)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var username string
+		if err := rows.Scan(&username); err != nil {
+			return nil, err
+		}
+		items = append(items, username)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getReservedUsernames = `-- name: GetReservedUsernames :many
--- Get all reserved usernames
 SELECT username FROM reserved_usernames
 `
 
+// Get all reserved usernames
 func (q *Queries) GetReservedUsernames(ctx context.Context) ([]string, error) {
 	rows, err := q.db.QueryContext(ctx, getReservedUsernames)
 	if err != nil {
@@ -52,51 +98,17 @@ func (q *Queries) GetReservedUsernames(ctx context.Context) ([]string, error) {
 	return items, nil
 }
 
-const isUsernameReserved = `-- name: IsUsernameReserved :one
--- Check if a username is reserved
-SELECT EXISTS(SELECT 1 FROM reserved_usernames WHERE LOWER(username) = LOWER($1)) as reserved
+const getUserByPreviousUsername = `-- name: GetUserByPreviousUsername :one
+SELECT u.id, u.phone, u.password_hash, u.username, u.full_name, u.avatar_url, u.bio, u.role, u.trust_level, u.is_verified, u.is_shadow_banned, u.last_active_at, u.created_at, u.is_ghost_mode, u.activity_streak, u.streak_updated_at, u.is_premium, u.streak_freezes_remaining, u.boost_expires_at, u.banner_url, u.theme, u.profile_visibility, u.email, u.website_url, u.links, u.google_id, u.ghost_mode_expires_at, u.interests, u.trust_score, u.username_normalized, u.is_private, u.privacy_updated_at FROM users u
+JOIN username_history h ON u.id = h.user_id
+WHERE LOWER(h.old_username) = LOWER($1)
+ORDER BY h.changed_at DESC
+LIMIT 1
 `
 
-func (q *Queries) IsUsernameReserved(ctx context.Context, username string) (bool, error) {
-	row := q.db.QueryRowContext(ctx, isUsernameReserved, username)
-	var reserved bool
-	err := row.Scan(&reserved)
-	return reserved, err
-}
-
-const addReservedUsername = `-- name: AddReservedUsername :exec
--- Add a new reserved username (admin only)
-INSERT INTO reserved_usernames (username, reason) VALUES ($1, $2)
-`
-
-type AddReservedUsernameParams struct {
-	Username string `json:"username"`
-	Reason   string `json:"reason"`
-}
-
-func (q *Queries) AddReservedUsername(ctx context.Context, arg AddReservedUsernameParams) error {
-	_, err := q.db.ExecContext(ctx, addReservedUsername, arg.Username, arg.Reason)
-	return err
-}
-
-const removeReservedUsername = `-- name: RemoveReservedUsername :exec
--- Remove a reserved username (admin only)
-DELETE FROM reserved_usernames WHERE LOWER(username) = LOWER($1)
-`
-
-func (q *Queries) RemoveReservedUsername(ctx context.Context, username string) error {
-	_, err := q.db.ExecContext(ctx, removeReservedUsername, username)
-	return err
-}
-
-const getUserByUsernameCaseInsensitive = `-- name: GetUserByUsernameCaseInsensitive :one
--- Get user by username (case-insensitive match)
-SELECT id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, ghost_mode_expires_at, interests, trust_score FROM users
-WHERE LOWER(username) = LOWER($1) LIMIT 1
-`
-
-func (q *Queries) GetUserByUsernameCaseInsensitive(ctx context.Context, username string) (User, error) {
-	row := q.db.QueryRowContext(ctx, getUserByUsernameCaseInsensitive, username)
+// Find user by a previous username (for redirects/mentions)
+func (q *Queries) GetUserByPreviousUsername(ctx context.Context, lower string) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByPreviousUsername, lower)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -126,61 +138,70 @@ func (q *Queries) GetUserByUsernameCaseInsensitive(ctx context.Context, username
 		&i.Links,
 		&i.GoogleID,
 		&i.GhostModeExpiresAt,
-		&i.Interests,
+		pq.Array(&i.Interests),
 		&i.TrustScore,
+		&i.UsernameNormalized,
+		&i.IsPrivate,
+		&i.PrivacyUpdatedAt,
 	)
 	return i, err
 }
 
-const recordUsernameChange = `-- name: RecordUsernameChange :one
--- Record a username change in history
-INSERT INTO username_history (user_id, old_username, new_username, changed_by) 
-VALUES ($1, $2, $3, $4) 
-RETURNING id, user_id, old_username, new_username, changed_at, changed_by
+const getUserByUsernameCaseInsensitive = `-- name: GetUserByUsernameCaseInsensitive :one
+
+SELECT id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at FROM users
+WHERE LOWER(username) = LOWER($1) LIMIT 1
 `
 
-type RecordUsernameChangeParams struct {
-	UserID      uuid.UUID     `json:"user_id"`
-	OldUsername string        `json:"old_username"`
-	NewUsername string        `json:"new_username"`
-	ChangedBy   uuid.NullUUID `json:"changed_by"`
-}
-
-type UsernameHistory struct {
-	ID          uuid.UUID     `json:"id"`
-	UserID      uuid.UUID     `json:"user_id"`
-	OldUsername string        `json:"old_username"`
-	NewUsername string        `json:"new_username"`
-	ChangedAt   time.Time     `json:"changed_at"`
-	ChangedBy   uuid.NullUUID `json:"changed_by"`
-}
-
-func (q *Queries) RecordUsernameChange(ctx context.Context, arg RecordUsernameChangeParams) (UsernameHistory, error) {
-	row := q.db.QueryRowContext(ctx, recordUsernameChange,
-		arg.UserID,
-		arg.OldUsername,
-		arg.NewUsername,
-		arg.ChangedBy,
-	)
-	var i UsernameHistory
+// Username Uniqueness System Queries
+// Get user by username (case-insensitive match)
+func (q *Queries) GetUserByUsernameCaseInsensitive(ctx context.Context, lower string) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByUsernameCaseInsensitive, lower)
+	var i User
 	err := row.Scan(
 		&i.ID,
-		&i.UserID,
-		&i.OldUsername,
-		&i.NewUsername,
-		&i.ChangedAt,
-		&i.ChangedBy,
+		&i.Phone,
+		&i.PasswordHash,
+		&i.Username,
+		&i.FullName,
+		&i.AvatarUrl,
+		&i.Bio,
+		&i.Role,
+		&i.TrustLevel,
+		&i.IsVerified,
+		&i.IsShadowBanned,
+		&i.LastActiveAt,
+		&i.CreatedAt,
+		&i.IsGhostMode,
+		&i.ActivityStreak,
+		&i.StreakUpdatedAt,
+		&i.IsPremium,
+		&i.StreakFreezesRemaining,
+		&i.BoostExpiresAt,
+		&i.BannerUrl,
+		&i.Theme,
+		&i.ProfileVisibility,
+		&i.Email,
+		&i.WebsiteUrl,
+		&i.Links,
+		&i.GoogleID,
+		&i.GhostModeExpiresAt,
+		pq.Array(&i.Interests),
+		&i.TrustScore,
+		&i.UsernameNormalized,
+		&i.IsPrivate,
+		&i.PrivacyUpdatedAt,
 	)
 	return i, err
 }
 
 const getUsernameHistory = `-- name: GetUsernameHistory :many
--- Get username change history for a user
 SELECT id, user_id, old_username, new_username, changed_at, changed_by FROM username_history 
 WHERE user_id = $1 
 ORDER BY changed_at DESC
 `
 
+// Get username change history for a user
 func (q *Queries) GetUsernameHistory(ctx context.Context, userID uuid.UUID) ([]UsernameHistory, error) {
 	rows, err := q.db.QueryContext(ctx, getUsernameHistory, userID)
 	if err != nil {
@@ -211,59 +232,66 @@ func (q *Queries) GetUsernameHistory(ctx context.Context, userID uuid.UUID) ([]U
 	return items, nil
 }
 
-const getUserByPreviousUsername = `-- name: GetUserByPreviousUsername :one
--- Find user by a previous username (for redirects/mentions)
-SELECT u.id, u.phone, u.password_hash, u.username, u.full_name, u.avatar_url, u.bio, u.role, u.trust_level, u.is_verified, u.is_shadow_banned, u.last_active_at, u.created_at, u.is_ghost_mode, u.activity_streak, u.streak_updated_at, u.is_premium, u.streak_freezes_remaining, u.boost_expires_at, u.banner_url, u.theme, u.profile_visibility, u.email, u.website_url, u.links, u.google_id, u.ghost_mode_expires_at, u.interests, u.trust_score FROM users u
-JOIN username_history h ON u.id = h.user_id
-WHERE LOWER(h.old_username) = LOWER($1)
-ORDER BY h.changed_at DESC
-LIMIT 1
+const isUsernameReserved = `-- name: IsUsernameReserved :one
+SELECT EXISTS(SELECT 1 FROM reserved_usernames WHERE LOWER(username) = LOWER($1)) as reserved
 `
 
-func (q *Queries) GetUserByPreviousUsername(ctx context.Context, username string) (User, error) {
-	row := q.db.QueryRowContext(ctx, getUserByPreviousUsername, username)
-	var i User
+// Check if a username is reserved
+func (q *Queries) IsUsernameReserved(ctx context.Context, lower string) (bool, error) {
+	row := q.db.QueryRowContext(ctx, isUsernameReserved, lower)
+	var reserved bool
+	err := row.Scan(&reserved)
+	return reserved, err
+}
+
+const recordUsernameChange = `-- name: RecordUsernameChange :one
+INSERT INTO username_history (user_id, old_username, new_username, changed_by) 
+VALUES ($1, $2, $3, $4) 
+RETURNING id, user_id, old_username, new_username, changed_at, changed_by
+`
+
+type RecordUsernameChangeParams struct {
+	UserID      uuid.UUID     `json:"user_id"`
+	OldUsername string        `json:"old_username"`
+	NewUsername string        `json:"new_username"`
+	ChangedBy   uuid.NullUUID `json:"changed_by"`
+}
+
+// Record a username change in history
+func (q *Queries) RecordUsernameChange(ctx context.Context, arg RecordUsernameChangeParams) (UsernameHistory, error) {
+	row := q.db.QueryRowContext(ctx, recordUsernameChange,
+		arg.UserID,
+		arg.OldUsername,
+		arg.NewUsername,
+		arg.ChangedBy,
+	)
+	var i UsernameHistory
 	err := row.Scan(
 		&i.ID,
-		&i.Phone,
-		&i.PasswordHash,
-		&i.Username,
-		&i.FullName,
-		&i.AvatarUrl,
-		&i.Bio,
-		&i.Role,
-		&i.TrustLevel,
-		&i.IsVerified,
-		&i.IsShadowBanned,
-		&i.LastActiveAt,
-		&i.CreatedAt,
-		&i.IsGhostMode,
-		&i.ActivityStreak,
-		&i.StreakUpdatedAt,
-		&i.IsPremium,
-		&i.StreakFreezesRemaining,
-		&i.BoostExpiresAt,
-		&i.BannerUrl,
-		&i.Theme,
-		&i.ProfileVisibility,
-		&i.Email,
-		&i.WebsiteUrl,
-		&i.Links,
-		&i.GoogleID,
-		&i.GhostModeExpiresAt,
-		&i.Interests,
-		&i.TrustScore,
+		&i.UserID,
+		&i.OldUsername,
+		&i.NewUsername,
+		&i.ChangedAt,
+		&i.ChangedBy,
 	)
 	return i, err
 }
 
+const removeReservedUsername = `-- name: RemoveReservedUsername :exec
+DELETE FROM reserved_usernames WHERE LOWER(username) = LOWER($1)
+`
+
+// Remove a reserved username (admin only)
+func (q *Queries) RemoveReservedUsername(ctx context.Context, lower string) error {
+	_, err := q.db.ExecContext(ctx, removeReservedUsername, lower)
+	return err
+}
+
 const updateUsername = `-- name: UpdateUsername :one
--- Update user username with history tracking
--- Note: This should be called within a transaction that also records history
 UPDATE users 
 SET username = $2, username_normalized = LOWER($2)
 WHERE id = $1
-RETURNING id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, ghost_mode_expires_at, interests, trust_score
+RETURNING id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at
 `
 
 type UpdateUsernameParams struct {
@@ -271,6 +299,8 @@ type UpdateUsernameParams struct {
 	Username string    `json:"username"`
 }
 
+// Update user username with history tracking
+// Note: This should be called within a transaction that also records history
 func (q *Queries) UpdateUsername(ctx context.Context, arg UpdateUsernameParams) (User, error) {
 	row := q.db.QueryRowContext(ctx, updateUsername, arg.ID, arg.Username)
 	var i User
@@ -302,39 +332,11 @@ func (q *Queries) UpdateUsername(ctx context.Context, arg UpdateUsernameParams) 
 		&i.Links,
 		&i.GoogleID,
 		&i.GhostModeExpiresAt,
-		&i.Interests,
+		pq.Array(&i.Interests),
 		&i.TrustScore,
+		&i.UsernameNormalized,
+		&i.IsPrivate,
+		&i.PrivacyUpdatedAt,
 	)
 	return i, err
-}
-
-const findSimilarUsernames = `-- name: FindSimilarUsernames :many
--- Find usernames similar to the given pattern (for suggestions)
--- Uses trigram similarity if available, otherwise simple LIKE
-SELECT username FROM users
-WHERE username ILIKE '%' || $1 || '%'
-LIMIT 10
-`
-
-func (q *Queries) FindSimilarUsernames(ctx context.Context, pattern string) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, findSimilarUsernames, pattern)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []string
-	for rows.Next() {
-		var username string
-		if err := rows.Scan(&username); err != nil {
-			return nil, err
-		}
-		items = append(items, username)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }

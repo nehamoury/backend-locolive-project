@@ -221,7 +221,34 @@ func (server *Server) sendConnectionRequest(ctx *gin.Context) {
 		return
 	}
 
-	// Create notification...
+	// Auto-accept if the target user is public
+	targetUser, err := server.store.GetUserByID(ctx, targetID)
+	if err == nil && !targetUser.IsPrivate {
+		conn, err = server.store.UpdateConnectionStatus(ctx, db.UpdateConnectionStatusParams{
+			RequesterID: authPayload.UserID,
+			TargetID:    targetID,
+			Status:      "accepted",
+		})
+		
+		if err == nil {
+			// Notify about the accepted connection
+			server.createNotificationWithSound(ctx, targetID, "connection_accepted", "connection",
+				"New Connection", "Someone started following you!",
+				map[string]uuid.UUID{"user": authPayload.UserID})
+			
+			// Invalidate profile caches
+			server.redis.Del(ctx, "profile:"+authPayload.UserID.String())
+			server.redis.Del(ctx, "profile:"+targetID.String())
+
+			ctx.JSON(http.StatusCreated, gin.H{
+				"status":   conn.Status,
+				"is_match": false,
+			})
+			return
+		}
+	}
+
+	// Create notification for pending request
 	server.createNotificationWithSound(ctx, targetID, "connection_request", "connection", 
 		"New Connection Request", "Someone wants to connect!", 
 		map[string]uuid.UUID{"user": authPayload.UserID})

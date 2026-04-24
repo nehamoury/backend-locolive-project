@@ -238,3 +238,110 @@ func (server *Server) panicMode(ctx *gin.Context) {
 		"status": "scrubbed",
 	})
 }
+
+
+type updateAccountPrivacyRequest struct {
+	IsPrivate bool `json:"is_private"`
+}
+
+func (server *Server) updateAccountPrivacy(ctx *gin.Context) {
+	var req updateAccountPrivacyRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, errorResponse(err))
+		return
+	}
+
+	payload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+
+	user, err := server.store.GetUserByID(ctx, payload.UserID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	oldIsPrivate := user.IsPrivate
+
+	updatedUser, err := server.store.UpdateAccountPrivacy(ctx, db.UpdateAccountPrivacyParams{
+		ID:        payload.UserID,
+		IsPrivate: req.IsPrivate,
+	})
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	_, _ = server.store.LogPrivacyChange(ctx, db.LogPrivacyChangeParams{
+		UserID:   payload.UserID,
+		OldValue: oldIsPrivate,
+		NewValue: req.IsPrivate,
+	})
+
+	server.invalidateProfileCache(payload.UserID)
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"message":    "Privacy updated",
+		"is_private": updatedUser.IsPrivate,
+	})
+}
+
+
+
+func (server *Server) canViewContent(ctx *gin.Context, viewerID, ownerID uuid.UUID) (bool, string, error) {
+	// Self access
+	if viewerID == ownerID {
+		return true, "", nil
+	}
+
+	// Check block status (both ways)
+	blocked, err := server.store.IsUserBlocked(ctx, db.IsUserBlockedParams{
+		BlockerID: ownerID,
+		BlockedID: viewerID,
+	})
+	if err != nil {
+		return false, "", err
+	}
+	if blocked {
+		return false, "blocked", nil
+	}
+
+	blockedByViewer, err := server.store.IsUserBlocked(ctx, db.IsUserBlockedParams{
+		BlockerID: viewerID,
+		BlockedID: ownerID,
+	})
+	if err != nil {
+		return false, "", err
+	}
+	if blockedByViewer {
+		return false, "blocked", nil
+	}
+
+	// Private account check
+	user, err := server.store.GetUserByID(ctx, ownerID)
+	if err != nil {
+		return false, "", err
+	}
+
+	if user.IsPrivate {
+		// Check connection status
+		conn, err := server.store.GetConnection(ctx, db.GetConnectionParams{
+			RequesterID: viewerID,
+			TargetID:    ownerID,
+		})
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return false, "private", nil
+			}
+			return false, "", err
+		}
+		if conn.Status != "accepted" {
+			return false, "private", nil
+		}
+	}
+
+	return true, "", nil
+}
+

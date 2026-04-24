@@ -47,6 +47,7 @@ type searchUserResponse struct {
 	FullName   string    `json:"full_name"`
 	AvatarUrl  string    `json:"avatar_url"`
 	IsVerified bool      `json:"is_verified"`
+	IsPrivate  bool      `json:"is_private"`
 }
 
 func newUserResponse(user db.User) userResponse {
@@ -289,6 +290,7 @@ func (server *Server) searchUsers(ctx *gin.Context) {
 			FullName:   u.FullName,
 			AvatarUrl:  avatarUrl,
 			IsVerified: u.IsVerified,
+			IsPrivate:  u.IsPrivate,
 		})
 	}
 

@@ -13,3 +13,19 @@ SET
     show_location = EXCLUDED.show_location,
     updated_at = NOW()
 RETURNING *;
+
+-- name: UpdateAccountPrivacy :one
+UPDATE users
+SET 
+    is_private = $2,
+    privacy_updated_at = NOW()
+WHERE id = $1
+RETURNING *;
+
+-- name: LogPrivacyChange :one
+INSERT INTO privacy_logs (
+    user_id, old_value, new_value
+) VALUES (
+    $1, $2, $3
+) RETURNING *;
+

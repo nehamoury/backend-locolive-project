@@ -57,5 +57,5 @@ RETURNING *;
 -- Find usernames similar to the given pattern (for suggestions)
 -- Uses trigram similarity if available, otherwise simple LIKE
 SELECT username FROM users
-WHERE username ILIKE '%' || $1 || '%'
+WHERE username ILIKE '%' || sqlc.arg(pattern)::text || '%'
 LIMIT 10;

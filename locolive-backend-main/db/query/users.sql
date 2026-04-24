@@ -125,7 +125,7 @@ RETURNING id, username, full_name, avatar_url, bio, banner_url, theme, profile_v
 
 -- name: GetUserProfile :one
 SELECT 
-  u.id, u.username, u.full_name, u.phone, u.avatar_url, u.bio, u.banner_url, u.theme, u.profile_visibility, u.email, u.is_ghost_mode, u.website_url, u.links, u.interests, u.created_at, u.is_premium, u.last_active_at,
+  u.id, u.username, u.full_name, u.phone, u.avatar_url, u.bio, u.banner_url, u.theme, u.profile_visibility, u.email, u.is_ghost_mode, u.website_url, u.links, u.interests, u.created_at, u.is_premium, u.last_active_at, u.is_private,
   (SELECT COUNT(*) FROM stories WHERE stories.user_id = u.id) as story_count,
   (SELECT COUNT(*) FROM posts WHERE posts.user_id = u.id) as post_count,
   (SELECT COUNT(*) FROM reels WHERE reels.user_id = u.id) as reels_count,
@@ -171,7 +171,8 @@ SELECT
   username,
   full_name,
   avatar_url,
-  is_verified
+  is_verified,
+  is_private
 FROM users
 WHERE 
   (username ILIKE '%' || sqlc.arg(query)::text || '%'

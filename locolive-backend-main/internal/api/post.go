@@ -164,6 +164,21 @@ func (server *Server) getUserPosts(ctx *gin.Context) {
 
 	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
 
+	canView, reason, err := server.canViewContent(ctx, authPayload.UserID, targetUserID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+	if !canView {
+		if reason == "blocked" {
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+		// If private, return empty array
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "This account is private"})
+		return
+	}
+
 	page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(ctx.DefaultQuery("page_size", "12"))
 	if page < 1 {

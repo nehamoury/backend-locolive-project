@@ -10,6 +10,7 @@ import (
 	"database/sql"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 const getPrivacySettings = `-- name: GetPrivacySettings :one
@@ -26,6 +27,87 @@ func (q *Queries) GetPrivacySettings(ctx context.Context, userID uuid.UUID) (Pri
 		&i.ShowLocation,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const logPrivacyChange = `-- name: LogPrivacyChange :one
+INSERT INTO privacy_logs (
+    user_id, old_value, new_value
+) VALUES (
+    $1, $2, $3
+) RETURNING id, user_id, old_value, new_value, changed_at
+`
+
+type LogPrivacyChangeParams struct {
+	UserID   uuid.UUID `json:"user_id"`
+	OldValue bool      `json:"old_value"`
+	NewValue bool      `json:"new_value"`
+}
+
+func (q *Queries) LogPrivacyChange(ctx context.Context, arg LogPrivacyChangeParams) (PrivacyLog, error) {
+	row := q.db.QueryRowContext(ctx, logPrivacyChange, arg.UserID, arg.OldValue, arg.NewValue)
+	var i PrivacyLog
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.OldValue,
+		&i.NewValue,
+		&i.ChangedAt,
+	)
+	return i, err
+}
+
+const updateAccountPrivacy = `-- name: UpdateAccountPrivacy :one
+UPDATE users
+SET 
+    is_private = $2,
+    privacy_updated_at = NOW()
+WHERE id = $1
+RETURNING id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at
+`
+
+type UpdateAccountPrivacyParams struct {
+	ID        uuid.UUID `json:"id"`
+	IsPrivate bool      `json:"is_private"`
+}
+
+func (q *Queries) UpdateAccountPrivacy(ctx context.Context, arg UpdateAccountPrivacyParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, updateAccountPrivacy, arg.ID, arg.IsPrivate)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Phone,
+		&i.PasswordHash,
+		&i.Username,
+		&i.FullName,
+		&i.AvatarUrl,
+		&i.Bio,
+		&i.Role,
+		&i.TrustLevel,
+		&i.IsVerified,
+		&i.IsShadowBanned,
+		&i.LastActiveAt,
+		&i.CreatedAt,
+		&i.IsGhostMode,
+		&i.ActivityStreak,
+		&i.StreakUpdatedAt,
+		&i.IsPremium,
+		&i.StreakFreezesRemaining,
+		&i.BoostExpiresAt,
+		&i.BannerUrl,
+		&i.Theme,
+		&i.ProfileVisibility,
+		&i.Email,
+		&i.WebsiteUrl,
+		&i.Links,
+		&i.GoogleID,
+		&i.GhostModeExpiresAt,
+		pq.Array(&i.Interests),
+		&i.TrustScore,
+		&i.UsernameNormalized,
+		&i.IsPrivate,
+		&i.PrivacyUpdatedAt,
 	)
 	return i, err
 }

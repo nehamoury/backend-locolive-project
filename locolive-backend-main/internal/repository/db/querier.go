@@ -13,6 +13,8 @@ import (
 
 type Querier interface {
 	AddGroupMember(ctx context.Context, arg AddGroupMemberParams) (GroupMember, error)
+	// Add a new reserved username (admin only)
+	AddReservedUsername(ctx context.Context, arg AddReservedUsernameParams) error
 	AddStoryToHighlight(ctx context.Context, arg AddStoryToHighlightParams) (HighlightStory, error)
 	AdminDeletePostComment(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	AdminDeleteReelComment(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
@@ -23,6 +25,8 @@ type Querier interface {
 	BlockUser(ctx context.Context, arg BlockUserParams) (BlockedUser, error)
 	BoostUser(ctx context.Context, arg BoostUserParams) (User, error)
 	CheckGroupMembership(ctx context.Context, arg CheckGroupMembershipParams) (bool, error)
+	// Check if a username exists (case-insensitive)
+	CheckUsernameExists(ctx context.Context, lower string) (bool, error)
 	CountAdminCrossings(ctx context.Context) (int64, error)
 	CountArchivedStories(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountConnectionRequestsToday(ctx context.Context, requesterID uuid.UUID) (int64, error)
@@ -96,6 +100,9 @@ type Querier interface {
 	DeleteUserPasswordResets(ctx context.Context, userID uuid.UUID) error
 	// Block Logic
 	FindPotentialCrossings(ctx context.Context, arg FindPotentialCrossingsParams) ([]FindPotentialCrossingsRow, error)
+	// Find usernames similar to the given pattern (for suggestions)
+	// Uses trigram similarity if available, otherwise simple LIKE
+	FindSimilarUsernames(ctx context.Context, pattern string) ([]string, error)
 	GetActiveStoriesByUserID(ctx context.Context, userID uuid.UUID) ([]GetActiveStoriesByUserIDRow, error)
 	GetArchivedStories(ctx context.Context, arg GetArchivedStoriesParams) ([]ArchivedStory, error)
 	GetArchivedStory(ctx context.Context, arg GetArchivedStoryParams) (ArchivedStory, error)
@@ -129,6 +136,8 @@ type Querier interface {
 	GetRecentProfileVisitors(ctx context.Context, viewedUserID uuid.UUID) ([]GetRecentProfileVisitorsRow, error)
 	GetReel(ctx context.Context, id uuid.UUID) (GetReelRow, error)
 	GetReelComment(ctx context.Context, id uuid.UUID) (ReelComment, error)
+	// Get all reserved usernames
+	GetReservedUsernames(ctx context.Context) ([]string, error)
 	GetSession(ctx context.Context, id uuid.UUID) (Session, error)
 	// Get stories within a bounding box for map view
 	// AND DATE(u.last_active_at) >= CURRENT_DATE - INTERVAL '1 day'
@@ -155,13 +164,20 @@ type Querier interface {
 	GetUserByGoogleID(ctx context.Context, googleID sql.NullString) (User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
 	GetUserByPhone(ctx context.Context, phone string) (User, error)
+	// Find user by a previous username (for redirects/mentions)
+	GetUserByPreviousUsername(ctx context.Context, lower string) (User, error)
 	GetUserByUsername(ctx context.Context, username string) (User, error)
+	// Username Uniqueness System Queries
+	// Get user by username (case-insensitive match)
+	GetUserByUsernameCaseInsensitive(ctx context.Context, lower string) (User, error)
 	GetUserEngagementStats(ctx context.Context, userID uuid.UUID) (GetUserEngagementStatsRow, error)
 	GetUserGroups(ctx context.Context, userID uuid.UUID) ([]Group, error)
 	GetUserMentions(ctx context.Context, arg GetUserMentionsParams) ([]GetUserMentionsRow, error)
 	GetUserProfile(ctx context.Context, id uuid.UUID) (GetUserProfileRow, error)
 	GetUserStreak(ctx context.Context, userID uuid.UUID) (UserStreak, error)
 	GetUserTrustScore(ctx context.Context, id uuid.UUID) (int32, error)
+	// Get username change history for a user
+	GetUsernameHistory(ctx context.Context, userID uuid.UUID) ([]UsernameHistory, error)
 	HasValidStory(ctx context.Context, userID uuid.UUID) (bool, error)
 	IncrementDailyStats(ctx context.Context, arg IncrementDailyStatsParams) (DailyStat, error)
 	IncrementPostComments(ctx context.Context, id uuid.UUID) error
@@ -173,6 +189,8 @@ type Querier interface {
 	IncrementReelShares(ctx context.Context, id uuid.UUID) error
 	IncrementReportPriority(ctx context.Context, targetID uuid.NullUUID) error
 	IsUserBlocked(ctx context.Context, arg IsUserBlockedParams) (bool, error)
+	// Check if a username is reserved
+	IsUsernameReserved(ctx context.Context, lower string) (bool, error)
 	LikePost(ctx context.Context, arg LikePostParams) (PostLike, error)
 	LikeReel(ctx context.Context, arg LikeReelParams) (ReelLike, error)
 	ListActiveUsersWithLocation(ctx context.Context) ([]ListActiveUsersWithLocationRow, error)
@@ -205,11 +223,16 @@ type Querier interface {
 	ListUserReels(ctx context.Context, arg ListUserReelsParams) ([]ListUserReelsRow, error)
 	// Admin Queries
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
+	LogPrivacyChange(ctx context.Context, arg LogPrivacyChangeParams) (PrivacyLog, error)
 	MarkAllNotificationsAsRead(ctx context.Context, userID uuid.UUID) error
 	MarkConversationRead(ctx context.Context, arg MarkConversationReadParams) error
 	MarkMessageRead(ctx context.Context, arg MarkMessageReadParams) (Message, error)
 	MarkNotificationAsRead(ctx context.Context, arg MarkNotificationAsReadParams) (Notification, error)
+	// Record a username change in history
+	RecordUsernameChange(ctx context.Context, arg RecordUsernameChangeParams) (UsernameHistory, error)
 	RemoveGroupMember(ctx context.Context, arg RemoveGroupMemberParams) error
+	// Remove a reserved username (admin only)
+	RemoveReservedUsername(ctx context.Context, lower string) error
 	RemoveStoryFromHighlight(ctx context.Context, arg RemoveStoryFromHighlightParams) error
 	// Admin: Resolve report
 	ResolveReport(ctx context.Context, id uuid.UUID) (Report, error)
@@ -224,6 +247,7 @@ type Querier interface {
 	UnlikePost(ctx context.Context, arg UnlikePostParams) error
 	UnlikeReel(ctx context.Context, arg UnlikeReelParams) error
 	UnsaveReel(ctx context.Context, arg UnsaveReelParams) error
+	UpdateAccountPrivacy(ctx context.Context, arg UpdateAccountPrivacyParams) (User, error)
 	UpdateConnectionStatus(ctx context.Context, arg UpdateConnectionStatusParams) (Connection, error)
 	UpdateHighlightCover(ctx context.Context, arg UpdateHighlightCoverParams) (HighlightGroup, error)
 	UpdateMessage(ctx context.Context, arg UpdateMessageParams) (Message, error)
@@ -241,19 +265,10 @@ type Querier interface {
 	UpdateUserStreak(ctx context.Context, arg UpdateUserStreakParams) (UserStreak, error)
 	UpdateUserTrust(ctx context.Context, arg UpdateUserTrustParams) (User, error)
 	UpdateUserTrustScore(ctx context.Context, arg UpdateUserTrustScoreParams) error
-	UpsertPrivacySettings(ctx context.Context, arg UpsertPrivacySettingsParams) (PrivacySetting, error)
-	// Username management
-	CheckUsernameExists(ctx context.Context, username string) (bool, error)
-	GetReservedUsernames(ctx context.Context) ([]string, error)
-	IsUsernameReserved(ctx context.Context, username string) (bool, error)
-	AddReservedUsername(ctx context.Context, arg AddReservedUsernameParams) error
-	RemoveReservedUsername(ctx context.Context, username string) error
-	GetUserByUsernameCaseInsensitive(ctx context.Context, username string) (User, error)
-	FindSimilarUsernames(ctx context.Context, pattern string) ([]string, error)
-	RecordUsernameChange(ctx context.Context, arg RecordUsernameChangeParams) (UsernameHistory, error)
+	// Update user username with history tracking
+	// Note: This should be called within a transaction that also records history
 	UpdateUsername(ctx context.Context, arg UpdateUsernameParams) (User, error)
-	GetUsernameHistory(ctx context.Context, userID uuid.UUID) ([]UsernameHistory, error)
-	GetUserByPreviousUsername(ctx context.Context, username string) (User, error)
+	UpsertPrivacySettings(ctx context.Context, arg UpsertPrivacySettingsParams) (PrivacySetting, error)
 }
 
 var _ Querier = (*Queries)(nil)

@@ -457,6 +457,14 @@ type PostLike struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+type PrivacyLog struct {
+	ID        uuid.UUID `json:"id"`
+	UserID    uuid.UUID `json:"user_id"`
+	OldValue  bool      `json:"old_value"`
+	NewValue  bool      `json:"new_value"`
+	ChangedAt time.Time `json:"changed_at"`
+}
+
 type PrivacySetting struct {
 	UserID           uuid.UUID      `json:"user_id"`
 	WhoCanMessage    sql.NullString `json:"who_can_message"`
@@ -525,6 +533,12 @@ type Report struct {
 	TargetID      uuid.NullUUID  `json:"target_id"`
 	TargetType    sql.NullString `json:"target_type"`
 	PriorityScore int32          `json:"priority_score"`
+}
+
+type ReservedUsername struct {
+	Username  string    `json:"username"`
+	Reason    string    `json:"reason"`
+	CreatedAt time.Time `json:"created_at"`
 }
 
 type Session struct {
@@ -608,6 +622,9 @@ type User struct {
 	GhostModeExpiresAt     sql.NullTime    `json:"ghost_mode_expires_at"`
 	Interests              []string        `json:"interests"`
 	TrustScore             int32           `json:"trust_score"`
+	UsernameNormalized     sql.NullString  `json:"username_normalized"`
+	IsPrivate              bool            `json:"is_private"`
+	PrivacyUpdatedAt       sql.NullTime    `json:"privacy_updated_at"`
 }
 
 type UserBadge struct {
@@ -623,4 +640,13 @@ type UserStreak struct {
 	LongestStreak    int32        `json:"longest_streak"`
 	LastActivityDate sql.NullTime `json:"last_activity_date"`
 	UpdatedAt        sql.NullTime `json:"updated_at"`
+}
+
+type UsernameHistory struct {
+	ID          uuid.UUID     `json:"id"`
+	UserID      uuid.UUID     `json:"user_id"`
+	OldUsername string        `json:"old_username"`
+	NewUsername string        `json:"new_username"`
+	ChangedAt   time.Time     `json:"changed_at"`
+	ChangedBy   uuid.NullUUID `json:"changed_by"`
 }

@@ -124,6 +124,16 @@ func (server *Server) createPost(ctx *gin.Context) {
 
 	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
 
+	// 1. Moderate Content
+	isFlagged, reason := server.moderation.ModerateText(req.Caption + " " + req.BodyText)
+	if isFlagged {
+		ctx.JSON(http.StatusForbidden, gin.H{
+			"error": "Content flagged as " + reason,
+			"code":  "MODERATION_FAILED",
+		})
+		return
+	}
+
 	post, err := server.store.CreatePost(ctx, db.CreatePostParams{
 		UserID:      authPayload.UserID,
 		MediaUrl:    req.MediaURL,
@@ -378,7 +388,7 @@ func (server *Server) addPostComment(ctx *gin.Context) {
 
 	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
 
-	isFlagged := server.moderation.FilterContent(req.Content)
+	isFlagged, _ := server.moderation.ModerateText(req.Content)
 
 	comment, err := server.store.CreatePostComment(ctx, db.CreatePostCommentParams{
 		PostID:    postID,

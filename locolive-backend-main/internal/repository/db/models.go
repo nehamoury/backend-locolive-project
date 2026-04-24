@@ -66,6 +66,12 @@ const (
 	NotificationTypeCrossingDetected   NotificationType = "crossing_detected"
 	NotificationTypeMessageReceived    NotificationType = "message_received"
 	NotificationTypeStoryReaction      NotificationType = "story_reaction"
+	NotificationTypeBadge              NotificationType = "badge"
+	NotificationTypeStreak             NotificationType = "streak"
+	NotificationTypeNudge              NotificationType = "nudge"
+	NotificationTypeNearbyStory        NotificationType = "nearby_story"
+	NotificationTypeReelLiked          NotificationType = "reel_liked"
+	NotificationTypeReelCommented      NotificationType = "reel_commented"
 )
 
 func (e *NotificationType) Scan(src interface{}) error {
@@ -268,6 +274,16 @@ type ArchivedStory struct {
 	CreatedAt         sql.NullTime   `json:"created_at"`
 }
 
+type Badge struct {
+	ID          string          `json:"id"`
+	Name        string          `json:"name"`
+	Description string          `json:"description"`
+	Icon        string          `json:"icon"`
+	Category    string          `json:"category"`
+	Requirement json.RawMessage `json:"requirement"`
+	CreatedAt   sql.NullTime    `json:"created_at"`
+}
+
 type BlockedUser struct {
 	ID        uuid.UUID    `json:"id"`
 	BlockerID uuid.UUID    `json:"blocker_id"`
@@ -290,6 +306,25 @@ type Crossing struct {
 	LocationCenter string    `json:"location_center"`
 	OccurredAt     time.Time `json:"occurred_at"`
 	CreatedAt      time.Time `json:"created_at"`
+}
+
+type DailyStat struct {
+	ID               uuid.UUID     `json:"id"`
+	UserID           uuid.UUID     `json:"user_id"`
+	Date             time.Time     `json:"date"`
+	CrossingsCount   sql.NullInt32 `json:"crossings_count"`
+	StoriesPosted    sql.NullInt32 `json:"stories_posted"`
+	MessagesSent     sql.NullInt32 `json:"messages_sent"`
+	LocationsUpdated sql.NullInt32 `json:"locations_updated"`
+	CreatedAt        sql.NullTime  `json:"created_at"`
+}
+
+type EngagementEvent struct {
+	ID        uuid.UUID             `json:"id"`
+	UserID    uuid.UUID             `json:"user_id"`
+	EventType string                `json:"event_type"`
+	EventData pqtype.NullRawMessage `json:"event_data"`
+	CreatedAt sql.NullTime          `json:"created_at"`
 }
 
 type Group struct {
@@ -367,6 +402,18 @@ type Notification struct {
 	RelatedCrossingID uuid.NullUUID    `json:"related_crossing_id"`
 	IsRead            bool             `json:"is_read"`
 	CreatedAt         time.Time        `json:"created_at"`
+	SubType           sql.NullString   `json:"sub_type"`
+	Sound             sql.NullString   `json:"sound"`
+}
+
+type NotificationPreference struct {
+	UserID         uuid.UUID    `json:"user_id"`
+	PushEnabled    sql.NullBool `json:"push_enabled"`
+	EmailEnabled   sql.NullBool `json:"email_enabled"`
+	CrossingAlerts sql.NullBool `json:"crossing_alerts"`
+	MessageAlerts  sql.NullBool `json:"message_alerts"`
+	StoryAlerts    sql.NullBool `json:"story_alerts"`
+	UpdatedAt      sql.NullTime `json:"updated_at"`
 }
 
 type PasswordReset struct {
@@ -561,4 +608,19 @@ type User struct {
 	GhostModeExpiresAt     sql.NullTime    `json:"ghost_mode_expires_at"`
 	Interests              []string        `json:"interests"`
 	TrustScore             int32           `json:"trust_score"`
+}
+
+type UserBadge struct {
+	ID       uuid.UUID    `json:"id"`
+	UserID   uuid.UUID    `json:"user_id"`
+	BadgeID  string       `json:"badge_id"`
+	EarnedAt sql.NullTime `json:"earned_at"`
+}
+
+type UserStreak struct {
+	UserID           uuid.UUID    `json:"user_id"`
+	CurrentStreak    int32        `json:"current_streak"`
+	LongestStreak    int32        `json:"longest_streak"`
+	LastActivityDate sql.NullTime `json:"last_activity_date"`
+	UpdatedAt        sql.NullTime `json:"updated_at"`
 }

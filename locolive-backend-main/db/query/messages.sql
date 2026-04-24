@@ -88,13 +88,13 @@ SELECT * FROM messages WHERE id = $1;
 
 -- name: MarkMessageRead :one
 UPDATE messages
-SET read_at = NOW()
+SET read_at = NOW(), is_read = true
 WHERE id = $1 AND receiver_id = $2 AND read_at IS NULL
 RETURNING *;
 
 -- name: MarkConversationRead :exec
 UPDATE messages
-SET read_at = NOW()
+SET read_at = NOW(), is_read = true
 WHERE receiver_id = $1 AND sender_id = $2 AND read_at IS NULL;
 
 -- name: CreateMessageReaction :one

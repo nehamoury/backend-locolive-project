@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
@@ -221,13 +222,9 @@ func (server *Server) sendConnectionRequest(ctx *gin.Context) {
 	}
 
 	// Create notification...
-	server.store.CreateNotification(ctx, db.CreateNotificationParams{
-		UserID:        targetID,
-		Type:          "connection_request",
-		Title:         "New Connection Request",
-		Message:       "Someone wants to connect!",
-		RelatedUserID: uuid.NullUUID{UUID: authPayload.UserID, Valid: true},
-	})
+	server.createNotificationWithSound(ctx, targetID, "connection_request", "connection", 
+		"New Connection Request", "Someone wants to connect!", 
+		map[string]uuid.UUID{"user": authPayload.UserID})
 
 	ctx.JSON(http.StatusCreated, gin.H{
 		"status":   conn.Status,
@@ -280,21 +277,20 @@ func (server *Server) updateConnection(ctx *gin.Context) {
 	if req.Status == "accepted" {
 		accepter, err := server.store.GetUserByID(ctx, authPayload.UserID)
 		if err == nil {
-			_, err = server.store.CreateNotification(ctx, db.CreateNotificationParams{
-				UserID:        requesterID,
-				Type:          "connection_accepted",
-				Title:         "Connection Accepted",
-				Message:       fmt.Sprintf("%s accepted your connection request", accepter.Username),
-				RelatedUserID: uuid.NullUUID{UUID: authPayload.UserID, Valid: true},
-			})
+			_, err = server.createNotificationWithSound(ctx, requesterID, "connection_accepted", "connection",
+				"Connection Accepted", fmt.Sprintf("%s accepted your connection request", accepter.Username),
+				map[string]uuid.UUID{"user": authPayload.UserID})
 			if err != nil {
 				log.Error().Err(err).Msg("failed to create connection accepted notification")
 			}
 		}
 
-		// Invalidate profile caches for both users so connection count updates instantly
 		server.redis.Del(ctx, "profile:"+authPayload.UserID.String())
 		server.redis.Del(ctx, "profile:"+requesterID.String())
+
+		// Update Trust Scores for both parties
+		go server.user.UpdateTrustScore(context.Background(), authPayload.UserID)
+		go server.user.UpdateTrustScore(context.Background(), requesterID)
 
 		// Real-time WebSocket notification to both parties
 		msg, _ := json.Marshal(gin.H{

@@ -23,6 +23,8 @@ type Client struct {
 // WSMessage defines the structure of WebSocket messages
 type WSMessage struct {
 	Type      string      `json:"type"` // "new_message", "typing", etc.
+	SubType   string      `json:"sub_type,omitempty"`
+	Sound     string      `json:"sound,omitempty"`
 	Payload   interface{} `json:"payload"`
 	SenderID  uuid.UUID   `json:"sender_id,omitempty"`
 	CreatedAt time.Time   `json:"created_at,omitempty"`

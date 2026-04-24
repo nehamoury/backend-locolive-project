@@ -7,6 +7,7 @@ package db
 
 import (
 	"context"
+	"database/sql"
 
 	"github.com/google/uuid"
 )
@@ -40,19 +41,23 @@ const createNotification = `-- name: CreateNotification :one
 INSERT INTO notifications (
   user_id,
   type,
+  sub_type,
+  sound,
   title,
   message,
   related_user_id,
   related_story_id,
   related_crossing_id
 ) VALUES (
-  $1, $2, $3, $4, $5, $6, $7
-) RETURNING id, user_id, type, title, message, related_user_id, related_story_id, related_crossing_id, is_read, created_at
+  $1, $2, $3, $4, $5, $6, $7, $8, $9
+) RETURNING id, user_id, type, title, message, related_user_id, related_story_id, related_crossing_id, is_read, created_at, sub_type, sound
 `
 
 type CreateNotificationParams struct {
 	UserID            uuid.UUID        `json:"user_id"`
 	Type              NotificationType `json:"type"`
+	SubType           sql.NullString   `json:"sub_type"`
+	Sound             sql.NullString   `json:"sound"`
 	Title             string           `json:"title"`
 	Message           string           `json:"message"`
 	RelatedUserID     uuid.NullUUID    `json:"related_user_id"`
@@ -64,6 +69,8 @@ func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotification
 	row := q.db.QueryRowContext(ctx, createNotification,
 		arg.UserID,
 		arg.Type,
+		arg.SubType,
+		arg.Sound,
 		arg.Title,
 		arg.Message,
 		arg.RelatedUserID,
@@ -82,6 +89,8 @@ func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotification
 		&i.RelatedCrossingID,
 		&i.IsRead,
 		&i.CreatedAt,
+		&i.SubType,
+		&i.Sound,
 	)
 	return i, err
 }
@@ -115,7 +124,7 @@ func (q *Queries) DeleteOldNotifications(ctx context.Context) error {
 }
 
 const listNotifications = `-- name: ListNotifications :many
-SELECT id, user_id, type, title, message, related_user_id, related_story_id, related_crossing_id, is_read, created_at FROM notifications
+SELECT id, user_id, type, title, message, related_user_id, related_story_id, related_crossing_id, is_read, created_at, sub_type, sound FROM notifications
 WHERE user_id = $1
 ORDER BY created_at DESC
 LIMIT $2 OFFSET $3
@@ -147,6 +156,8 @@ func (q *Queries) ListNotifications(ctx context.Context, arg ListNotificationsPa
 			&i.RelatedCrossingID,
 			&i.IsRead,
 			&i.CreatedAt,
+			&i.SubType,
+			&i.Sound,
 		); err != nil {
 			return nil, err
 		}
@@ -162,7 +173,7 @@ func (q *Queries) ListNotifications(ctx context.Context, arg ListNotificationsPa
 }
 
 const listNotificationsAdmin = `-- name: ListNotificationsAdmin :many
-SELECT id, user_id, type, title, message, related_user_id, related_story_id, related_crossing_id, is_read, created_at FROM notifications
+SELECT id, user_id, type, title, message, related_user_id, related_story_id, related_crossing_id, is_read, created_at, sub_type, sound FROM notifications
 WHERE type = 'system_announcement'
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
@@ -194,6 +205,8 @@ func (q *Queries) ListNotificationsAdmin(ctx context.Context, arg ListNotificati
 			&i.RelatedCrossingID,
 			&i.IsRead,
 			&i.CreatedAt,
+			&i.SubType,
+			&i.Sound,
 		); err != nil {
 			return nil, err
 		}
@@ -223,7 +236,7 @@ const markNotificationAsRead = `-- name: MarkNotificationAsRead :one
 UPDATE notifications
 SET is_read = true
 WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, type, title, message, related_user_id, related_story_id, related_crossing_id, is_read, created_at
+RETURNING id, user_id, type, title, message, related_user_id, related_story_id, related_crossing_id, is_read, created_at, sub_type, sound
 `
 
 type MarkNotificationAsReadParams struct {
@@ -245,6 +258,8 @@ func (q *Queries) MarkNotificationAsRead(ctx context.Context, arg MarkNotificati
 		&i.RelatedCrossingID,
 		&i.IsRead,
 		&i.CreatedAt,
+		&i.SubType,
+		&i.Sound,
 	)
 	return i, err
 }

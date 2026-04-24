@@ -2,13 +2,15 @@
 INSERT INTO notifications (
   user_id,
   type,
+  sub_type,
+  sound,
   title,
   message,
   related_user_id,
   related_story_id,
   related_crossing_id
 ) VALUES (
-  $1, $2, $3, $4, $5, $6, $7
+  $1, $2, $3, $4, $5, $6, $7, $8, $9
 ) RETURNING *;
 
 -- name: ListNotifications :many

@@ -505,7 +505,7 @@ func (q *Queries) ListMessages(ctx context.Context, arg ListMessagesParams) ([]L
 
 const markConversationRead = `-- name: MarkConversationRead :exec
 UPDATE messages
-SET read_at = NOW()
+SET read_at = NOW(), is_read = true
 WHERE receiver_id = $1 AND sender_id = $2 AND read_at IS NULL
 `
 
@@ -521,7 +521,7 @@ func (q *Queries) MarkConversationRead(ctx context.Context, arg MarkConversation
 
 const markMessageRead = `-- name: MarkMessageRead :one
 UPDATE messages
-SET read_at = NOW()
+SET read_at = NOW(), is_read = true
 WHERE id = $1 AND receiver_id = $2 AND read_at IS NULL
 RETURNING id, sender_id, receiver_id, content, is_read, created_at, read_at, expires_at, media_url, media_type, group_id
 `

@@ -12,6 +12,19 @@ import (
 	"github.com/google/uuid"
 )
 
+const countReportsForUser = `-- name: CountReportsForUser :one
+SELECT COUNT(*) FROM reports 
+WHERE (target_user_id = $1 OR (target_id = $1 AND target_type = 'user'))
+AND is_resolved = false
+`
+
+func (q *Queries) CountReportsForUser(ctx context.Context, targetUserID uuid.NullUUID) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countReportsForUser, targetUserID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const getUserTrustScore = `-- name: GetUserTrustScore :one
 SELECT trust_score FROM users WHERE id = $1
 `

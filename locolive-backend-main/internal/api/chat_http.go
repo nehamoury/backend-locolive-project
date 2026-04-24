@@ -243,10 +243,18 @@ func (server *Server) sendMessage(ctx *gin.Context) {
 	if req.GroupID != nil {
 		groupID = uuid.NullUUID{UUID: *req.GroupID, Valid: true}
 		// Check membership
-		// We need CheckGroupMembership query
-		// isMember, err := server.store.CheckGroupMembership(...)
-		// For MVP compile fix, assuming valid group ID or checking later.
-		// Actually, let's just proceed. The user is asking for Basic Group Chat.
+		isMember, err := server.store.CheckGroupMembership(ctx, db.CheckGroupMembershipParams{
+			GroupID: *req.GroupID,
+			UserID:  authPayload.UserID,
+		})
+		if err != nil {
+			ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+			return
+		}
+		if !isMember {
+			ctx.JSON(http.StatusForbidden, gin.H{"error": "You must be a member of this group to send messages."})
+			return
+		}
 	}
 
 	// Handle expiry - DEFAULT TO 24 HOURS (Snapchat-style)
@@ -286,23 +294,36 @@ func (server *Server) sendMessage(ctx *gin.Context) {
 
 		wsMsg := realtime.WSMessage{
 			Type:      "new_message",
+			SubType:   "message",
+			Sound:     "chat_pop.wav",
 			Payload:   msg,
 			SenderID:  authPayload.UserID,
 			CreatedAt: msg.CreatedAt,
 		}
-		wsMsgBytes, _ := json.Marshal(wsMsg)
-		server.hub.SendToUser(receiverID.UUID, wsMsgBytes)
+		data, _ := json.Marshal(wsMsg)
+		server.hub.SendToUser(receiverID.UUID, data)
 	} else if groupID.Valid {
 		// Group Logic
-		// 1. Invalidate Group Cache? "group_messages:{groupID}"
-		// server.invalidateGroupCache(groupID.UUID)
-
-		// 2. Notify All Members
-		// members, _ := server.store.GetGroupMembers(ctx, groupID.UUID)
-		// for _, m := range members {
-		//    server.hub.SendToUser(m.UserID, wsMsgBytes)
-		// }
-		// Need GetGroupMembers query.
+		// 1. Notify All Members
+		members, err := server.store.GetGroupMembers(ctx, groupID.UUID)
+		if err == nil {
+			wsMsg := realtime.WSMessage{
+				Type:      "new_group_message",
+				SubType:   "message",
+				Sound:     "chat_pop.wav",
+				Payload:   msg,
+				SenderID:  authPayload.UserID,
+				CreatedAt: msg.CreatedAt,
+			}
+			wsMsgBytes, _ := json.Marshal(wsMsg)
+			
+			for _, m := range members {
+				// Don't send back to self (already handled below by echo)
+				if m.UserID != authPayload.UserID {
+					server.hub.SendToUser(m.UserID, wsMsgBytes)
+				}
+			}
+		}
 	}
 
 	// Also send to SENDER so their client can update the messages list
@@ -311,6 +332,8 @@ func (server *Server) sendMessage(ctx *gin.Context) {
 
 	wsMsg := realtime.WSMessage{
 		Type:      "new_message",
+		SubType:   "message",
+		Sound:     "", // No sound for self-echo usually, but keeping struct consistent
 		Payload:   msg,
 		SenderID:  authPayload.UserID,
 		CreatedAt: msg.CreatedAt,
@@ -795,4 +818,55 @@ func (server *Server) deleteConversation(ctx *gin.Context) {
 	server.invalidateUnreadCountCache(authPayload.UserID)
 
 	ctx.JSON(http.StatusOK, gin.H{"message": "conversation deleted"})
+}
+
+// getIcebreakers returns a list of suggested messages to start a conversation
+func (server *Server) getIcebreakers(ctx *gin.Context) {
+	targetIDStr := ctx.Query("user_id")
+	targetID, ok := parseUUIDParam(ctx, targetIDStr, "user_id")
+	if !ok {
+		// If no user_id, return generic ones
+		ctx.JSON(http.StatusOK, gin.H{
+			"icebreakers": []string{
+				"Hey there! 👋",
+				"Hi! How is your day going?",
+				"Hello! I'd love to connect.",
+				"Hey! What's up?",
+			},
+		})
+		return
+	}
+
+	authPayload := getAuthPayload(ctx)
+	
+	var icebreakers []string
+
+	// 1. Check for recent crossing
+	crossing, err := server.store.GetLatestCrossingBetweenUsers(ctx, db.GetLatestCrossingBetweenUsersParams{
+		UserID1: authPayload.UserID,
+		UserID2: targetID,
+	})
+
+	if err == nil {
+		// We have a crossing!
+		icebreakers = append(icebreakers, "Hey! I saw we crossed paths recently. How are you? 👋")
+		
+		// If it was very recent (last 1 hour)
+		if time.Since(crossing.OccurredAt) < 1*time.Hour {
+			icebreakers = append(icebreakers, "Hi! Just saw you nearby. Hope you're having a good time! ✨")
+		}
+	}
+
+	// 2. Add generic/fun ones
+	icebreakers = append(icebreakers, []string{
+		"Hey! I'm new here, just saying hi! 👋",
+		"Hi! Love your profile! How are you?",
+		"Hey! Do you live around here too? 📍",
+		"Hello! Hope you're having an awesome day! 🌟",
+	}...)
+
+	// Shuffle or limit? Let's just return all for now (frontend can pick)
+	ctx.JSON(http.StatusOK, gin.H{
+		"icebreakers": icebreakers,
+	})
 }

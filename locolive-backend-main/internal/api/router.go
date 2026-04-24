@@ -95,6 +95,7 @@ func (server *Server) setupRouter() {
 	authRoutes.POST("/messages/:id/reactions", server.addReaction)
 	authRoutes.DELETE("/messages/:id/reactions", server.removeReaction)
 	authRoutes.GET("/messages/:id/reactions", server.getMessageReactions)
+	authRoutes.GET("/chat/icebreakers", server.getIcebreakers)
 	authRoutes.GET("/ws/chat", server.chatWebSocket)
 
 	authRoutes.GET("/crossings", server.getCrossings)
@@ -103,6 +104,13 @@ func (server *Server) setupRouter() {
 	authRoutes.POST("/profile/boost", server.boostProfile)
 	authRoutes.PUT("/account/email", server.updateUserEmail)
 	authRoutes.PUT("/account/password", server.updateUserPassword)
+	
+	// Gamification & Stats
+	authRoutes.GET("/stats/streak", server.getStreak)
+	authRoutes.GET("/stats/daily", server.getDailyStats)
+	authRoutes.GET("/badges", server.listBadges)
+	authRoutes.PUT("/notifications/preferences", server.updateNotificationPreferences)
+	authRoutes.GET("/notifications/preferences", server.getNotificationPreferences)
 
 	// Privacy features
 	authRoutes.GET("/privacy", server.getPrivacySettings)

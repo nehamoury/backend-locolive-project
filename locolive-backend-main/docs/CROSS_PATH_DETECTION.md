@@ -16,13 +16,10 @@ Detects when two users were at the same location at the same time, creating sere
 - Time rounded to **10-minute buckets**
 - Data stored for 24 hours
 
-### 2. Crossing Detection (Background Worker)
-- Runs every **5 minutes**
-- Looks back 10-15 minutes
-- Finds users with:
-  - **Same geohash** (within ~76m)
-  - **Same time bucket** (within 10 minutes)
-- Creates crossing records
+### 2. Crossing Detection (Hybrid System) 🔥
+- **Real-time Detection:** Triggered instantly on `POST /location/ping` using Redis `GEOSEARCH` (50m radius). Perfect for immediate "Path Crossed!" alerts.
+- **Background Worker:** Runs every **5 minutes** looking back 10-15 minutes using Postgres geohash matching. Ensures 100% coverage even if Redis is bypassed.
+- **Deduplication:** Both systems use 10-minute time buckets and a database unique constraint to prevent duplicate records.
 
 ### 3. 24-Hour Validity
 - Crossings expire after 24 hours

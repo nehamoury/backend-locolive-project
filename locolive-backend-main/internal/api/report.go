@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"net/http"
@@ -63,6 +64,11 @@ func (server *Server) createReport(ctx *gin.Context) {
 		"target_type": req.TargetType,
 		"reason":      req.Reason,
 	})
+
+	// Update Trust Score if target is a user
+	if req.TargetType == "user" {
+		go server.user.UpdateTrustScore(context.Background(), targetID)
+	}
 
 	ctx.JSON(http.StatusCreated, report)
 }

@@ -237,6 +237,16 @@ func (server *Server) createReel(ctx *gin.Context) {
 
 	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
 
+	// 1. Moderate Content
+	isFlagged, reason := server.moderation.ModerateText(req.Caption)
+	if isFlagged {
+		ctx.JSON(http.StatusForbidden, gin.H{
+			"error": "Content flagged as " + reason,
+			"code":  "MODERATION_FAILED",
+		})
+		return
+	}
+
 	// Determine geom if location is provided
 	var geom interface{}
 	if req.HasLocation {
@@ -479,10 +489,13 @@ func (server *Server) addReelComment(ctx *gin.Context) {
 
 	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
 
+	isFlagged, _ := server.moderation.ModerateText(req.Content)
+
 	comment, err := server.store.CreateReelComment(ctx, db.CreateReelCommentParams{
-		ReelID:  reelID,
-		UserID:  authPayload.UserID,
-		Content: req.Content,
+		ReelID:    reelID,
+		UserID:    authPayload.UserID,
+		Content:   req.Content,
+		IsFlagged: isFlagged,
 	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))

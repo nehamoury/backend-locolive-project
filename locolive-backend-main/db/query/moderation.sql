@@ -36,3 +36,8 @@ UPDATE users SET trust_score = trust_score + $2 WHERE id = $1;
 
 -- name: GetUserTrustScore :one
 SELECT trust_score FROM users WHERE id = $1;
+
+-- name: CountReportsForUser :one
+SELECT COUNT(*) FROM reports 
+WHERE (target_user_id = $1 OR (target_id = $1 AND target_type = 'user'))
+AND is_resolved = false;

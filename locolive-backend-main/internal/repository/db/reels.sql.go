@@ -95,19 +95,25 @@ func (q *Queries) CreateReel(ctx context.Context, arg CreateReelParams) (CreateR
 }
 
 const createReelComment = `-- name: CreateReelComment :one
-INSERT INTO reel_comments (reel_id, user_id, content)
-VALUES ($1, $2, $3)
+INSERT INTO reel_comments (reel_id, user_id, content, is_flagged)
+VALUES ($1, $2, $3, $4)
 RETURNING id, reel_id, user_id, content, created_at, is_flagged
 `
 
 type CreateReelCommentParams struct {
-	ReelID  uuid.UUID `json:"reel_id"`
-	UserID  uuid.UUID `json:"user_id"`
-	Content string    `json:"content"`
+	ReelID    uuid.UUID `json:"reel_id"`
+	UserID    uuid.UUID `json:"user_id"`
+	Content   string    `json:"content"`
+	IsFlagged bool      `json:"is_flagged"`
 }
 
 func (q *Queries) CreateReelComment(ctx context.Context, arg CreateReelCommentParams) (ReelComment, error) {
-	row := q.db.QueryRowContext(ctx, createReelComment, arg.ReelID, arg.UserID, arg.Content)
+	row := q.db.QueryRowContext(ctx, createReelComment,
+		arg.ReelID,
+		arg.UserID,
+		arg.Content,
+		arg.IsFlagged,
+	)
 	var i ReelComment
 	err := row.Scan(
 		&i.ID,

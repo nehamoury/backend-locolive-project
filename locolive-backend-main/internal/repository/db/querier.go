@@ -17,6 +17,7 @@ type Querier interface {
 	AdminDeletePostComment(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	AdminDeleteReelComment(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	ArchiveStory(ctx context.Context, arg ArchiveStoryParams) (ArchivedStory, error)
+	AwardBadge(ctx context.Context, arg AwardBadgeParams) (UserBadge, error)
 	BanUser(ctx context.Context, arg BanUserParams) (User, error)
 	BlockSession(ctx context.Context, userID uuid.UUID) error
 	BlockUser(ctx context.Context, arg BlockUserParams) (BlockedUser, error)
@@ -28,14 +29,17 @@ type Querier interface {
 	CountCrossingsToday(ctx context.Context, userID1 uuid.UUID) (int64, error)
 	// Admin: Count notifications
 	CountNotificationsAdmin(ctx context.Context) (int64, error)
+	CountReportsForUser(ctx context.Context, targetUserID uuid.NullUUID) (int64, error)
 	CountSearchUsersAdmin(ctx context.Context, query string) (int64, error)
 	CountStoryReactions(ctx context.Context, storyID uuid.UUID) (int64, error)
 	CountStoryViews(ctx context.Context, storyID uuid.UUID) (int64, error)
 	CountUnreadNotifications(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
 	CreateActivityLog(ctx context.Context, arg CreateActivityLogParams) (ActivityLog, error)
+	CreateBadge(ctx context.Context, arg CreateBadgeParams) (Badge, error)
 	CreateConnectionRequest(ctx context.Context, arg CreateConnectionRequestParams) (Connection, error)
 	CreateCrossing(ctx context.Context, arg CreateCrossingParams) (Crossing, error)
+	CreateEngagementEvent(ctx context.Context, arg CreateEngagementEventParams) (EngagementEvent, error)
 	CreateGroup(ctx context.Context, arg CreateGroupParams) (Group, error)
 	CreateHighlight(ctx context.Context, arg CreateHighlightParams) (HighlightGroup, error)
 	CreateLocation(ctx context.Context, arg CreateLocationParams) (Location, error)
@@ -95,6 +99,7 @@ type Querier interface {
 	GetActiveStoriesByUserID(ctx context.Context, userID uuid.UUID) ([]GetActiveStoriesByUserIDRow, error)
 	GetArchivedStories(ctx context.Context, arg GetArchivedStoriesParams) ([]ArchivedStory, error)
 	GetArchivedStory(ctx context.Context, arg GetArchivedStoryParams) (ArchivedStory, error)
+	GetBadge(ctx context.Context, id string) (Badge, error)
 	GetBlockedUsers(ctx context.Context, blockerID uuid.UUID) ([]GetBlockedUsersRow, error)
 	GetConnection(ctx context.Context, arg GetConnectionParams) (Connection, error)
 	// Get stories from connected users (not limited by radius)
@@ -103,6 +108,7 @@ type Querier interface {
 	GetConversionStats(ctx context.Context) (GetConversionStatsRow, error)
 	GetCrossingCount(ctx context.Context, arg GetCrossingCountParams) (int64, error)
 	GetCrossingsForUser(ctx context.Context, userID1 uuid.UUID) ([]Crossing, error)
+	GetDailyStats(ctx context.Context, arg GetDailyStatsParams) ([]DailyStat, error)
 	GetEngagementStats(ctx context.Context) (GetEngagementStatsRow, error)
 	GetGroupByID(ctx context.Context, id uuid.UUID) (Group, error)
 	GetGroupMembers(ctx context.Context, groupID uuid.UUID) ([]GetGroupMembersRow, error)
@@ -110,10 +116,12 @@ type Querier interface {
 	GetHeatmapData(ctx context.Context) ([]GetHeatmapDataRow, error)
 	// Returns all archived stories belonging to a highlight
 	GetHighlightDetails(ctx context.Context, highlightID uuid.UUID) ([]GetHighlightDetailsRow, error)
+	GetLatestCrossingBetweenUsers(ctx context.Context, arg GetLatestCrossingBetweenUsersParams) (Crossing, error)
 	GetMessage(ctx context.Context, id uuid.UUID) (Message, error)
 	GetMessageReactions(ctx context.Context, messageID uuid.UUID) ([]GetMessageReactionsRow, error)
 	GetMyProfileViews(ctx context.Context, viewerID uuid.UUID) ([]GetMyProfileViewsRow, error)
 	GetNearbyUsersFromDB(ctx context.Context, arg GetNearbyUsersFromDBParams) ([]GetNearbyUsersFromDBRow, error)
+	GetNotificationPreferences(ctx context.Context, userID uuid.UUID) (NotificationPreference, error)
 	GetPasswordResetByToken(ctx context.Context, token string) (PasswordReset, error)
 	GetPostComment(ctx context.Context, id uuid.UUID) (PostComment, error)
 	GetPrivacySettings(ctx context.Context, userID uuid.UUID) (PrivacySetting, error)
@@ -142,6 +150,7 @@ type Querier interface {
 	GetUnreadMessageCount(ctx context.Context, receiverID uuid.NullUUID) (int64, error)
 	// Get user's activity status and visibility
 	GetUserActivityStatus(ctx context.Context, id uuid.UUID) (GetUserActivityStatusRow, error)
+	GetUserBadges(ctx context.Context, userID uuid.UUID) ([]GetUserBadgesRow, error)
 	GetUserByEmail(ctx context.Context, email sql.NullString) (User, error)
 	GetUserByGoogleID(ctx context.Context, googleID sql.NullString) (User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (User, error)
@@ -151,8 +160,10 @@ type Querier interface {
 	GetUserGroups(ctx context.Context, userID uuid.UUID) ([]Group, error)
 	GetUserMentions(ctx context.Context, arg GetUserMentionsParams) ([]GetUserMentionsRow, error)
 	GetUserProfile(ctx context.Context, id uuid.UUID) (GetUserProfileRow, error)
+	GetUserStreak(ctx context.Context, userID uuid.UUID) (UserStreak, error)
 	GetUserTrustScore(ctx context.Context, id uuid.UUID) (int32, error)
 	HasValidStory(ctx context.Context, userID uuid.UUID) (bool, error)
+	IncrementDailyStats(ctx context.Context, arg IncrementDailyStatsParams) (DailyStat, error)
 	IncrementPostComments(ctx context.Context, id uuid.UUID) error
 	IncrementPostLikes(ctx context.Context, id uuid.UUID) error
 	IncrementPostShares(ctx context.Context, id uuid.UUID) error
@@ -169,6 +180,7 @@ type Querier interface {
 	ListAdminCrossings(ctx context.Context, arg ListAdminCrossingsParams) ([]ListAdminCrossingsRow, error)
 	// Admin: List all admin/moderator users
 	ListAdminUsers(ctx context.Context) ([]User, error)
+	ListAllBadges(ctx context.Context) ([]Badge, error)
 	ListAllComments(ctx context.Context, arg ListAllCommentsParams) ([]ListAllCommentsRow, error)
 	// Admin: List all stories
 	ListAllStories(ctx context.Context, arg ListAllStoriesParams) ([]ListAllStoriesRow, error)
@@ -215,6 +227,7 @@ type Querier interface {
 	UpdateConnectionStatus(ctx context.Context, arg UpdateConnectionStatusParams) (Connection, error)
 	UpdateHighlightCover(ctx context.Context, arg UpdateHighlightCoverParams) (HighlightGroup, error)
 	UpdateMessage(ctx context.Context, arg UpdateMessageParams) (Message, error)
+	UpdateNotificationPreferences(ctx context.Context, arg UpdateNotificationPreferencesParams) (NotificationPreference, error)
 	UpdatePostCommentFlag(ctx context.Context, arg UpdatePostCommentFlagParams) error
 	UpdateReelCommentFlag(ctx context.Context, arg UpdateReelCommentFlagParams) error
 	UpdateStory(ctx context.Context, arg UpdateStoryParams) (UpdateStoryRow, error)
@@ -225,6 +238,7 @@ type Querier interface {
 	UpdateUserPassword(ctx context.Context, arg UpdateUserPasswordParams) error
 	UpdateUserProfile(ctx context.Context, arg UpdateUserProfileParams) (UpdateUserProfileRow, error)
 	UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) (User, error)
+	UpdateUserStreak(ctx context.Context, arg UpdateUserStreakParams) (UserStreak, error)
 	UpdateUserTrust(ctx context.Context, arg UpdateUserTrustParams) (User, error)
 	UpdateUserTrustScore(ctx context.Context, arg UpdateUserTrustScoreParams) error
 	UpsertPrivacySettings(ctx context.Context, arg UpsertPrivacySettingsParams) (PrivacySetting, error)

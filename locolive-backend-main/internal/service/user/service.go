@@ -51,6 +51,7 @@ type Service interface {
 	GetUserByID(ctx context.Context, id uuid.UUID) (db.User, error)
 	UpdatePassword(ctx context.Context, userID uuid.UUID, currentPassword, newPassword string) error
 	SearchUsers(ctx context.Context, query string) ([]db.SearchUsersRow, error)
+	UpdateTrustScore(ctx context.Context, userID uuid.UUID) (int32, error)
 }
 
 type ServiceImpl struct {
@@ -192,4 +193,66 @@ func (s *ServiceImpl) UpdatePassword(ctx context.Context, userID uuid.UUID, curr
 
 func (s *ServiceImpl) SearchUsers(ctx context.Context, query string) ([]db.SearchUsersRow, error) {
 	return s.store.SearchUsers(ctx, query)
+}
+
+func (s *ServiceImpl) UpdateTrustScore(ctx context.Context, userID uuid.UUID) (int32, error) {
+	// 1. Get user profile and stats
+	profile, err := s.store.GetUserProfile(ctx, userID)
+	if err != nil {
+		return 0, err
+	}
+
+	// 2. Fetch full user object for extra fields
+	user, err := s.store.GetUserByID(ctx, userID)
+	if err != nil {
+		return 0, err
+	}
+
+	// Base score
+	score := int32(50)
+
+	// Account Age (+1 per day, max 20)
+	daysOld := int32(time.Since(profile.CreatedAt).Hours() / 24)
+	if daysOld > 20 {
+		daysOld = 20
+	}
+	score += daysOld
+
+	// Connections (+3 per connection, max 15)
+	connBonus := int32(profile.ConnectionCount * 3)
+	if connBonus > 15 {
+		connBonus = 15
+	}
+	score += connBonus
+
+	// Reports (-10 per report, max -30)
+	reportCount, err := s.store.CountReportsForUser(ctx, uuid.NullUUID{UUID: userID, Valid: true})
+	if err == nil {
+		reportPenalty := int32(reportCount) * 10
+		if reportPenalty > 30 {
+			reportPenalty = 30
+		}
+		score -= reportPenalty
+	}
+
+	// Verified status (+15)
+	if user.IsVerified {
+		score += 15
+	}
+
+	// Clamp 0-100
+	if score < 0 {
+		score = 0
+	}
+	if score > 100 {
+		score = 100
+	}
+
+	// 3. Update DB
+	_, err = s.store.UpdateUserTrust(ctx, db.UpdateUserTrustParams{
+		ID:         userID,
+		TrustLevel: score,
+	})
+
+	return score, err
 }

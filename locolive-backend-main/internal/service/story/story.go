@@ -116,6 +116,13 @@ func (s *ServiceImpl) CreateStory(ctx context.Context, req CreateStoryParams) (*
 		log.Error().Err(err).Msg("Failed to update user activity")
 	}
 
+	// Gamification: Increment daily stories posted
+	s.store.IncrementDailyStats(ctx, db.IncrementDailyStatsParams{
+		UserID:        req.UserID,
+		Date:          time.Now().UTC(),
+		StoriesPosted: int32(1),
+	})
+
 	userGeohash := hash
 	if len(userGeohash) > 5 {
 		userGeohash = userGeohash[:5]
@@ -170,6 +177,8 @@ func (s *ServiceImpl) notifyNearbyUsers(ctx context.Context, story db.CreateStor
 		notif, err := s.store.CreateNotification(ctx, db.CreateNotificationParams{
 			UserID:         targetID,
 			Type:           "nearby_story",
+			SubType:        sql.NullString{String: "nearby_story", Valid: true},
+			Sound:          sql.NullString{String: "soft_ping.wav", Valid: true},
 			Title:          "Nearby Activity!",
 			Message:        "Someone just posted a new story near you",
 			RelatedStoryID: uuid.NullUUID{UUID: story.ID, Valid: true},
@@ -182,6 +191,8 @@ func (s *ServiceImpl) notifyNearbyUsers(ctx context.Context, story db.CreateStor
 		if s.hub != nil {
 			msg := realtime.WSMessage{
 				Type:    "new_nearby_post",
+				SubType: "nearby_story",
+				Sound:   "soft_ping.wav",
 				Payload: notif,
 			}
 			data, _ := json.Marshal(msg)
@@ -191,41 +202,44 @@ func (s *ServiceImpl) notifyNearbyUsers(ctx context.Context, story db.CreateStor
 }
 
 func (s *ServiceImpl) GetFeed(ctx context.Context, params GetFeedParams) ([]db.GetStoriesWithinRadiusRow, string, float64, error) {
-	const maxRadius = 50000.0 // 50km
+	radii := []float64{5000.0, 10000.0, 20000.0, 50000.0}
+	var stories []db.GetStoriesWithinRadiusRow
+	var err error
+	var currentRadius float64
 
-	// 1. Fetch stories using existing radius query (respects privacy/blocks)
-	allStories, err := s.store.GetStoriesWithinRadius(ctx, db.GetStoriesWithinRadiusParams{
-		Lng:          params.Longitude,
-		Lat:          params.Latitude,
-		RadiusMeters: maxRadius,
-		UserID:       params.UserID,
-	})
-	if err != nil {
-		return nil, "", 0, err
+	for _, radius := range radii {
+		currentRadius = radius
+		stories, err = s.store.GetStoriesWithinRadius(ctx, db.GetStoriesWithinRadiusParams{
+			Lng:          params.Longitude,
+			Lat:          params.Latitude,
+			RadiusMeters: radius,
+			UserID:       params.UserID,
+		})
+		if err != nil {
+			return nil, "", 0, err
+		}
+
+		if len(stories) > 0 {
+			break
+		}
 	}
 
-	// 2. Fetch connections
-	connections, err := s.store.ListConnections(ctx, params.UserID)
-	if err != nil {
-		return nil, "", 0, err
-	}
-
-	connectionMap := make(map[uuid.UUID]bool)
-	for _, c := range connections {
-		connectionMap[c.ID] = true
-	}
-
-	// 3. No filter - allow discovering nearby users!
-	sort.Slice(allStories, func(i, j int) bool {
-		return allStories[i].CreatedAt.After(allStories[j].CreatedAt)
+	sort.Slice(stories, func(i, j int) bool {
+		return stories[i].CreatedAt.After(stories[j].CreatedAt)
 	})
 
-	message := "Stories found nearby"
-	if len(allStories) == 0 {
-		message = "No stories found nearby"
+	var message string
+	if len(stories) > 0 {
+		if currentRadius <= 5000.0 {
+			message = "Stories found nearby"
+		} else {
+			message = "Expanded search to find nearby stories"
+		}
+	} else {
+		message = "No stories found within 20km. Be the first to share!"
 	}
 
-	return allStories, message, maxRadius, nil
+	return stories, message, currentRadius, nil
 }
 
 func (s *ServiceImpl) GetMapStories(ctx context.Context, params GetFeedParams) ([]db.GetStoriesWithinRadiusRow, error) {

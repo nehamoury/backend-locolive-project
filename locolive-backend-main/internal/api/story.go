@@ -51,6 +51,27 @@ func (server *Server) createStory(ctx *gin.Context) {
 
 	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
 
+	// 1. Moderate Content (Text & Media)
+	isFlagged, reason := server.moderation.ModerateText(req.Caption)
+	if isFlagged {
+		ctx.JSON(http.StatusForbidden, gin.H{
+			"error": "Content flagged as " + reason,
+			"code":  "MODERATION_FAILED",
+		})
+		return
+	}
+
+	if req.MediaURL != "" {
+		isFlagged, reason = server.moderation.ModerateImage(ctx, req.MediaURL)
+		if isFlagged {
+			ctx.JSON(http.StatusForbidden, gin.H{
+				"error": "Media flagged as " + reason,
+				"code":  "MODERATION_FAILED",
+			})
+			return
+		}
+	}
+
 	result, err := server.story.CreateStory(ctx, story.CreateStoryParams{
 		UserID:       authPayload.UserID,
 		MediaURL:     req.MediaURL,
@@ -65,6 +86,9 @@ func (server *Server) createStory(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
 	}
+
+	// Gamification: Update user streak
+	go server.updateStreakLogic(authPayload.UserID)
 
 	ctx.JSON(http.StatusCreated, toStoryResponseFromCreate(*result))
 }

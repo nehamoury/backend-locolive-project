@@ -90,3 +90,9 @@ JOIN users u1 ON c.user_id_1 = u1.id
 JOIN users u2 ON c.user_id_2 = u2.id
 ORDER BY c.occurred_at DESC
 LIMIT sqlc.arg('limit') OFFSET sqlc.arg('offset');
+
+-- name: GetLatestCrossingBetweenUsers :one
+SELECT * FROM crossings
+WHERE (user_id_1 = $1 AND user_id_2 = $2) OR (user_id_1 = $2 AND user_id_2 = $1)
+ORDER BY occurred_at DESC
+LIMIT 1;

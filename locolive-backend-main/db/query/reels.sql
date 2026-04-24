@@ -77,8 +77,8 @@ UPDATE reels SET likes_count = likes_count + 1 WHERE id = $1;
 UPDATE reels SET likes_count = likes_count - 1 WHERE id = $1;
 
 -- name: CreateReelComment :one
-INSERT INTO reel_comments (reel_id, user_id, content)
-VALUES ($1, $2, $3)
+INSERT INTO reel_comments (reel_id, user_id, content, is_flagged)
+VALUES ($1, $2, $3, $4)
 RETURNING *;
 
 -- name: ListReelComments :many

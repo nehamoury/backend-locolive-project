@@ -740,12 +740,8 @@ func (server *Server) sendBroadcastNotification(ctx *gin.Context) {
 	// Create notifications for all target users
 	notificationCount := 0
 	for _, userID := range userIDs {
-		_, notifErr := server.store.CreateNotification(ctx, db.CreateNotificationParams{
-			UserID:  userID,
-			Type:    "system_announcement",
-			Title:   req.Title,
-			Message: req.Message,
-		})
+		_, notifErr := server.createNotificationWithSound(ctx, userID, "system_announcement", "system", 
+			req.Title, req.Message, nil)
 		if notifErr == nil {
 			notificationCount++
 		}

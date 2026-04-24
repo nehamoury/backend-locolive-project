@@ -2,6 +2,7 @@ package worker
 
 import (
 	"context"
+	"database/sql"
 	"log"
 	"time"
 
@@ -79,6 +80,8 @@ func (worker *CleanupWorker) detectCrossings() {
 		_, err = worker.store.CreateNotification(ctx, db.CreateNotificationParams{
 			UserID:            c.User1,
 			Type:              "crossing_detected",
+			SubType:           sql.NullString{String: "crossing", Valid: true},
+			Sound:             sql.NullString{String: "soft_ping.wav", Valid: true},
 			Title:             title,
 			Message:           message,
 			RelatedUserID:     uuid.NullUUID{UUID: c.User2, Valid: true},
@@ -92,6 +95,8 @@ func (worker *CleanupWorker) detectCrossings() {
 		_, err = worker.store.CreateNotification(ctx, db.CreateNotificationParams{
 			UserID:            c.User2,
 			Type:              "crossing_detected",
+			SubType:           sql.NullString{String: "crossing", Valid: true},
+			Sound:             sql.NullString{String: "soft_ping.wav", Valid: true},
 			Title:             title,
 			Message:           message,
 			RelatedUserID:     uuid.NullUUID{UUID: c.User1, Valid: true},

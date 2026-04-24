@@ -26,6 +26,17 @@ const (
 	adminActivityKey = "locolive:admin:activity"
 )
 
+var soundMap = map[string]string{
+	"badge":          "badge_unlock.wav",
+	"streak":         "streak_fire.wav",
+	"nudge":          "soft_ping.wav",
+	"message":        "chat_pop.wav",
+	"gift":           "coin_reward.wav",
+	"reel_liked":     "chat_pop.wav", // Reusing for now
+	"reel_commented": "chat_pop.wav", // Reusing for now
+	"new_reel_nearby": "soft_ping.wav",
+}
+
 func NewHub(rdb *redis.Client) *Hub {
 	return &Hub{
 		Register:   make(chan *Client),
@@ -183,12 +194,15 @@ func (h *Hub) IsUserOnline(userID uuid.UUID) bool {
 
 func (h *Hub) BroadcastReelLiked(reelID uuid.UUID, ownerID uuid.UUID, likerID uuid.UUID, likerUsername string) {
 	msg := WSMessage{
-		Type: "reel_liked",
+		Type:    "reel_liked",
+		SubType: "reel",
+		Sound:   soundMap["reel_liked"],
 		Payload: map[string]interface{}{
 			"reel_id":  reelID,
 			"user_id":  likerID,
 			"username": likerUsername,
 		},
+		CreatedAt: time.Now().UTC(),
 	}
 	data, _ := json.Marshal(msg)
 	h.SendToUser(ownerID, data)
@@ -196,13 +210,16 @@ func (h *Hub) BroadcastReelLiked(reelID uuid.UUID, ownerID uuid.UUID, likerID uu
 
 func (h *Hub) BroadcastReelCommented(reelID uuid.UUID, ownerID uuid.UUID, commenterID uuid.UUID, commenterUsername string, comment interface{}) {
 	msg := WSMessage{
-		Type: "reel_commented",
+		Type:    "reel_commented",
+		SubType: "reel",
+		Sound:   soundMap["reel_commented"],
 		Payload: map[string]interface{}{
 			"reel_id":  reelID,
 			"user_id":  commenterID,
 			"username": commenterUsername,
 			"comment":  comment,
 		},
+		CreatedAt: time.Now().UTC(),
 	}
 	data, _ := json.Marshal(msg)
 	h.SendToUser(ownerID, data)
@@ -211,7 +228,10 @@ func (h *Hub) BroadcastReelCommented(reelID uuid.UUID, ownerID uuid.UUID, commen
 func (h *Hub) BroadcastNewReelNearby(reel interface{}, targetUserIDs []uuid.UUID) {
 	msg := WSMessage{
 		Type:    "new_reel_nearby",
+		SubType: "reel",
+		Sound:   soundMap["new_reel_nearby"],
 		Payload: reel,
+		CreatedAt: time.Now().UTC(),
 	}
 	data, _ := json.Marshal(msg)
 	for _, id := range targetUserIDs {

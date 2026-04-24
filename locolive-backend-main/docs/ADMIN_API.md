@@ -61,16 +61,12 @@ curl -X GET http://localhost:8080/admin/stats \
 **Response:**
 ```json
 {
-  "users": {
-    "total_users": 1500,
-    "new_users_24h": 45,
-    "active_users_1h": 120
-  },
-  "stories": {
-    "total_stories": 5000,
-    "stories_24h": 300,
-    "expired_stories": 200
-  }
+  "totalUsers": 1500,
+  "newUsers24h": 45,
+  "activeUsers": 120,
+  "totalConnections": 500,
+  "reelsToday": 30,
+  "crossingsToday": 15
 }
 ```
 
@@ -98,6 +94,37 @@ curl -X GET "http://localhost:8080/admin/stories?page=1&page_size=50" \
 ```bash
 curl -X DELETE http://localhost:8080/admin/stories/STORY_UUID \
   -H "Authorization: Bearer ADMIN_ACCESS_TOKEN"
+```
+
+### 4. Advanced Moderation & Logs
+
+#### List Activity Logs
+```bash
+curl -X GET "http://localhost:8080/admin/activity/logs?page=1&page_size=20" \
+  -H "Authorization: Bearer ADMIN_ACCESS_TOKEN"
+```
+
+#### Moderate Comments
+```bash
+# List all comments
+curl -X GET "http://localhost:8080/admin/comments?page=1&page_size=20"
+
+# Take action
+curl -X POST http://localhost:8080/admin/comments/moderate \
+  -d '{"comment_id": "UUID", "source": "post", "action": "delete"}'
+```
+
+### 5. System Tools
+
+#### Broadcast Notification
+```bash
+curl -X POST http://localhost:8080/admin/notifications/send \
+  -d '{"title": "Update!", "message": "New features added", "target": "all"}'
+```
+
+#### View Real-time Crossing Logs
+```bash
+curl -X GET http://localhost:8080/admin/crossings?page=1&page_size=20
 ```
 
 ## Admin Workflow Examples

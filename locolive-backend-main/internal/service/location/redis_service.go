@@ -2,6 +2,7 @@ package location
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -378,7 +379,7 @@ func (s *RedisLocationService) processCrossings(ctx context.Context, userID uuid
 			UserID1:        u1,
 			UserID2:        u2,
 			LocationCenter: centerHash,
-			OccurredAt:     time.Now().UTC(),
+			OccurredAt:     time.Now().UTC().Truncate(10 * time.Minute),
 		})
 		if err != nil {
 			log.Error().Err(err).Msg("[Crossing] Failed to persist crossing")
@@ -411,6 +412,8 @@ func (s *RedisLocationService) processCrossings(ctx context.Context, userID uuid
 		notif1, err := s.store.CreateNotification(ctx, db.CreateNotificationParams{
 			UserID:            userID,
 			Type:              "crossing_detected",
+			SubType:           sql.NullString{String: "crossing", Valid: true},
+			Sound:             sql.NullString{String: "soft_ping.wav", Valid: true},
 			Title:             title,
 			Message:           message,
 			RelatedUserID:     uuid.NullUUID{UUID: targetUserID, Valid: true},
@@ -426,6 +429,8 @@ func (s *RedisLocationService) processCrossings(ctx context.Context, userID uuid
 		notif2, err := s.store.CreateNotification(ctx, db.CreateNotificationParams{
 			UserID:            targetUserID,
 			Type:              "crossing_detected",
+			SubType:           sql.NullString{String: "crossing", Valid: true},
+			Sound:             sql.NullString{String: "soft_ping.wav", Valid: true},
 			Title:             title,
 			Message:           message,
 			RelatedUserID:     uuid.NullUUID{UUID: userID, Valid: true},
@@ -473,6 +478,10 @@ func (s *RedisLocationService) validateCrossingPrivacy(ctx context.Context, u1, 
 
 	user1, err := s.store.GetUserByID(ctx, u1)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Debug().Str("u1", u1.String()).Msg("[Privacy] u1 not found in DB, skipping")
+			return false, nil
+		}
 		log.Error().Err(err).Str("u1", u1.String()).Msg("[Privacy] get user1 failed")
 		return false, fmt.Errorf("get user1 failed: %w", err)
 	}
@@ -487,6 +496,10 @@ func (s *RedisLocationService) validateCrossingPrivacy(ctx context.Context, u1, 
 
 	user2, err := s.store.GetUserByID(ctx, u2)
 	if err != nil {
+		if err == sql.ErrNoRows {
+			log.Debug().Str("u2", u2.String()).Msg("[Privacy] u2 not found in DB, skipping")
+			return false, nil
+		}
 		log.Error().Err(err).Str("u2", u2.String()).Msg("[Privacy] get user2 failed")
 		return false, fmt.Errorf("get user2 failed: %w", err)
 	}
@@ -504,8 +517,18 @@ func (s *RedisLocationService) validateCrossingPrivacy(ctx context.Context, u1, 
 }
 
 func (s *RedisLocationService) formatAlert(msgType string, payload interface{}) []byte {
+	sound := ""
+	switch msgType {
+	case "nearby_user_update":
+		sound = "soft_ping.wav"
+	case "crossing_detected":
+		sound = "soft_ping.wav"
+	}
+
 	wsMsg := realtime.WSMessage{
 		Type:    msgType,
+		SubType: "location",
+		Sound:   sound,
 		Payload: payload,
 	}
 	data, _ := json.Marshal(wsMsg)

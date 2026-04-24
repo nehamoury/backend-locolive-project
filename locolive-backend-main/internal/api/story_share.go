@@ -123,13 +123,9 @@ func (server *Server) createStoryMentions(ctx *gin.Context, storyID uuid.UUID, c
 		}
 
 		// Send notification to mentioned user
-		_, err = server.store.CreateNotification(ctx, db.CreateNotificationParams{
-			UserID:         user.ID,
-			Type:           "story_mention",
-			Title:          "You were mentioned!",
-			Message:        "You were mentioned in a story",
-			RelatedStoryID: uuid.NullUUID{UUID: storyID, Valid: true},
-		})
+		server.createNotificationWithSound(ctx, user.ID, "story_mention", "story_mention", 
+			"You were mentioned!", "You were mentioned in a story", 
+			map[string]uuid.UUID{"story": storyID})
 		if err != nil {
 			// Log error but don't fail the whole operation
 			continue

@@ -213,6 +213,32 @@ func (q *Queries) GetCrossingsForUser(ctx context.Context, userID1 uuid.UUID) ([
 	return items, nil
 }
 
+const getLatestCrossingBetweenUsers = `-- name: GetLatestCrossingBetweenUsers :one
+SELECT id, user_id_1, user_id_2, location_center, occurred_at, created_at FROM crossings
+WHERE (user_id_1 = $1 AND user_id_2 = $2) OR (user_id_1 = $2 AND user_id_2 = $1)
+ORDER BY occurred_at DESC
+LIMIT 1
+`
+
+type GetLatestCrossingBetweenUsersParams struct {
+	UserID1 uuid.UUID `json:"user_id_1"`
+	UserID2 uuid.UUID `json:"user_id_2"`
+}
+
+func (q *Queries) GetLatestCrossingBetweenUsers(ctx context.Context, arg GetLatestCrossingBetweenUsersParams) (Crossing, error) {
+	row := q.db.QueryRowContext(ctx, getLatestCrossingBetweenUsers, arg.UserID1, arg.UserID2)
+	var i Crossing
+	err := row.Scan(
+		&i.ID,
+		&i.UserID1,
+		&i.UserID2,
+		&i.LocationCenter,
+		&i.OccurredAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getTotalCrossingsCountToday = `-- name: GetTotalCrossingsCountToday :one
 SELECT COUNT(*) FROM crossings
 WHERE occurred_at >= CURRENT_DATE

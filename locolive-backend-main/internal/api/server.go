@@ -18,6 +18,7 @@ import (
 	"privacy-social-backend/internal/service/user"
 	"privacy-social-backend/internal/token"
 	"privacy-social-backend/internal/util"
+	"privacy-social-backend/internal/worker"
 
 	"github.com/rs/zerolog/log"
 )
@@ -101,6 +102,11 @@ func NewServer(
 		config.FrontendURL,
 	)
 	log.Info().Str("host", host).Msg("Email Service Initialized (SMTP)")
+
+	// Initialize and Start Background Workers
+	bgWorker := worker.NewCleanupWorker(store)
+	bgWorker.Start()
+	bgWorker.StartCrossingDetector()
 
 	server := &Server{
 		config:     config,

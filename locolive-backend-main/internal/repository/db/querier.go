@@ -242,6 +242,18 @@ type Querier interface {
 	UpdateUserTrust(ctx context.Context, arg UpdateUserTrustParams) (User, error)
 	UpdateUserTrustScore(ctx context.Context, arg UpdateUserTrustScoreParams) error
 	UpsertPrivacySettings(ctx context.Context, arg UpsertPrivacySettingsParams) (PrivacySetting, error)
+	// Username management
+	CheckUsernameExists(ctx context.Context, username string) (bool, error)
+	GetReservedUsernames(ctx context.Context) ([]string, error)
+	IsUsernameReserved(ctx context.Context, username string) (bool, error)
+	AddReservedUsername(ctx context.Context, arg AddReservedUsernameParams) error
+	RemoveReservedUsername(ctx context.Context, username string) error
+	GetUserByUsernameCaseInsensitive(ctx context.Context, username string) (User, error)
+	FindSimilarUsernames(ctx context.Context, pattern string) ([]string, error)
+	RecordUsernameChange(ctx context.Context, arg RecordUsernameChangeParams) (UsernameHistory, error)
+	UpdateUsername(ctx context.Context, arg UpdateUsernameParams) (User, error)
+	GetUsernameHistory(ctx context.Context, userID uuid.UUID) ([]UsernameHistory, error)
+	GetUserByPreviousUsername(ctx context.Context, username string) (User, error)
 }
 
 var _ Querier = (*Queries)(nil)

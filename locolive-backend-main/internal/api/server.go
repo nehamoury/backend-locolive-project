@@ -15,6 +15,7 @@ import (
 	"privacy-social-backend/internal/service/storage"
 	"privacy-social-backend/internal/service/moderation"
 	"privacy-social-backend/internal/service/story"
+	usernameservice "privacy-social-backend/internal/service/username"
 	"privacy-social-backend/internal/service/user"
 	"privacy-social-backend/internal/token"
 	"privacy-social-backend/internal/util"
@@ -35,6 +36,7 @@ type Server struct {
 	location   *location.RedisLocationService
 	story      story.Service
 	user       user.Service
+	usernameService *usernameservice.Service
 	admin      admin.Service
 	storage    storage.Service
 	moderation *moderation.Service
@@ -80,6 +82,7 @@ func NewServer(
 		AccessTokenDuration:  config.AccessTokenDuration,
 		RefreshTokenDuration: config.RefreshTokenDuration,
 	})
+	usernameService := usernameservice.NewService(store, rdb)
 	adminService := admin.NewService(store, rdb)
 	modService := moderation.NewService(store)
 
@@ -118,6 +121,7 @@ func NewServer(
 		location:   locationService,
 		story:      storyService,
 		user:       userService,
+		usernameService: usernameService,
 		admin:      adminService,
 		storage:    storageService,
 		moderation: modService,

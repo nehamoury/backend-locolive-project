@@ -12,6 +12,7 @@ import (
 	"privacy-social-backend/internal/repository/db"
 	"privacy-social-backend/internal/token"
 	"privacy-social-backend/internal/util"
+	usernameutil "privacy-social-backend/internal/util/username"
 )
 
 type CreateUserParams struct {
@@ -73,7 +74,28 @@ func NewService(store repository.Store, tokenMaker token.Maker, config TokenConf
 	}
 }
 
+var (
+	ErrInvalidUsername  = errors.New("invalid username format")
+	ErrReservedUsername = errors.New("username is reserved")
+)
+
 func (s *ServiceImpl) CreateUser(ctx context.Context, req CreateUserParams) (db.User, error) {
+	// Validate and normalize username
+	normalized, valid, errorCode := usernameutil.ValidateUsername(req.Username)
+	if !valid {
+		return db.User{}, errors.New(usernameutil.GetValidationErrorMessage(errorCode))
+	}
+
+	// Check for reserved patterns
+	if usernameutil.IsReservedPattern(normalized) {
+		return db.User{}, ErrReservedUsername
+	}
+
+	// Check hardcoded reserved usernames
+	if usernameutil.IsHardcodedReserved(normalized) {
+		return db.User{}, ErrReservedUsername
+	}
+
 	hashedPassword, err := util.HashPassword(req.Password)
 	if err != nil {
 		return db.User{}, err
@@ -82,7 +104,7 @@ func (s *ServiceImpl) CreateUser(ctx context.Context, req CreateUserParams) (db.
 	arg := db.CreateUserParams{
 		Phone:        req.Phone,
 		Email:        sql.NullString{String: req.Email, Valid: req.Email != ""},
-		Username:     req.Username,
+		Username:     normalized, // Store normalized username
 		FullName:     req.FullName,
 		PasswordHash: hashedPassword,
 		IsGhostMode:  req.IsGhostMode,

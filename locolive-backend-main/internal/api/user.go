@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"net/http"
 	"strings"
 	"time"
@@ -12,13 +13,14 @@ import (
 	"privacy-social-backend/internal/repository/db"
 	"privacy-social-backend/internal/service/user"
 	"privacy-social-backend/internal/token"
+	usernameutil "privacy-social-backend/internal/util/username"
 )
 
 type createUserRequest struct {
-	Phone    string `json:"phone" binding:"required"`
-	Email    string `json:"email" binding:"required,email"`
-	Username string `json:"username" binding:"required,alphanum"`
-	FullName string `json:"full_name" binding:"required"`
+	Phone       string `json:"phone" binding:"required"`
+	Email       string `json:"email" binding:"required,email"`
+	Username    string `json:"username" binding:"required,alphanum"`
+	FullName    string `json:"full_name" binding:"required"`
 	Password    string `json:"password" binding:"required,min=6"`
 	IsGhostMode bool   `json:"is_ghost_mode"`
 }
@@ -71,11 +73,17 @@ func (server *Server) createUser(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, errorResponse(err))
 		return
 	}
+	// Normalize and validate username
+	req.Username = usernameutil.NormalizeUsername(req.Username)
+	if !usernameutil.IsValidUsername(req.Username) {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid username format. Must be 3-20 characters, start with a letter, and contain only a-z, 0-9, or underscore."})
+		return
+	}
 
 	user, err := server.user.CreateUser(ctx, user.CreateUserParams{
-		Phone:    req.Phone,
-		Email:    req.Email,
-		Username: req.Username,
+		Phone:       req.Phone,
+		Email:       req.Email,
+		Username:    req.Username,
 		FullName:    req.FullName,
 		Password:    req.Password,
 		IsGhostMode: req.IsGhostMode,
@@ -160,7 +168,6 @@ func (server *Server) createUser(ctx *gin.Context) {
 		"fullName": user.FullName,
 	})
 }
-
 
 type loginUserRequest struct {
 	Email    string `json:"email" binding:"required,email"`
@@ -345,4 +352,38 @@ func (server *Server) updateUserPassword(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{"message": "password updated successfully"})
+}
+
+// checkEmail handles GET /api/users/check-email
+func (server *Server) checkEmail(ctx *gin.Context) {
+	email := ctx.Query("email")
+	if email == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "email is required"})
+		return
+	}
+
+	_, err := server.store.GetUserByEmail(ctx, sql.NullString{String: email, Valid: true})
+	if err == nil {
+		ctx.JSON(http.StatusOK, gin.H{"available": false, "message": "Email is already registered"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"available": true})
+}
+
+// checkPhone handles GET /api/users/check-phone
+func (server *Server) checkPhone(ctx *gin.Context) {
+	phone := ctx.Query("phone")
+	if phone == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "phone is required"})
+		return
+	}
+
+	_, err := server.store.GetUserByPhone(ctx, phone)
+	if err == nil {
+		ctx.JSON(http.StatusOK, gin.H{"available": false, "message": "Phone number is already registered"})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"available": true})
 }

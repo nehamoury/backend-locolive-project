@@ -15,6 +15,7 @@ import (
 	"privacy-social-backend/internal/repository/db"
 	"privacy-social-backend/internal/service/location"
 	"privacy-social-backend/internal/token"
+	usernameutil "privacy-social-backend/internal/util/username"
 )
 
 const profileCacheTTL = 10 * time.Minute
@@ -218,6 +219,15 @@ func (server *Server) updateProfile(ctx *gin.Context) {
 	if err := ctx.ShouldBindJSON(&req); err != nil {
 		ctx.JSON(http.StatusBadRequest, errorResponse(err))
 		return
+	}
+
+	// Normalize and validate username if provided
+	if req.Username != "" {
+		req.Username = usernameutil.NormalizeUsername(req.Username)
+		if !usernameutil.IsValidUsername(req.Username) {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid username format. Must be 3-20 characters, start with a letter, and contain only a-z, 0-9, or underscore."})
+			return
+		}
 	}
 
 	payload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)

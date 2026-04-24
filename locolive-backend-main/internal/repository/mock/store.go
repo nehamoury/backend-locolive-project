@@ -3097,3 +3097,166 @@ func (mr *MockStoreMockRecorder) UpsertPrivacySettings(ctx, arg any) *gomock.Cal
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertPrivacySettings", reflect.TypeOf((*MockStore)(nil).UpsertPrivacySettings), ctx, arg)
 }
+
+// CheckUsernameExists mocks base method.
+func (m *MockStore) CheckUsernameExists(ctx context.Context, username string) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CheckUsernameExists", ctx, username)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CheckUsernameExists indicates an expected call of CheckUsernameExists.
+func (mr *MockStoreMockRecorder) CheckUsernameExists(ctx, username any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckUsernameExists", reflect.TypeOf((*MockStore)(nil).CheckUsernameExists), ctx, username)
+}
+
+// GetReservedUsernames mocks base method.
+func (m *MockStore) GetReservedUsernames(ctx context.Context) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetReservedUsernames", ctx)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetReservedUsernames indicates an expected call of GetReservedUsernames.
+func (mr *MockStoreMockRecorder) GetReservedUsernames(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetReservedUsernames", reflect.TypeOf((*MockStore)(nil).GetReservedUsernames), ctx)
+}
+
+// IsUsernameReserved mocks base method.
+func (m *MockStore) IsUsernameReserved(ctx context.Context, username string) (bool, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "IsUsernameReserved", ctx, username)
+	ret0, _ := ret[0].(bool)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// IsUsernameReserved indicates an expected call of IsUsernameReserved.
+func (mr *MockStoreMockRecorder) IsUsernameReserved(ctx, username any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "IsUsernameReserved", reflect.TypeOf((*MockStore)(nil).IsUsernameReserved), ctx, username)
+}
+
+// AddReservedUsername mocks base method.
+func (m *MockStore) AddReservedUsername(ctx context.Context, arg db.AddReservedUsernameParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddReservedUsername", ctx, arg)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddReservedUsername indicates an expected call of AddReservedUsername.
+func (mr *MockStoreMockRecorder) AddReservedUsername(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddReservedUsername", reflect.TypeOf((*MockStore)(nil).AddReservedUsername), ctx, arg)
+}
+
+// RemoveReservedUsername mocks base method.
+func (m *MockStore) RemoveReservedUsername(ctx context.Context, username string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveReservedUsername", ctx, username)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveReservedUsername indicates an expected call of RemoveReservedUsername.
+func (mr *MockStoreMockRecorder) RemoveReservedUsername(ctx, username any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveReservedUsername", reflect.TypeOf((*MockStore)(nil).RemoveReservedUsername), ctx, username)
+}
+
+// GetUserByUsernameCaseInsensitive mocks base method.
+func (m *MockStore) GetUserByUsernameCaseInsensitive(ctx context.Context, username string) (db.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUserByUsernameCaseInsensitive", ctx, username)
+	ret0, _ := ret[0].(db.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUserByUsernameCaseInsensitive indicates an expected call of GetUserByUsernameCaseInsensitive.
+func (mr *MockStoreMockRecorder) GetUserByUsernameCaseInsensitive(ctx, username any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserByUsernameCaseInsensitive", reflect.TypeOf((*MockStore)(nil).GetUserByUsernameCaseInsensitive), ctx, username)
+}
+
+// FindSimilarUsernames mocks base method.
+func (m *MockStore) FindSimilarUsernames(ctx context.Context, pattern string) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "FindSimilarUsernames", ctx, pattern)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// FindSimilarUsernames indicates an expected call of FindSimilarUsernames.
+func (mr *MockStoreMockRecorder) FindSimilarUsernames(ctx, pattern any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "FindSimilarUsernames", reflect.TypeOf((*MockStore)(nil).FindSimilarUsernames), ctx, pattern)
+}
+
+// RecordUsernameChange mocks base method.
+func (m *MockStore) RecordUsernameChange(ctx context.Context, arg db.RecordUsernameChangeParams) (db.UsernameHistory, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RecordUsernameChange", ctx, arg)
+	ret0, _ := ret[0].(db.UsernameHistory)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RecordUsernameChange indicates an expected call of RecordUsernameChange.
+func (mr *MockStoreMockRecorder) RecordUsernameChange(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordUsernameChange", reflect.TypeOf((*MockStore)(nil).RecordUsernameChange), ctx, arg)
+}
+
+// UpdateUsername mocks base method.
+func (m *MockStore) UpdateUsername(ctx context.Context, arg db.UpdateUsernameParams) (db.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateUsername", ctx, arg)
+	ret0, _ := ret[0].(db.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateUsername indicates an expected call of UpdateUsername.
+func (mr *MockStoreMockRecorder) UpdateUsername(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateUsername", reflect.TypeOf((*MockStore)(nil).UpdateUsername), ctx, arg)
+}
+
+// GetUsernameHistory mocks base method.
+func (m *MockStore) GetUsernameHistory(ctx context.Context, userID uuid.UUID) ([]db.UsernameHistory, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUsernameHistory", ctx, userID)
+	ret0, _ := ret[0].([]db.UsernameHistory)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUsernameHistory indicates an expected call of GetUsernameHistory.
+func (mr *MockStoreMockRecorder) GetUsernameHistory(ctx, userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUsernameHistory", reflect.TypeOf((*MockStore)(nil).GetUsernameHistory), ctx, userID)
+}
+
+// GetUserByPreviousUsername mocks base method.
+func (m *MockStore) GetUserByPreviousUsername(ctx context.Context, username string) (db.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUserByPreviousUsername", ctx, username)
+	ret0, _ := ret[0].(db.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUserByPreviousUsername indicates an expected call of GetUserByPreviousUsername.
+func (mr *MockStoreMockRecorder) GetUserByPreviousUsername(ctx, username any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserByPreviousUsername", reflect.TypeOf((*MockStore)(nil).GetUserByPreviousUsername), ctx, username)
+}

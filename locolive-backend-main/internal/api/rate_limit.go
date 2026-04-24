@@ -48,6 +48,12 @@ var (
 		Period: 1 * time.Second,
 		Limit:  10,
 	}
+
+	// Username availability check: 30 requests per minute (stricter for enumeration protection)
+	usernameCheckRate = limiter.Rate{
+		Period: 1 * time.Minute,
+		Limit:  30,
+	}
 )
 
 // createRateLimiter creates a rate limiter with Redis store
@@ -120,4 +126,10 @@ func (server *Server) messageRateLimiter() gin.HandlerFunc {
 // searchRateLimiter applies rate limiting for user search
 func (server *Server) searchRateLimiter() gin.HandlerFunc {
 	return server.createRateLimiter(searchRate)
+}
+
+// usernameCheckRateLimiter applies strict rate limiting for username availability checks
+// to prevent username enumeration attacks
+func (server *Server) usernameCheckRateLimiter() gin.HandlerFunc {
+	return server.createRateLimiter(usernameCheckRate)
 }

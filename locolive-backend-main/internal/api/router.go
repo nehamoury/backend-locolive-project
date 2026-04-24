@@ -37,6 +37,13 @@ func (server *Server) setupRouter() {
 	})
 	api.POST("/users", server.authRateLimiter(), server.createUser)
 	api.POST("/users/login", server.authRateLimiter(), server.loginUser)
+	
+	// Username availability check (public with stricter rate limit)
+	api.GET("/users/check-username", server.usernameCheckRateLimiter(), server.checkUsername)
+	api.GET("/users/suggest-usernames", server.usernameCheckRateLimiter(), server.suggestUsernames)
+	api.POST("/users/validate-username", server.usernameCheckRateLimiter(), server.validateUsername)
+	api.GET("/users/check-email", server.usernameCheckRateLimiter(), server.checkEmail)
+	api.GET("/users/check-phone", server.usernameCheckRateLimiter(), server.checkPhone)
 	api.POST("/auth/google", server.authRateLimiter(), server.googleLogin)
 	api.GET("/auth/google/callback", server.googleCallback)
 	api.POST("/auth/forgot-password", server.authRateLimiter(), server.forgotPassword)
@@ -104,6 +111,10 @@ func (server *Server) setupRouter() {
 	authRoutes.POST("/profile/boost", server.boostProfile)
 	authRoutes.PUT("/account/email", server.updateUserEmail)
 	authRoutes.PUT("/account/password", server.updateUserPassword)
+	
+	// Username Management
+	authRoutes.POST("/users/reserve-username", server.reserveUsername)
+	authRoutes.PUT("/users/change-username", server.changeUsername)
 	
 	// Gamification & Stats
 	authRoutes.GET("/stats/streak", server.getStreak)
@@ -220,6 +231,11 @@ func (server *Server) setupRouter() {
 
 	// Search Users
 	adminRoutes.GET("/users/search", server.searchUsersAdmin)
+	
+	// Reserved Username Management
+	adminRoutes.GET("/reserved-usernames", server.listReservedUsernames)
+	adminRoutes.POST("/reserved-usernames", server.addReservedUsername)
+	adminRoutes.DELETE("/reserved-usernames/:username", server.removeReservedUsername)
 
 	// Serve uploaded media files
 	router.Static("/uploads", "./uploads")

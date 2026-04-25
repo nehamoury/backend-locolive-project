@@ -440,12 +440,18 @@ func (server *Server) likeReel(ctx *gin.Context) {
 
 	_ = server.store.IncrementReelLikes(ctx, reelID)
 
-	// WebSocket event to owner
+	// WebSocket event & Persistent Notification to owner
 	reel, err := server.store.GetReel(ctx, reelID)
 	if err == nil {
 		// Get liker username
 		liker, _ := server.store.GetUserByID(ctx, authPayload.UserID)
 		server.hub.BroadcastReelLiked(reelID, reel.UserID, authPayload.UserID, liker.Username)
+
+		if reel.UserID != authPayload.UserID {
+			server.createNotificationWithSound(ctx, reel.UserID, "reel_liked", "reel_liked",
+				"Reel Liked", fmt.Sprintf("%s liked your reel!", liker.Username),
+				map[string]uuid.UUID{"user": authPayload.UserID})
+		}
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{"message": "liked"})
@@ -504,11 +510,17 @@ func (server *Server) addReelComment(ctx *gin.Context) {
 
 	_ = server.store.IncrementReelComments(ctx, reelID)
 
-	// WebSocket event to owner
+	// WebSocket event & Persistent Notification to owner
 	reel, err := server.store.GetReel(ctx, reelID)
 	if err == nil {
 		commenter, _ := server.store.GetUserByID(ctx, authPayload.UserID)
 		server.hub.BroadcastReelCommented(reelID, reel.UserID, authPayload.UserID, commenter.Username, comment)
+
+		if reel.UserID != authPayload.UserID {
+			server.createNotificationWithSound(ctx, reel.UserID, "reel_commented", "reel_commented",
+				"New Reel Comment", fmt.Sprintf("%s commented on your reel: %s", commenter.Username, comment.Content),
+				map[string]uuid.UUID{"user": authPayload.UserID})
+		}
 	}
 
 	ctx.JSON(http.StatusCreated, toReelCommentResponse(comment))

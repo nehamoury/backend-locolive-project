@@ -8,6 +8,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"time"
 
 	"github.com/google/uuid"
 )
@@ -124,9 +125,15 @@ func (q *Queries) DeleteOldNotifications(ctx context.Context) error {
 }
 
 const listNotifications = `-- name: ListNotifications :many
-SELECT id, user_id, type, title, message, related_user_id, related_story_id, related_crossing_id, is_read, created_at, sub_type, sound FROM notifications
-WHERE user_id = $1
-ORDER BY created_at DESC
+SELECT 
+    n.id, n.user_id, n.type, n.title, n.message, n.related_user_id, n.related_story_id, n.related_crossing_id, n.is_read, n.created_at, n.sub_type, n.sound,
+    COALESCE(u.username, '')::text as actor_username,
+    COALESCE(u.full_name, '')::text as actor_full_name,
+    COALESCE(u.avatar_url, '')::text as actor_avatar_url
+FROM notifications n
+LEFT JOIN users u ON n.related_user_id = u.id
+WHERE n.user_id = $1
+ORDER BY n.created_at DESC
 LIMIT $2 OFFSET $3
 `
 
@@ -136,15 +143,33 @@ type ListNotificationsParams struct {
 	Offset int32     `json:"offset"`
 }
 
-func (q *Queries) ListNotifications(ctx context.Context, arg ListNotificationsParams) ([]Notification, error) {
+type ListNotificationsRow struct {
+	ID                uuid.UUID        `json:"id"`
+	UserID            uuid.UUID        `json:"user_id"`
+	Type              NotificationType `json:"type"`
+	Title             string           `json:"title"`
+	Message           string           `json:"message"`
+	RelatedUserID     uuid.NullUUID    `json:"related_user_id"`
+	RelatedStoryID    uuid.NullUUID    `json:"related_story_id"`
+	RelatedCrossingID uuid.NullUUID    `json:"related_crossing_id"`
+	IsRead            bool             `json:"is_read"`
+	CreatedAt         time.Time        `json:"created_at"`
+	SubType           sql.NullString   `json:"sub_type"`
+	Sound             sql.NullString   `json:"sound"`
+	ActorUsername     string           `json:"actor_username"`
+	ActorFullName     string           `json:"actor_full_name"`
+	ActorAvatarUrl    string           `json:"actor_avatar_url"`
+}
+
+func (q *Queries) ListNotifications(ctx context.Context, arg ListNotificationsParams) ([]ListNotificationsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listNotifications, arg.UserID, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Notification
+	var items []ListNotificationsRow
 	for rows.Next() {
-		var i Notification
+		var i ListNotificationsRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.UserID,
@@ -158,6 +183,9 @@ func (q *Queries) ListNotifications(ctx context.Context, arg ListNotificationsPa
 			&i.CreatedAt,
 			&i.SubType,
 			&i.Sound,
+			&i.ActorUsername,
+			&i.ActorFullName,
+			&i.ActorAvatarUrl,
 		); err != nil {
 			return nil, err
 		}
@@ -173,9 +201,15 @@ func (q *Queries) ListNotifications(ctx context.Context, arg ListNotificationsPa
 }
 
 const listNotificationsAdmin = `-- name: ListNotificationsAdmin :many
-SELECT id, user_id, type, title, message, related_user_id, related_story_id, related_crossing_id, is_read, created_at, sub_type, sound FROM notifications
-WHERE type = 'system_announcement'
-ORDER BY created_at DESC
+SELECT 
+    n.id, n.user_id, n.type, n.title, n.message, n.related_user_id, n.related_story_id, n.related_crossing_id, n.is_read, n.created_at, n.sub_type, n.sound,
+    COALESCE(u.username, '')::text as actor_username,
+    COALESCE(u.full_name, '')::text as actor_full_name,
+    COALESCE(u.avatar_url, '')::text as actor_avatar_url
+FROM notifications n
+LEFT JOIN users u ON n.related_user_id = u.id
+WHERE n.type = 'system_announcement'
+ORDER BY n.created_at DESC
 LIMIT $1 OFFSET $2
 `
 
@@ -184,16 +218,34 @@ type ListNotificationsAdminParams struct {
 	Offset int32 `json:"offset"`
 }
 
+type ListNotificationsAdminRow struct {
+	ID                uuid.UUID        `json:"id"`
+	UserID            uuid.UUID        `json:"user_id"`
+	Type              NotificationType `json:"type"`
+	Title             string           `json:"title"`
+	Message           string           `json:"message"`
+	RelatedUserID     uuid.NullUUID    `json:"related_user_id"`
+	RelatedStoryID    uuid.NullUUID    `json:"related_story_id"`
+	RelatedCrossingID uuid.NullUUID    `json:"related_crossing_id"`
+	IsRead            bool             `json:"is_read"`
+	CreatedAt         time.Time        `json:"created_at"`
+	SubType           sql.NullString   `json:"sub_type"`
+	Sound             sql.NullString   `json:"sound"`
+	ActorUsername     string           `json:"actor_username"`
+	ActorFullName     string           `json:"actor_full_name"`
+	ActorAvatarUrl    string           `json:"actor_avatar_url"`
+}
+
 // Admin: List all notifications (for admin panel)
-func (q *Queries) ListNotificationsAdmin(ctx context.Context, arg ListNotificationsAdminParams) ([]Notification, error) {
+func (q *Queries) ListNotificationsAdmin(ctx context.Context, arg ListNotificationsAdminParams) ([]ListNotificationsAdminRow, error) {
 	rows, err := q.db.QueryContext(ctx, listNotificationsAdmin, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []Notification
+	var items []ListNotificationsAdminRow
 	for rows.Next() {
-		var i Notification
+		var i ListNotificationsAdminRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.UserID,
@@ -207,6 +259,9 @@ func (q *Queries) ListNotificationsAdmin(ctx context.Context, arg ListNotificati
 			&i.CreatedAt,
 			&i.SubType,
 			&i.Sound,
+			&i.ActorUsername,
+			&i.ActorFullName,
+			&i.ActorAvatarUrl,
 		); err != nil {
 			return nil, err
 		}

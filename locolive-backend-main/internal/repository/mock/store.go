@@ -43,20 +43,6 @@ func (m *MockStore) EXPECT() *MockStoreMockRecorder {
 	return m.recorder
 }
 
-// GetDB mocks base method.
-func (m *MockStore) GetDB() *sql.DB {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "GetDB")
-	ret0, _ := ret[0].(*sql.DB)
-	return ret0
-}
-
-// GetDB indicates an expected call of GetDB.
-func (mr *MockStoreMockRecorder) GetDB() *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDB", reflect.TypeOf((*MockStore)(nil).GetDB))
-}
-
 // AddGroupMember mocks base method.
 func (m *MockStore) AddGroupMember(ctx context.Context, arg db.AddGroupMemberParams) (db.GroupMember, error) {
 	m.ctrl.T.Helper()
@@ -1391,6 +1377,20 @@ func (mr *MockStoreMockRecorder) GetCrossingsForUser(ctx, userID1 any) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetCrossingsForUser", reflect.TypeOf((*MockStore)(nil).GetCrossingsForUser), ctx, userID1)
 }
 
+// GetDB mocks base method.
+func (m *MockStore) GetDB() *sql.DB {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDB")
+	ret0, _ := ret[0].(*sql.DB)
+	return ret0
+}
+
+// GetDB indicates an expected call of GetDB.
+func (mr *MockStoreMockRecorder) GetDB() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDB", reflect.TypeOf((*MockStore)(nil).GetDB))
+}
+
 // GetDailyStats mocks base method.
 func (m *MockStore) GetDailyStats(ctx context.Context, arg db.GetDailyStatsParams) ([]db.DailyStat, error) {
 	m.ctrl.T.Helper()
@@ -2569,10 +2569,10 @@ func (mr *MockStoreMockRecorder) ListNearbyReels(ctx, arg any) *gomock.Call {
 }
 
 // ListNotifications mocks base method.
-func (m *MockStore) ListNotifications(ctx context.Context, arg db.ListNotificationsParams) ([]db.Notification, error) {
+func (m *MockStore) ListNotifications(ctx context.Context, arg db.ListNotificationsParams) ([]db.ListNotificationsRow, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListNotifications", ctx, arg)
-	ret0, _ := ret[0].([]db.Notification)
+	ret0, _ := ret[0].([]db.ListNotificationsRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
@@ -2584,10 +2584,10 @@ func (mr *MockStoreMockRecorder) ListNotifications(ctx, arg any) *gomock.Call {
 }
 
 // ListNotificationsAdmin mocks base method.
-func (m *MockStore) ListNotificationsAdmin(ctx context.Context, arg db.ListNotificationsAdminParams) ([]db.Notification, error) {
+func (m *MockStore) ListNotificationsAdmin(ctx context.Context, arg db.ListNotificationsAdminParams) ([]db.ListNotificationsAdminRow, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "ListNotificationsAdmin", ctx, arg)
-	ret0, _ := ret[0].([]db.Notification)
+	ret0, _ := ret[0].([]db.ListNotificationsAdminRow)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }

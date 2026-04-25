@@ -3,9 +3,11 @@ package api
 import (
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
 	"privacy-social-backend/internal/repository/db"
@@ -161,6 +163,15 @@ func (server *Server) reactToStory(ctx *gin.Context) {
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
+	}
+
+	// Create persistent notification for story owner
+	story, err := server.store.GetStoryByID(ctx, storyID)
+	if err == nil && story.UserID != authPayload.UserID {
+		reactor, _ := server.store.GetUserByID(ctx, authPayload.UserID)
+		server.createNotificationWithSound(ctx, story.UserID, "story_reaction", "story_reaction",
+			"Story Reaction", fmt.Sprintf("%s reacted with %s to your story", reactor.Username, bodyReq.Emoji),
+			map[string]uuid.UUID{"user": authPayload.UserID, "story": storyID})
 	}
 
 	ctx.JSON(http.StatusOK, reaction)

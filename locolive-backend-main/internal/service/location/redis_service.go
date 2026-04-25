@@ -398,17 +398,20 @@ func (s *RedisLocationService) processCrossings(ctx context.Context, userID uuid
 		})
 		isConnected := err == nil && conn.Status == "accepted"
 
+		otherUser, _ := s.store.GetUserByID(ctx, targetUserID)
+		meUser, _ := s.store.GetUserByID(ctx, userID)
+
 		title := "Path Crossed!"
-		message := "You crossed paths with someone nearby"
+		message := fmt.Sprintf("You crossed paths with %s nearby!", otherUser.Username)
 		if isConnected {
 			title = "Crossed Again!"
-			message = "You crossed paths with a connection again!"
+			message = fmt.Sprintf("You crossed paths with %s again!", otherUser.Username)
 		} else {
 			title = "Connection Suggestion!"
-			message = "Send a connection request to someone you crossed paths with!"
+			message = fmt.Sprintf("You crossed paths with %s! Send a connection request?", otherUser.Username)
 		}
 
-		// Notification for user1
+		// Notification for user1 (me)
 		notif1, err := s.store.CreateNotification(ctx, db.CreateNotificationParams{
 			UserID:            userID,
 			Type:              "crossing_detected",
@@ -425,14 +428,25 @@ func (s *RedisLocationService) processCrossings(ctx context.Context, userID uuid
 			s.hub.SendToUser(userID, s.formatAlert("crossing_detected", notif1))
 		}
 
+		// Update title/message for user2 (other)
+		title2 := "Path Crossed!"
+		message2 := fmt.Sprintf("You crossed paths with %s nearby!", meUser.Username)
+		if isConnected {
+			title2 = "Crossed Again!"
+			message2 = fmt.Sprintf("You crossed paths with %s again!", meUser.Username)
+		} else {
+			title2 = "Connection Suggestion!"
+			message2 = fmt.Sprintf("You crossed paths with %s! Send a connection request?", meUser.Username)
+		}
+
 		// Notification for user2
 		notif2, err := s.store.CreateNotification(ctx, db.CreateNotificationParams{
 			UserID:            targetUserID,
 			Type:              "crossing_detected",
 			SubType:           sql.NullString{String: "crossing", Valid: true},
 			Sound:             sql.NullString{String: "soft_ping.wav", Valid: true},
-			Title:             title,
-			Message:           message,
+			Title:             title2,
+			Message:           message2,
 			RelatedUserID:     uuid.NullUUID{UUID: userID, Valid: true},
 			RelatedCrossingID: uuid.NullUUID{UUID: crossing.ID, Valid: true},
 		})

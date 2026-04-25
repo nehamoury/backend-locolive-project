@@ -307,7 +307,7 @@ func (server *Server) sendConnectionRequest(ctx *gin.Context) {
 		if err == nil {
 			// Notify about the accepted connection
 			server.createNotificationWithSound(ctx, targetID, "connection_accepted", "connection",
-				"New Connection", "Someone started following you!",
+				"New Connection", fmt.Sprintf("%s started following you!", targetUser.Username),
 				map[string]uuid.UUID{"user": authPayload.UserID})
 			
 			// Invalidate profile caches
@@ -323,8 +323,9 @@ func (server *Server) sendConnectionRequest(ctx *gin.Context) {
 	}
 
 	// Create notification for pending request
+	sender, _ := server.store.GetUserByID(ctx, authPayload.UserID)
 	server.createNotificationWithSound(ctx, targetID, "connection_request", "connection", 
-		"New Connection Request", "Someone wants to connect!", 
+		"New Connection Request", fmt.Sprintf("%s wants to connect with you!", sender.Username), 
 		map[string]uuid.UUID{"user": authPayload.UserID})
 
 	ctx.JSON(http.StatusCreated, gin.H{

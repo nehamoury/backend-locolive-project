@@ -76,6 +76,8 @@ func (server *Server) setupRouter() {
 	authRoutes.DELETE("/stories/archived/:id", server.deleteArchivedStory)
 
 	authRoutes.GET("/connections", server.listConnections)
+	authRoutes.GET("/connections/followers", server.listFollowers)
+	authRoutes.GET("/connections/following", server.listFollowing)
 	authRoutes.GET("/connections/suggested", server.getSuggestedConnections)
 	authRoutes.GET("/connections/requests", server.listPendingRequests)
 	authRoutes.GET("/connections/sent", server.listSentRequests)
@@ -88,6 +90,8 @@ func (server *Server) setupRouter() {
 	authRoutes.PUT("/notifications/:id/read", server.markNotificationRead)
 	authRoutes.PUT("/notifications/read-all", server.markAllNotificationsRead)
 	authRoutes.GET("/notifications/unread-count", server.getUnreadCount)
+	authRoutes.POST("/notifications/token", server.registerFCMToken)
+	authRoutes.DELETE("/notifications/token", server.removeFCMToken)
 
 	// Chat & Messages
 	authRoutes.GET("/conversations", server.getConversationList)

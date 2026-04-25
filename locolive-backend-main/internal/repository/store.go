@@ -13,6 +13,7 @@ type Store interface {
 	db.Querier
 	// Add transaction methods here later if needed
 	ExecTx(ctx context.Context, fn func(*db.Queries) error) error
+	GetDB() *sql.DB
 }
 
 // SQLStore provides all functions to execute SQL queries and transactions
@@ -46,4 +47,7 @@ func (store *SQLStore) ExecTx(ctx context.Context, fn func(*db.Queries) error) e
 	}
 
 	return tx.Commit()
+}
+func (store *SQLStore) GetDB() *sql.DB {
+	return store.db
 }

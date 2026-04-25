@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/sqlc-dev/pqtype"
 )
 
 const createStory = `-- name: CreateStory :one
@@ -24,43 +25,46 @@ INSERT INTO stories (
   is_anonymous,
   show_location,
   is_premium,
-  expires_at
+  expires_at,
+  crop_settings
 ) VALUES (
-  $1, $2, $3, $4, $5, ST_SetSRID(ST_MakePoint($6::float8, $7::float8), 4326), $8, $9, $10, $11
-) RETURNING id, user_id, media_url, media_type, thumbnail_url, caption, geohash, geom, visibility, expires_at, created_at, is_anonymous, is_premium, show_location, ST_Y(geom::geometry) as lat, ST_X(geom::geometry) as lng
+  $1, $2, $3, $4, $5, ST_SetSRID(ST_MakePoint($6::float8, $7::float8), 4326), $8, $9, $10, $11, $12
+) RETURNING id, user_id, media_url, media_type, thumbnail_url, caption, geohash, geom, visibility, expires_at, created_at, is_anonymous, is_premium, show_location, crop_settings, ST_Y(geom::geometry) as lat, ST_X(geom::geometry) as lng
 `
 
 type CreateStoryParams struct {
-	UserID       uuid.UUID      `json:"user_id"`
-	MediaUrl     string         `json:"media_url"`
-	MediaType    string         `json:"media_type"`
-	Caption      sql.NullString `json:"caption"`
-	Geohash      string         `json:"geohash"`
-	Lng          float64        `json:"lng"`
-	Lat          float64        `json:"lat"`
-	IsAnonymous  bool           `json:"is_anonymous"`
-	ShowLocation bool           `json:"show_location"`
-	IsPremium    sql.NullBool   `json:"is_premium"`
-	ExpiresAt    time.Time      `json:"expires_at"`
+	UserID       uuid.UUID             `json:"user_id"`
+	MediaUrl     string                `json:"media_url"`
+	MediaType    string                `json:"media_type"`
+	Caption      sql.NullString        `json:"caption"`
+	Geohash      string                `json:"geohash"`
+	Lng          float64               `json:"lng"`
+	Lat          float64               `json:"lat"`
+	IsAnonymous  bool                  `json:"is_anonymous"`
+	ShowLocation bool                  `json:"show_location"`
+	IsPremium    sql.NullBool          `json:"is_premium"`
+	ExpiresAt    time.Time             `json:"expires_at"`
+	CropSettings pqtype.NullRawMessage `json:"crop_settings"`
 }
 
 type CreateStoryRow struct {
-	ID           uuid.UUID         `json:"id"`
-	UserID       uuid.UUID         `json:"user_id"`
-	MediaUrl     string            `json:"media_url"`
-	MediaType    string            `json:"media_type"`
-	ThumbnailUrl sql.NullString    `json:"thumbnail_url"`
-	Caption      sql.NullString    `json:"caption"`
-	Geohash      string            `json:"geohash"`
-	Geom         interface{}       `json:"geom"`
-	Visibility   StoryAvailability `json:"visibility"`
-	ExpiresAt    time.Time         `json:"expires_at"`
-	CreatedAt    time.Time         `json:"created_at"`
-	IsAnonymous  bool              `json:"is_anonymous"`
-	IsPremium    sql.NullBool      `json:"is_premium"`
-	ShowLocation bool              `json:"show_location"`
-	Lat          interface{}       `json:"lat"`
-	Lng          interface{}       `json:"lng"`
+	ID           uuid.UUID             `json:"id"`
+	UserID       uuid.UUID             `json:"user_id"`
+	MediaUrl     string                `json:"media_url"`
+	MediaType    string                `json:"media_type"`
+	ThumbnailUrl sql.NullString        `json:"thumbnail_url"`
+	Caption      sql.NullString        `json:"caption"`
+	Geohash      string                `json:"geohash"`
+	Geom         interface{}           `json:"geom"`
+	Visibility   StoryAvailability     `json:"visibility"`
+	ExpiresAt    time.Time             `json:"expires_at"`
+	CreatedAt    time.Time             `json:"created_at"`
+	IsAnonymous  bool                  `json:"is_anonymous"`
+	IsPremium    sql.NullBool          `json:"is_premium"`
+	ShowLocation bool                  `json:"show_location"`
+	CropSettings pqtype.NullRawMessage `json:"crop_settings"`
+	Lat          interface{}           `json:"lat"`
+	Lng          interface{}           `json:"lng"`
 }
 
 func (q *Queries) CreateStory(ctx context.Context, arg CreateStoryParams) (CreateStoryRow, error) {
@@ -76,6 +80,7 @@ func (q *Queries) CreateStory(ctx context.Context, arg CreateStoryParams) (Creat
 		arg.ShowLocation,
 		arg.IsPremium,
 		arg.ExpiresAt,
+		arg.CropSettings,
 	)
 	var i CreateStoryRow
 	err := row.Scan(
@@ -93,6 +98,7 @@ func (q *Queries) CreateStory(ctx context.Context, arg CreateStoryParams) (Creat
 		&i.IsAnonymous,
 		&i.IsPremium,
 		&i.ShowLocation,
+		&i.CropSettings,
 		&i.Lat,
 		&i.Lng,
 	)
@@ -121,7 +127,7 @@ func (q *Queries) DeleteStory(ctx context.Context, id uuid.UUID) error {
 }
 
 const getActiveStoriesByUserID = `-- name: GetActiveStoriesByUserID :many
-SELECT s.id, s.user_id, s.media_url, s.media_type, s.thumbnail_url, s.caption, s.geohash, s.geom, s.visibility, s.expires_at, s.created_at, s.is_anonymous, s.is_premium, s.show_location, u.username, u.avatar_url, u.is_premium,
+SELECT s.id, s.user_id, s.media_url, s.media_type, s.thumbnail_url, s.caption, s.geohash, s.geom, s.visibility, s.expires_at, s.created_at, s.is_anonymous, s.is_premium, s.show_location, s.crop_settings, u.username, u.avatar_url, u.is_premium,
        ST_Y(s.geom::geometry) as lat, ST_X(s.geom::geometry) as lng
 FROM stories s
 JOIN users u ON s.user_id = u.id
@@ -130,25 +136,26 @@ ORDER BY s.created_at ASC
 `
 
 type GetActiveStoriesByUserIDRow struct {
-	ID           uuid.UUID         `json:"id"`
-	UserID       uuid.UUID         `json:"user_id"`
-	MediaUrl     string            `json:"media_url"`
-	MediaType    string            `json:"media_type"`
-	ThumbnailUrl sql.NullString    `json:"thumbnail_url"`
-	Caption      sql.NullString    `json:"caption"`
-	Geohash      string            `json:"geohash"`
-	Geom         interface{}       `json:"geom"`
-	Visibility   StoryAvailability `json:"visibility"`
-	ExpiresAt    time.Time         `json:"expires_at"`
-	CreatedAt    time.Time         `json:"created_at"`
-	IsAnonymous  bool              `json:"is_anonymous"`
-	IsPremium    sql.NullBool      `json:"is_premium"`
-	ShowLocation bool              `json:"show_location"`
-	Username     string            `json:"username"`
-	AvatarUrl    sql.NullString    `json:"avatar_url"`
-	IsPremium_2  sql.NullBool      `json:"is_premium_2"`
-	Lat          interface{}       `json:"lat"`
-	Lng          interface{}       `json:"lng"`
+	ID           uuid.UUID             `json:"id"`
+	UserID       uuid.UUID             `json:"user_id"`
+	MediaUrl     string                `json:"media_url"`
+	MediaType    string                `json:"media_type"`
+	ThumbnailUrl sql.NullString        `json:"thumbnail_url"`
+	Caption      sql.NullString        `json:"caption"`
+	Geohash      string                `json:"geohash"`
+	Geom         interface{}           `json:"geom"`
+	Visibility   StoryAvailability     `json:"visibility"`
+	ExpiresAt    time.Time             `json:"expires_at"`
+	CreatedAt    time.Time             `json:"created_at"`
+	IsAnonymous  bool                  `json:"is_anonymous"`
+	IsPremium    sql.NullBool          `json:"is_premium"`
+	ShowLocation bool                  `json:"show_location"`
+	CropSettings pqtype.NullRawMessage `json:"crop_settings"`
+	Username     string                `json:"username"`
+	AvatarUrl    sql.NullString        `json:"avatar_url"`
+	IsPremium_2  sql.NullBool          `json:"is_premium_2"`
+	Lat          interface{}           `json:"lat"`
+	Lng          interface{}           `json:"lng"`
 }
 
 func (q *Queries) GetActiveStoriesByUserID(ctx context.Context, userID uuid.UUID) ([]GetActiveStoriesByUserIDRow, error) {
@@ -175,6 +182,7 @@ func (q *Queries) GetActiveStoriesByUserID(ctx context.Context, userID uuid.UUID
 			&i.IsAnonymous,
 			&i.IsPremium,
 			&i.ShowLocation,
+			&i.CropSettings,
 			&i.Username,
 			&i.AvatarUrl,
 			&i.IsPremium_2,
@@ -195,7 +203,7 @@ func (q *Queries) GetActiveStoriesByUserID(ctx context.Context, userID uuid.UUID
 }
 
 const getConnectionStories = `-- name: GetConnectionStories :many
-SELECT s.id, s.user_id, s.media_url, s.media_type, s.thumbnail_url, s.caption, s.geohash, s.geom, s.visibility, s.expires_at, s.created_at, s.is_anonymous, s.is_premium, s.show_location, u.username, u.avatar_url, u.is_premium,
+SELECT s.id, s.user_id, s.media_url, s.media_type, s.thumbnail_url, s.caption, s.geohash, s.geom, s.visibility, s.expires_at, s.created_at, s.is_anonymous, s.is_premium, s.show_location, s.crop_settings, u.username, u.avatar_url, u.is_premium,
        ST_Y(s.geom::geometry) as lat, ST_X(s.geom::geometry) as lng
 FROM stories s
 JOIN users u ON s.user_id = u.id
@@ -218,25 +226,26 @@ ORDER BY s.created_at DESC
 `
 
 type GetConnectionStoriesRow struct {
-	ID           uuid.UUID         `json:"id"`
-	UserID       uuid.UUID         `json:"user_id"`
-	MediaUrl     string            `json:"media_url"`
-	MediaType    string            `json:"media_type"`
-	ThumbnailUrl sql.NullString    `json:"thumbnail_url"`
-	Caption      sql.NullString    `json:"caption"`
-	Geohash      string            `json:"geohash"`
-	Geom         interface{}       `json:"geom"`
-	Visibility   StoryAvailability `json:"visibility"`
-	ExpiresAt    time.Time         `json:"expires_at"`
-	CreatedAt    time.Time         `json:"created_at"`
-	IsAnonymous  bool              `json:"is_anonymous"`
-	IsPremium    sql.NullBool      `json:"is_premium"`
-	ShowLocation bool              `json:"show_location"`
-	Username     string            `json:"username"`
-	AvatarUrl    sql.NullString    `json:"avatar_url"`
-	IsPremium_2  sql.NullBool      `json:"is_premium_2"`
-	Lat          interface{}       `json:"lat"`
-	Lng          interface{}       `json:"lng"`
+	ID           uuid.UUID             `json:"id"`
+	UserID       uuid.UUID             `json:"user_id"`
+	MediaUrl     string                `json:"media_url"`
+	MediaType    string                `json:"media_type"`
+	ThumbnailUrl sql.NullString        `json:"thumbnail_url"`
+	Caption      sql.NullString        `json:"caption"`
+	Geohash      string                `json:"geohash"`
+	Geom         interface{}           `json:"geom"`
+	Visibility   StoryAvailability     `json:"visibility"`
+	ExpiresAt    time.Time             `json:"expires_at"`
+	CreatedAt    time.Time             `json:"created_at"`
+	IsAnonymous  bool                  `json:"is_anonymous"`
+	IsPremium    sql.NullBool          `json:"is_premium"`
+	ShowLocation bool                  `json:"show_location"`
+	CropSettings pqtype.NullRawMessage `json:"crop_settings"`
+	Username     string                `json:"username"`
+	AvatarUrl    sql.NullString        `json:"avatar_url"`
+	IsPremium_2  sql.NullBool          `json:"is_premium_2"`
+	Lat          interface{}           `json:"lat"`
+	Lng          interface{}           `json:"lng"`
 }
 
 // Get stories from connected users (not limited by radius)
@@ -264,6 +273,7 @@ func (q *Queries) GetConnectionStories(ctx context.Context, userID uuid.UUID) ([
 			&i.IsAnonymous,
 			&i.IsPremium,
 			&i.ShowLocation,
+			&i.CropSettings,
 			&i.Username,
 			&i.AvatarUrl,
 			&i.IsPremium_2,
@@ -284,7 +294,7 @@ func (q *Queries) GetConnectionStories(ctx context.Context, userID uuid.UUID) ([
 }
 
 const getStoriesInBounds = `-- name: GetStoriesInBounds :many
-SELECT s.id, s.user_id, s.media_url, s.media_type, s.thumbnail_url, s.caption, s.geohash, s.geom, s.visibility, s.expires_at, s.created_at, s.is_anonymous, s.is_premium, s.show_location, u.username, u.avatar_url,
+SELECT s.id, s.user_id, s.media_url, s.media_type, s.thumbnail_url, s.caption, s.geohash, s.geom, s.visibility, s.expires_at, s.created_at, s.is_anonymous, s.is_premium, s.show_location, s.crop_settings, u.username, u.avatar_url,
        ST_Y(s.geom::geometry) as lat, ST_X(s.geom::geometry) as lng
 FROM stories s
 JOIN users u ON s.user_id = u.id
@@ -330,24 +340,25 @@ type GetStoriesInBoundsParams struct {
 }
 
 type GetStoriesInBoundsRow struct {
-	ID           uuid.UUID         `json:"id"`
-	UserID       uuid.UUID         `json:"user_id"`
-	MediaUrl     string            `json:"media_url"`
-	MediaType    string            `json:"media_type"`
-	ThumbnailUrl sql.NullString    `json:"thumbnail_url"`
-	Caption      sql.NullString    `json:"caption"`
-	Geohash      string            `json:"geohash"`
-	Geom         interface{}       `json:"geom"`
-	Visibility   StoryAvailability `json:"visibility"`
-	ExpiresAt    time.Time         `json:"expires_at"`
-	CreatedAt    time.Time         `json:"created_at"`
-	IsAnonymous  bool              `json:"is_anonymous"`
-	IsPremium    sql.NullBool      `json:"is_premium"`
-	ShowLocation bool              `json:"show_location"`
-	Username     string            `json:"username"`
-	AvatarUrl    sql.NullString    `json:"avatar_url"`
-	Lat          interface{}       `json:"lat"`
-	Lng          interface{}       `json:"lng"`
+	ID           uuid.UUID             `json:"id"`
+	UserID       uuid.UUID             `json:"user_id"`
+	MediaUrl     string                `json:"media_url"`
+	MediaType    string                `json:"media_type"`
+	ThumbnailUrl sql.NullString        `json:"thumbnail_url"`
+	Caption      sql.NullString        `json:"caption"`
+	Geohash      string                `json:"geohash"`
+	Geom         interface{}           `json:"geom"`
+	Visibility   StoryAvailability     `json:"visibility"`
+	ExpiresAt    time.Time             `json:"expires_at"`
+	CreatedAt    time.Time             `json:"created_at"`
+	IsAnonymous  bool                  `json:"is_anonymous"`
+	IsPremium    sql.NullBool          `json:"is_premium"`
+	ShowLocation bool                  `json:"show_location"`
+	CropSettings pqtype.NullRawMessage `json:"crop_settings"`
+	Username     string                `json:"username"`
+	AvatarUrl    sql.NullString        `json:"avatar_url"`
+	Lat          interface{}           `json:"lat"`
+	Lng          interface{}           `json:"lng"`
 }
 
 // Get stories within a bounding box for map view
@@ -382,6 +393,7 @@ func (q *Queries) GetStoriesInBounds(ctx context.Context, arg GetStoriesInBounds
 			&i.IsAnonymous,
 			&i.IsPremium,
 			&i.ShowLocation,
+			&i.CropSettings,
 			&i.Username,
 			&i.AvatarUrl,
 			&i.Lat,
@@ -401,7 +413,7 @@ func (q *Queries) GetStoriesInBounds(ctx context.Context, arg GetStoriesInBounds
 }
 
 const getStoriesWithinRadius = `-- name: GetStoriesWithinRadius :many
-SELECT s.id, s.user_id, s.media_url, s.media_type, s.thumbnail_url, s.caption, s.geohash, s.geom, s.visibility, s.expires_at, s.created_at, s.is_anonymous, s.is_premium, s.show_location, u.username, u.avatar_url, u.is_premium,
+SELECT s.id, s.user_id, s.media_url, s.media_type, s.thumbnail_url, s.caption, s.geohash, s.geom, s.visibility, s.expires_at, s.created_at, s.is_anonymous, s.is_premium, s.show_location, s.crop_settings, u.username, u.avatar_url, u.is_premium,
        ST_Y(s.geom::geometry) as lat, ST_X(s.geom::geometry) as lng
 FROM stories s
 JOIN users u ON s.user_id = u.id
@@ -461,25 +473,26 @@ type GetStoriesWithinRadiusParams struct {
 }
 
 type GetStoriesWithinRadiusRow struct {
-	ID           uuid.UUID         `json:"id"`
-	UserID       uuid.UUID         `json:"user_id"`
-	MediaUrl     string            `json:"media_url"`
-	MediaType    string            `json:"media_type"`
-	ThumbnailUrl sql.NullString    `json:"thumbnail_url"`
-	Caption      sql.NullString    `json:"caption"`
-	Geohash      string            `json:"geohash"`
-	Geom         interface{}       `json:"geom"`
-	Visibility   StoryAvailability `json:"visibility"`
-	ExpiresAt    time.Time         `json:"expires_at"`
-	CreatedAt    time.Time         `json:"created_at"`
-	IsAnonymous  bool              `json:"is_anonymous"`
-	IsPremium    sql.NullBool      `json:"is_premium"`
-	ShowLocation bool              `json:"show_location"`
-	Username     string            `json:"username"`
-	AvatarUrl    sql.NullString    `json:"avatar_url"`
-	IsPremium_2  sql.NullBool      `json:"is_premium_2"`
-	Lat          interface{}       `json:"lat"`
-	Lng          interface{}       `json:"lng"`
+	ID           uuid.UUID             `json:"id"`
+	UserID       uuid.UUID             `json:"user_id"`
+	MediaUrl     string                `json:"media_url"`
+	MediaType    string                `json:"media_type"`
+	ThumbnailUrl sql.NullString        `json:"thumbnail_url"`
+	Caption      sql.NullString        `json:"caption"`
+	Geohash      string                `json:"geohash"`
+	Geom         interface{}           `json:"geom"`
+	Visibility   StoryAvailability     `json:"visibility"`
+	ExpiresAt    time.Time             `json:"expires_at"`
+	CreatedAt    time.Time             `json:"created_at"`
+	IsAnonymous  bool                  `json:"is_anonymous"`
+	IsPremium    sql.NullBool          `json:"is_premium"`
+	ShowLocation bool                  `json:"show_location"`
+	CropSettings pqtype.NullRawMessage `json:"crop_settings"`
+	Username     string                `json:"username"`
+	AvatarUrl    sql.NullString        `json:"avatar_url"`
+	IsPremium_2  sql.NullBool          `json:"is_premium_2"`
+	Lat          interface{}           `json:"lat"`
+	Lng          interface{}           `json:"lng"`
 }
 
 func (q *Queries) GetStoriesWithinRadius(ctx context.Context, arg GetStoriesWithinRadiusParams) ([]GetStoriesWithinRadiusRow, error) {
@@ -511,6 +524,7 @@ func (q *Queries) GetStoriesWithinRadius(ctx context.Context, arg GetStoriesWith
 			&i.IsAnonymous,
 			&i.IsPremium,
 			&i.ShowLocation,
+			&i.CropSettings,
 			&i.Username,
 			&i.AvatarUrl,
 			&i.IsPremium_2,
@@ -531,27 +545,28 @@ func (q *Queries) GetStoriesWithinRadius(ctx context.Context, arg GetStoriesWith
 }
 
 const getStoryByID = `-- name: GetStoryByID :one
-SELECT id, user_id, media_url, media_type, thumbnail_url, caption, geohash, geom, visibility, expires_at, created_at, is_anonymous, is_premium, show_location, ST_Y(geom::geometry) as lat, ST_X(geom::geometry) as lng FROM stories
+SELECT id, user_id, media_url, media_type, thumbnail_url, caption, geohash, geom, visibility, expires_at, created_at, is_anonymous, is_premium, show_location, crop_settings, ST_Y(geom::geometry) as lat, ST_X(geom::geometry) as lng FROM stories
 WHERE id = $1 LIMIT 1
 `
 
 type GetStoryByIDRow struct {
-	ID           uuid.UUID         `json:"id"`
-	UserID       uuid.UUID         `json:"user_id"`
-	MediaUrl     string            `json:"media_url"`
-	MediaType    string            `json:"media_type"`
-	ThumbnailUrl sql.NullString    `json:"thumbnail_url"`
-	Caption      sql.NullString    `json:"caption"`
-	Geohash      string            `json:"geohash"`
-	Geom         interface{}       `json:"geom"`
-	Visibility   StoryAvailability `json:"visibility"`
-	ExpiresAt    time.Time         `json:"expires_at"`
-	CreatedAt    time.Time         `json:"created_at"`
-	IsAnonymous  bool              `json:"is_anonymous"`
-	IsPremium    sql.NullBool      `json:"is_premium"`
-	ShowLocation bool              `json:"show_location"`
-	Lat          interface{}       `json:"lat"`
-	Lng          interface{}       `json:"lng"`
+	ID           uuid.UUID             `json:"id"`
+	UserID       uuid.UUID             `json:"user_id"`
+	MediaUrl     string                `json:"media_url"`
+	MediaType    string                `json:"media_type"`
+	ThumbnailUrl sql.NullString        `json:"thumbnail_url"`
+	Caption      sql.NullString        `json:"caption"`
+	Geohash      string                `json:"geohash"`
+	Geom         interface{}           `json:"geom"`
+	Visibility   StoryAvailability     `json:"visibility"`
+	ExpiresAt    time.Time             `json:"expires_at"`
+	CreatedAt    time.Time             `json:"created_at"`
+	IsAnonymous  bool                  `json:"is_anonymous"`
+	IsPremium    sql.NullBool          `json:"is_premium"`
+	ShowLocation bool                  `json:"show_location"`
+	CropSettings pqtype.NullRawMessage `json:"crop_settings"`
+	Lat          interface{}           `json:"lat"`
+	Lng          interface{}           `json:"lng"`
 }
 
 func (q *Queries) GetStoryByID(ctx context.Context, id uuid.UUID) (GetStoryByIDRow, error) {
@@ -572,6 +587,7 @@ func (q *Queries) GetStoryByID(ctx context.Context, id uuid.UUID) (GetStoryByIDR
 		&i.IsAnonymous,
 		&i.IsPremium,
 		&i.ShowLocation,
+		&i.CropSettings,
 		&i.Lat,
 		&i.Lng,
 	)
@@ -616,7 +632,7 @@ func (q *Queries) HasValidStory(ctx context.Context, userID uuid.UUID) (bool, er
 }
 
 const listAllStories = `-- name: ListAllStories :many
-SELECT s.id, s.user_id, s.media_url, s.media_type, s.thumbnail_url, s.caption, s.geohash, s.geom, s.visibility, s.expires_at, s.created_at, s.is_anonymous, s.is_premium, s.show_location, u.username
+SELECT s.id, s.user_id, s.media_url, s.media_type, s.thumbnail_url, s.caption, s.geohash, s.geom, s.visibility, s.expires_at, s.created_at, s.is_anonymous, s.is_premium, s.show_location, s.crop_settings, u.username
 FROM stories s
 JOIN users u ON s.user_id = u.id
 ORDER BY s.created_at DESC
@@ -629,21 +645,22 @@ type ListAllStoriesParams struct {
 }
 
 type ListAllStoriesRow struct {
-	ID           uuid.UUID         `json:"id"`
-	UserID       uuid.UUID         `json:"user_id"`
-	MediaUrl     string            `json:"media_url"`
-	MediaType    string            `json:"media_type"`
-	ThumbnailUrl sql.NullString    `json:"thumbnail_url"`
-	Caption      sql.NullString    `json:"caption"`
-	Geohash      string            `json:"geohash"`
-	Geom         interface{}       `json:"geom"`
-	Visibility   StoryAvailability `json:"visibility"`
-	ExpiresAt    time.Time         `json:"expires_at"`
-	CreatedAt    time.Time         `json:"created_at"`
-	IsAnonymous  bool              `json:"is_anonymous"`
-	IsPremium    sql.NullBool      `json:"is_premium"`
-	ShowLocation bool              `json:"show_location"`
-	Username     string            `json:"username"`
+	ID           uuid.UUID             `json:"id"`
+	UserID       uuid.UUID             `json:"user_id"`
+	MediaUrl     string                `json:"media_url"`
+	MediaType    string                `json:"media_type"`
+	ThumbnailUrl sql.NullString        `json:"thumbnail_url"`
+	Caption      sql.NullString        `json:"caption"`
+	Geohash      string                `json:"geohash"`
+	Geom         interface{}           `json:"geom"`
+	Visibility   StoryAvailability     `json:"visibility"`
+	ExpiresAt    time.Time             `json:"expires_at"`
+	CreatedAt    time.Time             `json:"created_at"`
+	IsAnonymous  bool                  `json:"is_anonymous"`
+	IsPremium    sql.NullBool          `json:"is_premium"`
+	ShowLocation bool                  `json:"show_location"`
+	CropSettings pqtype.NullRawMessage `json:"crop_settings"`
+	Username     string                `json:"username"`
 }
 
 // Admin: List all stories
@@ -671,6 +688,7 @@ func (q *Queries) ListAllStories(ctx context.Context, arg ListAllStoriesParams) 
 			&i.IsAnonymous,
 			&i.IsPremium,
 			&i.ShowLocation,
+			&i.CropSettings,
 			&i.Username,
 		); err != nil {
 			return nil, err
@@ -696,7 +714,7 @@ WHERE id = $1
   AND user_id = $2
   AND created_at > NOW() - INTERVAL '15 minutes'
   AND expires_at > NOW()
-RETURNING id, user_id, media_url, media_type, thumbnail_url, caption, geohash, geom, visibility, expires_at, created_at, is_anonymous, is_premium, show_location, ST_Y(geom::geometry) as lat, ST_X(geom::geometry) as lng
+RETURNING id, user_id, media_url, media_type, thumbnail_url, caption, geohash, geom, visibility, expires_at, created_at, is_anonymous, is_premium, show_location, crop_settings, ST_Y(geom::geometry) as lat, ST_X(geom::geometry) as lng
 `
 
 type UpdateStoryParams struct {
@@ -708,22 +726,23 @@ type UpdateStoryParams struct {
 }
 
 type UpdateStoryRow struct {
-	ID           uuid.UUID         `json:"id"`
-	UserID       uuid.UUID         `json:"user_id"`
-	MediaUrl     string            `json:"media_url"`
-	MediaType    string            `json:"media_type"`
-	ThumbnailUrl sql.NullString    `json:"thumbnail_url"`
-	Caption      sql.NullString    `json:"caption"`
-	Geohash      string            `json:"geohash"`
-	Geom         interface{}       `json:"geom"`
-	Visibility   StoryAvailability `json:"visibility"`
-	ExpiresAt    time.Time         `json:"expires_at"`
-	CreatedAt    time.Time         `json:"created_at"`
-	IsAnonymous  bool              `json:"is_anonymous"`
-	IsPremium    sql.NullBool      `json:"is_premium"`
-	ShowLocation bool              `json:"show_location"`
-	Lat          interface{}       `json:"lat"`
-	Lng          interface{}       `json:"lng"`
+	ID           uuid.UUID             `json:"id"`
+	UserID       uuid.UUID             `json:"user_id"`
+	MediaUrl     string                `json:"media_url"`
+	MediaType    string                `json:"media_type"`
+	ThumbnailUrl sql.NullString        `json:"thumbnail_url"`
+	Caption      sql.NullString        `json:"caption"`
+	Geohash      string                `json:"geohash"`
+	Geom         interface{}           `json:"geom"`
+	Visibility   StoryAvailability     `json:"visibility"`
+	ExpiresAt    time.Time             `json:"expires_at"`
+	CreatedAt    time.Time             `json:"created_at"`
+	IsAnonymous  bool                  `json:"is_anonymous"`
+	IsPremium    sql.NullBool          `json:"is_premium"`
+	ShowLocation bool                  `json:"show_location"`
+	CropSettings pqtype.NullRawMessage `json:"crop_settings"`
+	Lat          interface{}           `json:"lat"`
+	Lng          interface{}           `json:"lng"`
 }
 
 func (q *Queries) UpdateStory(ctx context.Context, arg UpdateStoryParams) (UpdateStoryRow, error) {
@@ -750,6 +769,7 @@ func (q *Queries) UpdateStory(ctx context.Context, arg UpdateStoryParams) (Updat
 		&i.IsAnonymous,
 		&i.IsPremium,
 		&i.ShowLocation,
+		&i.CropSettings,
 		&i.Lat,
 		&i.Lng,
 	)

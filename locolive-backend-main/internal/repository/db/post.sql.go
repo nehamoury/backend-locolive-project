@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/sqlc-dev/pqtype"
 )
 
 const adminDeletePostComment = `-- name: AdminDeletePostComment :one
@@ -26,50 +27,53 @@ func (q *Queries) AdminDeletePostComment(ctx context.Context, id uuid.UUID) (uui
 }
 
 const createPost = `-- name: CreatePost :one
-INSERT INTO posts (user_id, media_url, media_type, caption, body_text, location_name, geohash, geom)
+INSERT INTO posts (user_id, media_url, media_type, caption, body_text, location_name, geohash, geom, crop_settings)
 VALUES (
     $1, $2, $3,
     $4, $5, $6, $7,
 
     CASE WHEN $8::boolean
          THEN ST_SetSRID(ST_MakePoint($9::float8, $10::float8), 4326)
-         ELSE NULL END
+         ELSE NULL END,
+    $11
 )
-RETURNING id, user_id, media_url, media_type, caption, location_name, geohash, geom, likes_count, comments_count, created_at, updated_at, body_text, shares_count,
+RETURNING id, user_id, media_url, media_type, caption, location_name, geohash, geom, likes_count, comments_count, created_at, updated_at, body_text, shares_count, crop_settings,
     CASE WHEN geom IS NOT NULL THEN ST_Y(geom::geometry) ELSE NULL END as lat_out,
     CASE WHEN geom IS NOT NULL THEN ST_X(geom::geometry) ELSE NULL END as lng_out
 `
 
 type CreatePostParams struct {
-	UserID       uuid.UUID      `json:"user_id"`
-	MediaUrl     string         `json:"media_url"`
-	MediaType    string         `json:"media_type"`
-	Caption      sql.NullString `json:"caption"`
-	BodyText     sql.NullString `json:"body_text"`
-	LocationName sql.NullString `json:"location_name"`
-	Geohash      sql.NullString `json:"geohash"`
-	HasLocation  bool           `json:"has_location"`
-	Lng          float64        `json:"lng"`
-	Lat          float64        `json:"lat"`
+	UserID       uuid.UUID             `json:"user_id"`
+	MediaUrl     string                `json:"media_url"`
+	MediaType    string                `json:"media_type"`
+	Caption      sql.NullString        `json:"caption"`
+	BodyText     sql.NullString        `json:"body_text"`
+	LocationName sql.NullString        `json:"location_name"`
+	Geohash      sql.NullString        `json:"geohash"`
+	HasLocation  bool                  `json:"has_location"`
+	Lng          float64               `json:"lng"`
+	Lat          float64               `json:"lat"`
+	CropSettings pqtype.NullRawMessage `json:"crop_settings"`
 }
 
 type CreatePostRow struct {
-	ID            uuid.UUID      `json:"id"`
-	UserID        uuid.UUID      `json:"user_id"`
-	MediaUrl      string         `json:"media_url"`
-	MediaType     string         `json:"media_type"`
-	Caption       sql.NullString `json:"caption"`
-	LocationName  sql.NullString `json:"location_name"`
-	Geohash       sql.NullString `json:"geohash"`
-	Geom          interface{}    `json:"geom"`
-	LikesCount    int32          `json:"likes_count"`
-	CommentsCount int32          `json:"comments_count"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
-	BodyText      sql.NullString `json:"body_text"`
-	SharesCount   int32          `json:"shares_count"`
-	LatOut        interface{}    `json:"lat_out"`
-	LngOut        interface{}    `json:"lng_out"`
+	ID            uuid.UUID             `json:"id"`
+	UserID        uuid.UUID             `json:"user_id"`
+	MediaUrl      string                `json:"media_url"`
+	MediaType     string                `json:"media_type"`
+	Caption       sql.NullString        `json:"caption"`
+	LocationName  sql.NullString        `json:"location_name"`
+	Geohash       sql.NullString        `json:"geohash"`
+	Geom          interface{}           `json:"geom"`
+	LikesCount    int32                 `json:"likes_count"`
+	CommentsCount int32                 `json:"comments_count"`
+	CreatedAt     time.Time             `json:"created_at"`
+	UpdatedAt     time.Time             `json:"updated_at"`
+	BodyText      sql.NullString        `json:"body_text"`
+	SharesCount   int32                 `json:"shares_count"`
+	CropSettings  pqtype.NullRawMessage `json:"crop_settings"`
+	LatOut        interface{}           `json:"lat_out"`
+	LngOut        interface{}           `json:"lng_out"`
 }
 
 func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (CreatePostRow, error) {
@@ -84,6 +88,7 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (CreateP
 		arg.HasLocation,
 		arg.Lng,
 		arg.Lat,
+		arg.CropSettings,
 	)
 	var i CreatePostRow
 	err := row.Scan(
@@ -101,6 +106,7 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (CreateP
 		&i.UpdatedAt,
 		&i.BodyText,
 		&i.SharesCount,
+		&i.CropSettings,
 		&i.LatOut,
 		&i.LngOut,
 	)
@@ -257,7 +263,7 @@ func (q *Queries) LikePost(ctx context.Context, arg LikePostParams) (PostLike, e
 }
 
 const listConnectionsPosts = `-- name: ListConnectionsPosts :many
-SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.location_name,
+SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.location_name, p.crop_settings,
        p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
 
        u.username, u.full_name, u.avatar_url,
@@ -286,23 +292,24 @@ type ListConnectionsPostsParams struct {
 }
 
 type ListConnectionsPostsRow struct {
-	ID            uuid.UUID      `json:"id"`
-	UserID        uuid.UUID      `json:"user_id"`
-	MediaUrl      string         `json:"media_url"`
-	MediaType     string         `json:"media_type"`
-	Caption       sql.NullString `json:"caption"`
-	LocationName  sql.NullString `json:"location_name"`
-	LikesCount    int32          `json:"likes_count"`
-	CommentsCount int32          `json:"comments_count"`
-	SharesCount   int32          `json:"shares_count"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
-	Username      string         `json:"username"`
-	FullName      string         `json:"full_name"`
-	AvatarUrl     sql.NullString `json:"avatar_url"`
-	LatOut        interface{}    `json:"lat_out"`
-	LngOut        interface{}    `json:"lng_out"`
-	LikedByViewer bool           `json:"liked_by_viewer"`
+	ID            uuid.UUID             `json:"id"`
+	UserID        uuid.UUID             `json:"user_id"`
+	MediaUrl      string                `json:"media_url"`
+	MediaType     string                `json:"media_type"`
+	Caption       sql.NullString        `json:"caption"`
+	LocationName  sql.NullString        `json:"location_name"`
+	CropSettings  pqtype.NullRawMessage `json:"crop_settings"`
+	LikesCount    int32                 `json:"likes_count"`
+	CommentsCount int32                 `json:"comments_count"`
+	SharesCount   int32                 `json:"shares_count"`
+	CreatedAt     time.Time             `json:"created_at"`
+	UpdatedAt     time.Time             `json:"updated_at"`
+	Username      string                `json:"username"`
+	FullName      string                `json:"full_name"`
+	AvatarUrl     sql.NullString        `json:"avatar_url"`
+	LatOut        interface{}           `json:"lat_out"`
+	LngOut        interface{}           `json:"lng_out"`
+	LikedByViewer bool                  `json:"liked_by_viewer"`
 }
 
 // Get posts from connections AND own posts
@@ -322,6 +329,7 @@ func (q *Queries) ListConnectionsPosts(ctx context.Context, arg ListConnectionsP
 			&i.MediaType,
 			&i.Caption,
 			&i.LocationName,
+			&i.CropSettings,
 			&i.LikesCount,
 			&i.CommentsCount,
 			&i.SharesCount,
@@ -401,7 +409,7 @@ func (q *Queries) ListPostComments(ctx context.Context, postID uuid.UUID) ([]Lis
 }
 
 const listPostsByUserID = `-- name: ListPostsByUserID :many
-SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.location_name,
+SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.location_name, p.crop_settings,
        p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
 
        u.username, u.full_name, u.avatar_url,
@@ -423,23 +431,24 @@ type ListPostsByUserIDParams struct {
 }
 
 type ListPostsByUserIDRow struct {
-	ID            uuid.UUID      `json:"id"`
-	UserID        uuid.UUID      `json:"user_id"`
-	MediaUrl      string         `json:"media_url"`
-	MediaType     string         `json:"media_type"`
-	Caption       sql.NullString `json:"caption"`
-	LocationName  sql.NullString `json:"location_name"`
-	LikesCount    int32          `json:"likes_count"`
-	CommentsCount int32          `json:"comments_count"`
-	SharesCount   int32          `json:"shares_count"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
-	Username      string         `json:"username"`
-	FullName      string         `json:"full_name"`
-	AvatarUrl     sql.NullString `json:"avatar_url"`
-	LatOut        interface{}    `json:"lat_out"`
-	LngOut        interface{}    `json:"lng_out"`
-	LikedByViewer bool           `json:"liked_by_viewer"`
+	ID            uuid.UUID             `json:"id"`
+	UserID        uuid.UUID             `json:"user_id"`
+	MediaUrl      string                `json:"media_url"`
+	MediaType     string                `json:"media_type"`
+	Caption       sql.NullString        `json:"caption"`
+	LocationName  sql.NullString        `json:"location_name"`
+	CropSettings  pqtype.NullRawMessage `json:"crop_settings"`
+	LikesCount    int32                 `json:"likes_count"`
+	CommentsCount int32                 `json:"comments_count"`
+	SharesCount   int32                 `json:"shares_count"`
+	CreatedAt     time.Time             `json:"created_at"`
+	UpdatedAt     time.Time             `json:"updated_at"`
+	Username      string                `json:"username"`
+	FullName      string                `json:"full_name"`
+	AvatarUrl     sql.NullString        `json:"avatar_url"`
+	LatOut        interface{}           `json:"lat_out"`
+	LngOut        interface{}           `json:"lng_out"`
+	LikedByViewer bool                  `json:"liked_by_viewer"`
 }
 
 func (q *Queries) ListPostsByUserID(ctx context.Context, arg ListPostsByUserIDParams) ([]ListPostsByUserIDRow, error) {
@@ -463,6 +472,7 @@ func (q *Queries) ListPostsByUserID(ctx context.Context, arg ListPostsByUserIDPa
 			&i.MediaType,
 			&i.Caption,
 			&i.LocationName,
+			&i.CropSettings,
 			&i.LikesCount,
 			&i.CommentsCount,
 			&i.SharesCount,

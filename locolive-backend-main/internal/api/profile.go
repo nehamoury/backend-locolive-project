@@ -16,6 +16,8 @@ import (
 	"privacy-social-backend/internal/service/location"
 	"privacy-social-backend/internal/token"
 	usernameutil "privacy-social-backend/internal/util/username"
+
+	"github.com/rs/zerolog/log"
 )
 
 const profileCacheTTL = 10 * time.Minute
@@ -56,6 +58,7 @@ type ProfileResponse struct {
 	Interests         []string   `json:"interests"`
 	DistanceKm        *float64   `json:"distance_km,omitempty"`
 	IsPrivate         bool       `json:"is_private"`
+	ConnectionStatus  string     `json:"connection_status"`
 }
 
 func mapProfileResponse(p db.GetUserProfileRow) ProfileResponse {
@@ -164,6 +167,25 @@ func (server *Server) getUserProfile(ctx *gin.Context) {
 		ctx.Header("X-Cache", "MISS")
 	}
 
+	// Fetch connection status if authenticated
+	rsp.ConnectionStatus = "none"
+	if exists && authPayload != nil {
+		payload := authPayload.(*token.Payload)
+		if payload.UserID == userID {
+			rsp.ConnectionStatus = "self"
+		} else {
+			conn, err := server.store.GetConnection(ctx, db.GetConnectionParams{
+				RequesterID: payload.UserID,
+				TargetID:    userID,
+			})
+			if err == nil {
+				rsp.ConnectionStatus = string(conn.Status)
+			} else if err != sql.ErrNoRows {
+				log.Error().Err(err).Msg("failed to get connection status")
+			}
+		}
+	}
+
 	// Enforce Privacy Settings (Whether from cache or DB)
 	if exists && authPayload != nil {
 		payload := authPayload.(*token.Payload)
@@ -237,6 +259,7 @@ func (server *Server) getMyProfile(ctx *gin.Context) {
 	rsp := mapProfileResponse(profile)
 	rsp.ViewsCount = profile.TotalViews
 	rsp.CrossingsCount = profile.CrossingsCount
+	rsp.ConnectionStatus = "self"
 
 	// Cache the result
 	responseJSON, _ := json.Marshal(rsp)

@@ -25,8 +25,9 @@ type createPostRequest struct {
 	BodyText     string  `json:"body_text"`
 	LocationName string  `json:"location_name"`
 	Latitude     float64 `json:"latitude"`
-	Longitude    float64 `json:"longitude"`
-	HasLocation  bool    `json:"has_location"`
+	Longitude    float64         `json:"longitude"`
+	HasLocation  bool            `json:"has_location"`
+	CropSettings json.RawMessage `json:"crop_settings"`
 }
 
 type postResponse struct {
@@ -43,8 +44,9 @@ type postResponse struct {
 	CreatedAt     time.Time `json:"created_at"`
 	Username      string    `json:"username,omitempty"`
 	FullName      string    `json:"full_name,omitempty"`
-	AvatarUrl     string    `json:"avatar_url,omitempty"`
-	LikedByViewer bool      `json:"liked_by_viewer"`
+	AvatarUrl     string          `json:"avatar_url,omitempty"`
+	LikedByViewer bool            `json:"liked_by_viewer"`
+	CropSettings  json.RawMessage `json:"crop_settings,omitempty"`
 }
 
 type postCommentResponse struct {
@@ -71,6 +73,7 @@ func toPostResponse(p db.CreatePostRow) postResponse {
 		CommentsCount: p.CommentsCount,
 		SharesCount:   p.SharesCount,
 		CreatedAt:     p.CreatedAt,
+		CropSettings:  p.CropSettings.RawMessage,
 	}
 }
 
@@ -90,6 +93,7 @@ func toPostResponseFromList(p db.ListPostsByUserIDRow) postResponse {
 		FullName:      p.FullName,
 		AvatarUrl:     p.AvatarUrl.String,
 		LikedByViewer: p.LikedByViewer,
+		CropSettings:  p.CropSettings.RawMessage,
 	}
 }
 
@@ -109,6 +113,7 @@ func toPostResponseFromConnections(p db.ListConnectionsPostsRow) postResponse {
 		FullName:      p.FullName,
 		AvatarUrl:     p.AvatarUrl.String,
 		LikedByViewer: p.LikedByViewer,
+		CropSettings:  p.CropSettings.RawMessage,
 	}
 }
 
@@ -142,9 +147,10 @@ func (server *Server) createPost(ctx *gin.Context) {
 		BodyText:    sql.NullString{String: req.BodyText, Valid: req.BodyText != ""},
 		LocationName: sql.NullString{String: req.LocationName, Valid: req.LocationName != ""},
 		Geohash:     sql.NullString{},
-		HasLocation: req.HasLocation,
-		Lat:         req.Latitude,
-		Lng:         req.Longitude,
+		HasLocation:  req.HasLocation,
+		Lat:          req.Latitude,
+		Lng:          req.Longitude,
+		CropSettings: pqtype.NullRawMessage{RawMessage: req.CropSettings, Valid: len(req.CropSettings) > 0},
 	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))

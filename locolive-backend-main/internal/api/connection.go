@@ -65,6 +65,80 @@ func (server *Server) listConnections(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, rsp)
 }
 
+func (server *Server) listFollowers(ctx *gin.Context) {
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+
+	// In Locolive, an accepted connection is bi-directional.
+	query := `
+		SELECT u.id, u.username, u.full_name, u.avatar_url, u.last_active_at
+		FROM connections c
+		JOIN users u ON (u.id = c.requester_id OR u.id = c.target_id)
+		WHERE (c.requester_id = $1 OR c.target_id = $1)
+		  AND c.status = 'accepted'
+		  AND u.id != $1
+	`
+	rows, err := server.store.GetDB().QueryContext(ctx, query, authPayload.UserID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+	defer rows.Close()
+
+	var rsp []friendResponse
+	for rows.Next() {
+		var c friendResponse
+		var lastActive sql.NullTime
+		var avatarUrl sql.NullString
+		if err := rows.Scan(&c.ID, &c.Username, &c.FullName, &avatarUrl, &lastActive); err != nil {
+			continue
+		}
+		if lastActive.Valid {
+			c.LastActiveAt = &lastActive.Time
+		}
+		c.AvatarUrl = avatarUrl.String
+		rsp = append(rsp, c)
+	}
+
+	ctx.JSON(http.StatusOK, rsp)
+}
+
+func (server *Server) listFollowing(ctx *gin.Context) {
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+
+	// In Locolive, an accepted connection is bi-directional.
+	query := `
+		SELECT u.id, u.username, u.full_name, u.avatar_url, u.last_active_at
+		FROM connections c
+		JOIN users u ON (u.id = c.requester_id OR u.id = c.target_id)
+		WHERE (c.requester_id = $1 OR c.target_id = $1)
+		  AND c.status = 'accepted'
+		  AND u.id != $1
+	`
+	rows, err := server.store.GetDB().QueryContext(ctx, query, authPayload.UserID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+	defer rows.Close()
+
+	var rsp []friendResponse
+	for rows.Next() {
+		var c friendResponse
+		var lastActive sql.NullTime
+		var avatarUrl sql.NullString
+		if err := rows.Scan(&c.ID, &c.Username, &c.FullName, &avatarUrl, &lastActive); err != nil {
+			continue
+		}
+		if lastActive.Valid {
+			c.LastActiveAt = &lastActive.Time
+		}
+		c.AvatarUrl = avatarUrl.String
+		rsp = append(rsp, c)
+	}
+
+	ctx.JSON(http.StatusOK, rsp)
+}
+
 func (server *Server) listPendingRequests(ctx *gin.Context) {
 	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
 

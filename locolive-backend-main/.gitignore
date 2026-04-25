@@ -42,3 +42,7 @@ uploads/*
 !uploads/.gitkeep
 tmp/
 coverage.out
+
+scratch/
+firebase-adminsdk.json
+

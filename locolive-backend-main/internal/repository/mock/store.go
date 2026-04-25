@@ -43,6 +43,20 @@ func (m *MockStore) EXPECT() *MockStoreMockRecorder {
 	return m.recorder
 }
 
+// GetDB mocks base method.
+func (m *MockStore) GetDB() *sql.DB {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDB")
+	ret0, _ := ret[0].(*sql.DB)
+	return ret0
+}
+
+// GetDB indicates an expected call of GetDB.
+func (mr *MockStoreMockRecorder) GetDB() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDB", reflect.TypeOf((*MockStore)(nil).GetDB))
+}
+
 // AddGroupMember mocks base method.
 func (m *MockStore) AddGroupMember(ctx context.Context, arg db.AddGroupMemberParams) (db.GroupMember, error) {
 	m.ctrl.T.Helper()
@@ -2067,6 +2081,21 @@ func (mr *MockStoreMockRecorder) GetUserEngagementStats(ctx, userID any) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserEngagementStats", reflect.TypeOf((*MockStore)(nil).GetUserEngagementStats), ctx, userID)
 }
 
+// GetUserFCMTokens mocks base method.
+func (m *MockStore) GetUserFCMTokens(ctx context.Context, userID uuid.UUID) ([]string, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUserFCMTokens", ctx, userID)
+	ret0, _ := ret[0].([]string)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUserFCMTokens indicates an expected call of GetUserFCMTokens.
+func (mr *MockStoreMockRecorder) GetUserFCMTokens(ctx, userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserFCMTokens", reflect.TypeOf((*MockStore)(nil).GetUserFCMTokens), ctx, userID)
+}
+
 // GetUserGroups mocks base method.
 func (m *MockStore) GetUserGroups(ctx context.Context, userID uuid.UUID) ([]db.Group, error) {
 	m.ctrl.T.Helper()
@@ -2805,6 +2834,49 @@ func (m *MockStore) RecordUsernameChange(ctx context.Context, arg db.RecordUsern
 func (mr *MockStoreMockRecorder) RecordUsernameChange(ctx, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RecordUsernameChange", reflect.TypeOf((*MockStore)(nil).RecordUsernameChange), ctx, arg)
+}
+
+// RegisterFCMToken mocks base method.
+func (m *MockStore) RegisterFCMToken(ctx context.Context, arg db.RegisterFCMTokenParams) (db.UserFcmToken, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RegisterFCMToken", ctx, arg)
+	ret0, _ := ret[0].(db.UserFcmToken)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// RegisterFCMToken indicates an expected call of RegisterFCMToken.
+func (mr *MockStoreMockRecorder) RegisterFCMToken(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RegisterFCMToken", reflect.TypeOf((*MockStore)(nil).RegisterFCMToken), ctx, arg)
+}
+
+// RemoveAllUserFCMTokens mocks base method.
+func (m *MockStore) RemoveAllUserFCMTokens(ctx context.Context, userID uuid.UUID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveAllUserFCMTokens", ctx, userID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveAllUserFCMTokens indicates an expected call of RemoveAllUserFCMTokens.
+func (mr *MockStoreMockRecorder) RemoveAllUserFCMTokens(ctx, userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveAllUserFCMTokens", reflect.TypeOf((*MockStore)(nil).RemoveAllUserFCMTokens), ctx, userID)
+}
+
+// RemoveFCMToken mocks base method.
+func (m *MockStore) RemoveFCMToken(ctx context.Context, arg db.RemoveFCMTokenParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RemoveFCMToken", ctx, arg)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RemoveFCMToken indicates an expected call of RemoveFCMToken.
+func (mr *MockStoreMockRecorder) RemoveFCMToken(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveFCMToken", reflect.TypeOf((*MockStore)(nil).RemoveFCMToken), ctx, arg)
 }
 
 // RemoveGroupMember mocks base method.

@@ -171,6 +171,7 @@ type Querier interface {
 	// Get user by username (case-insensitive match)
 	GetUserByUsernameCaseInsensitive(ctx context.Context, lower string) (User, error)
 	GetUserEngagementStats(ctx context.Context, userID uuid.UUID) (GetUserEngagementStatsRow, error)
+	GetUserFCMTokens(ctx context.Context, userID uuid.UUID) ([]string, error)
 	GetUserGroups(ctx context.Context, userID uuid.UUID) ([]Group, error)
 	GetUserMentions(ctx context.Context, arg GetUserMentionsParams) ([]GetUserMentionsRow, error)
 	GetUserProfile(ctx context.Context, id uuid.UUID) (GetUserProfileRow, error)
@@ -230,6 +231,9 @@ type Querier interface {
 	MarkNotificationAsRead(ctx context.Context, arg MarkNotificationAsReadParams) (Notification, error)
 	// Record a username change in history
 	RecordUsernameChange(ctx context.Context, arg RecordUsernameChangeParams) (UsernameHistory, error)
+	RegisterFCMToken(ctx context.Context, arg RegisterFCMTokenParams) (UserFcmToken, error)
+	RemoveAllUserFCMTokens(ctx context.Context, userID uuid.UUID) error
+	RemoveFCMToken(ctx context.Context, arg RemoveFCMTokenParams) error
 	RemoveGroupMember(ctx context.Context, arg RemoveGroupMemberParams) error
 	// Remove a reserved username (admin only)
 	RemoveReservedUsername(ctx context.Context, lower string) error

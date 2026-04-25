@@ -425,20 +425,21 @@ type PasswordReset struct {
 }
 
 type Post struct {
-	ID            uuid.UUID      `json:"id"`
-	UserID        uuid.UUID      `json:"user_id"`
-	MediaUrl      string         `json:"media_url"`
-	MediaType     string         `json:"media_type"`
-	Caption       sql.NullString `json:"caption"`
-	LocationName  sql.NullString `json:"location_name"`
-	Geohash       sql.NullString `json:"geohash"`
-	Geom          interface{}    `json:"geom"`
-	LikesCount    int32          `json:"likes_count"`
-	CommentsCount int32          `json:"comments_count"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
-	BodyText      sql.NullString `json:"body_text"`
-	SharesCount   int32          `json:"shares_count"`
+	ID            uuid.UUID             `json:"id"`
+	UserID        uuid.UUID             `json:"user_id"`
+	MediaUrl      string                `json:"media_url"`
+	MediaType     string                `json:"media_type"`
+	Caption       sql.NullString        `json:"caption"`
+	LocationName  sql.NullString        `json:"location_name"`
+	Geohash       sql.NullString        `json:"geohash"`
+	Geom          interface{}           `json:"geom"`
+	LikesCount    int32                 `json:"likes_count"`
+	CommentsCount int32                 `json:"comments_count"`
+	CreatedAt     time.Time             `json:"created_at"`
+	UpdatedAt     time.Time             `json:"updated_at"`
+	BodyText      sql.NullString        `json:"body_text"`
+	SharesCount   int32                 `json:"shares_count"`
+	CropSettings  pqtype.NullRawMessage `json:"crop_settings"`
 }
 
 type PostComment struct {
@@ -553,20 +554,21 @@ type Session struct {
 }
 
 type Story struct {
-	ID           uuid.UUID         `json:"id"`
-	UserID       uuid.UUID         `json:"user_id"`
-	MediaUrl     string            `json:"media_url"`
-	MediaType    string            `json:"media_type"`
-	ThumbnailUrl sql.NullString    `json:"thumbnail_url"`
-	Caption      sql.NullString    `json:"caption"`
-	Geohash      string            `json:"geohash"`
-	Geom         interface{}       `json:"geom"`
-	Visibility   StoryAvailability `json:"visibility"`
-	ExpiresAt    time.Time         `json:"expires_at"`
-	CreatedAt    time.Time         `json:"created_at"`
-	IsAnonymous  bool              `json:"is_anonymous"`
-	IsPremium    sql.NullBool      `json:"is_premium"`
-	ShowLocation bool              `json:"show_location"`
+	ID           uuid.UUID             `json:"id"`
+	UserID       uuid.UUID             `json:"user_id"`
+	MediaUrl     string                `json:"media_url"`
+	MediaType    string                `json:"media_type"`
+	ThumbnailUrl sql.NullString        `json:"thumbnail_url"`
+	Caption      sql.NullString        `json:"caption"`
+	Geohash      string                `json:"geohash"`
+	Geom         interface{}           `json:"geom"`
+	Visibility   StoryAvailability     `json:"visibility"`
+	ExpiresAt    time.Time             `json:"expires_at"`
+	CreatedAt    time.Time             `json:"created_at"`
+	IsAnonymous  bool                  `json:"is_anonymous"`
+	IsPremium    sql.NullBool          `json:"is_premium"`
+	ShowLocation bool                  `json:"show_location"`
+	CropSettings pqtype.NullRawMessage `json:"crop_settings"`
 }
 
 type StoryMention struct {
@@ -632,6 +634,15 @@ type UserBadge struct {
 	UserID   uuid.UUID    `json:"user_id"`
 	BadgeID  string       `json:"badge_id"`
 	EarnedAt sql.NullTime `json:"earned_at"`
+}
+
+type UserFcmToken struct {
+	ID         uuid.UUID `json:"id"`
+	UserID     uuid.UUID `json:"user_id"`
+	Token      string    `json:"token"`
+	DeviceType string    `json:"device_type"`
+	LastUsedAt time.Time `json:"last_used_at"`
+	CreatedAt  time.Time `json:"created_at"`
 }
 
 type UserStreak struct {

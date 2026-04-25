@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"privacy-social-backend/internal/realtime"
 
@@ -15,4 +16,15 @@ func (server *Server) sendWSNotification(userID uuid.UUID, msgType string, paylo
 	}
 	wsMsgBytes, _ := json.Marshal(wsMsg)
 	server.hub.SendToUser(userID, wsMsgBytes)
+
+	// Also send Push Notification via FCM
+	go server.sendPushNotificationToUser(
+		context.Background(),
+		userID,
+		"Locolive Notification",
+		msgType, // Simple message for now
+		map[string]string{
+			"type": msgType,
+		},
+	)
 }

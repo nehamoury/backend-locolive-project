@@ -14,6 +14,7 @@ import (
 	"privacy-social-backend/internal/service/safety"
 	"privacy-social-backend/internal/service/storage"
 	"privacy-social-backend/internal/service/moderation"
+	"privacy-social-backend/internal/service/notification"
 	"privacy-social-backend/internal/service/story"
 	usernameservice "privacy-social-backend/internal/service/username"
 	"privacy-social-backend/internal/service/user"
@@ -41,6 +42,7 @@ type Server struct {
 	storage    storage.Service
 	moderation *moderation.Service
 	mailer     util.Mailer
+	notification *notification.NotificationService
 }
 
 // NewServer creates a new HTTP server and setup routing
@@ -126,6 +128,17 @@ func NewServer(
 		storage:    storageService,
 		moderation: modService,
 		mailer:     mailer,
+	}
+
+	// Initialize Notification Service (FCM)
+	if config.FirebaseCredentialsPath != "" {
+		notificationService, err := notification.NewNotificationService(config.FirebaseCredentialsPath)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to initialize FCM Notification Service")
+		} else {
+			server.notification = notificationService
+			log.Info().Msg("FCM Notification Service Initialized")
+		}
 	}
 
 	server.setupRouter()

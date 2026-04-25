@@ -66,3 +66,21 @@ func (server *Server) createNotificationWithSound(
 
 	return notif, nil
 }
+
+// sendPushNotificationToUser fetches all FCM tokens for a user and sends a push notification
+func (server *Server) sendPushNotificationToUser(ctx context.Context, userID uuid.UUID, title, body string, data map[string]string) {
+	if server.notification == nil {
+		return
+	}
+
+	tokens, err := server.store.GetUserFCMTokens(ctx, userID)
+	if err != nil || len(tokens) == 0 {
+		return
+	}
+
+	// Send to all registered devices for this user
+	err = server.notification.SendMulticastNotification(ctx, tokens, title, body, data)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to send multicast push notification")
+	}
+}

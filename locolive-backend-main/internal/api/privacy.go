@@ -337,7 +337,7 @@ func (server *Server) canViewContent(ctx *gin.Context, viewerID, ownerID uuid.UU
 			}
 			return false, "", err
 		}
-		if conn.Status != "accepted" {
+		if conn.Status != "accepted" && conn.Status != "pending" {
 			return false, "private", nil
 		}
 	}

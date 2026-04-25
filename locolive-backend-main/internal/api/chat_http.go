@@ -302,6 +302,18 @@ func (server *Server) sendMessage(ctx *gin.Context) {
 		}
 		data, _ := json.Marshal(wsMsg)
 		server.hub.SendToUser(receiverID.UUID, data)
+		
+		// Send Push Notification via FCM
+		go server.sendPushNotificationToUser(
+			context.Background(),
+			receiverID.UUID,
+			fmt.Sprintf("New message from %s", authPayload.Username),
+			req.Content,
+			map[string]string{
+				"type": "new_message",
+				"sender_id": authPayload.UserID.String(),
+			},
+		)
 	} else if groupID.Valid {
 		// Group Logic
 		// 1. Notify All Members
@@ -321,6 +333,18 @@ func (server *Server) sendMessage(ctx *gin.Context) {
 				// Don't send back to self (already handled below by echo)
 				if m.UserID != authPayload.UserID {
 					server.hub.SendToUser(m.UserID, wsMsgBytes)
+					
+					// Send Push Notification (async)
+					go server.sendPushNotificationToUser(
+						context.Background(),
+						m.UserID,
+						"New message in group",
+						req.Content,
+						map[string]string{
+							"type": "new_group_message",
+							"group_id": groupID.UUID.String(),
+						},
+					)
 				}
 			}
 		}

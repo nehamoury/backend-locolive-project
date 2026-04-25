@@ -13,6 +13,7 @@ import (
 	"github.com/mmcloughlin/geohash"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog/log"
+	"github.com/sqlc-dev/pqtype"
 
 	"privacy-social-backend/internal/realtime"
 	"privacy-social-backend/internal/repository"
@@ -29,6 +30,7 @@ type CreateStoryParams struct {
 	Caption      string
 	IsAnonymous  bool
 	ShowLocation bool
+	CropSettings json.RawMessage
 }
 
 type GetFeedParams struct {
@@ -106,6 +108,7 @@ func (s *ServiceImpl) CreateStory(ctx context.Context, req CreateStoryParams) (*
 		ShowLocation: req.ShowLocation,
 		IsPremium:    sql.NullBool{Bool: isPremium, Valid: true},
 		ExpiresAt:    expiresAt,
+		CropSettings: pqtype.NullRawMessage{RawMessage: req.CropSettings, Valid: len(req.CropSettings) > 0},
 	})
 	if err != nil {
 		return nil, err

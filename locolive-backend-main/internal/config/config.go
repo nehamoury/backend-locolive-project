@@ -32,6 +32,7 @@ type Config struct {
 	TLSCertFile          string        `mapstructure:"TLS_CERT_FILE"`
 	TLSKeyFile           string        `mapstructure:"TLS_KEY_FILE"`
 	ForceHTTPS           bool          `mapstructure:"FORCE_HTTPS"`
+	FirebaseCredentialsPath string     `mapstructure:"FIREBASE_CREDENTIALS_PATH"`
 }
 
 func LoadConfig(path string) (config Config, err error) {

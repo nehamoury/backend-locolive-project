@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	"encoding/json"
 	"net/http"
 	"time"
 
@@ -27,8 +28,9 @@ type createStoryRequest struct {
 	Latitude     float64 `json:"latitude" binding:"required,min=-90,max=90"`
 	Longitude    float64 `json:"longitude" binding:"required,min=-180,max=180"`
 	Caption      string  `json:"caption"`
-	IsAnonymous  bool    `json:"is_anonymous"`
-	ShowLocation bool    `json:"show_location"`
+	IsAnonymous  bool            `json:"is_anonymous"`
+	ShowLocation bool            `json:"show_location"`
+	CropSettings json.RawMessage `json:"crop_settings"`
 }
 
 func (server *Server) createStory(ctx *gin.Context) {
@@ -81,6 +83,7 @@ func (server *Server) createStory(ctx *gin.Context) {
 		Caption:      req.Caption,
 		IsAnonymous:  req.IsAnonymous,
 		ShowLocation: req.ShowLocation,
+		CropSettings: req.CropSettings,
 	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))

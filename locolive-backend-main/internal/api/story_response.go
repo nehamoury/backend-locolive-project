@@ -1,6 +1,7 @@
 package api
 
 import (
+	"encoding/json"
 	"time"
 
 	"privacy-social-backend/internal/repository/db"
@@ -10,23 +11,24 @@ import (
 
 // StoryResponse is the DTO for story API responses
 type StoryResponse struct {
-	ID           uuid.UUID `json:"id"`
-	UserID       uuid.UUID `json:"user_id"`
-	MediaURL     string    `json:"media_url"`
-	MediaType    string    `json:"media_type"`
-	ThumbnailURL *string   `json:"thumbnail_url"`
-	Caption      *string   `json:"caption"`
-	Geohash      string    `json:"geohash"`
-	Visibility   string    `json:"visibility"`
-	ExpiresAt    time.Time `json:"expires_at"`
-	CreatedAt    time.Time `json:"created_at"`
-	IsAnonymous  bool      `json:"is_anonymous"`
-	ShowLocation bool      `json:"show_location"`
-	IsPremium    *bool     `json:"is_premium"`
-	Username     string    `json:"username"`
-	AvatarURL    *string   `json:"avatar_url"`
-	Lat          float64   `json:"lat"`
-	Lng          float64   `json:"lng"`
+	ID           uuid.UUID       `json:"id"`
+	UserID       uuid.UUID       `json:"user_id"`
+	MediaURL     string          `json:"media_url"`
+	MediaType    string          `json:"media_type"`
+	ThumbnailURL *string         `json:"thumbnail_url"`
+	Caption      *string         `json:"caption"`
+	Geohash      string          `json:"geohash"`
+	Visibility   string          `json:"visibility"`
+	ExpiresAt    time.Time       `json:"expires_at"`
+	CreatedAt    time.Time       `json:"created_at"`
+	IsAnonymous  bool            `json:"is_anonymous"`
+	ShowLocation bool            `json:"show_location"`
+	IsPremium    *bool           `json:"is_premium"`
+	Username     string          `json:"username"`
+	AvatarURL    *string         `json:"avatar_url"`
+	Lat          float64         `json:"lat"`
+	Lng          float64         `json:"lng"`
+	CropSettings json.RawMessage `json:"crop_settings,omitempty"`
 }
 
 // Convert db.GetStoriesWithinRadiusRow to StoryResponse
@@ -43,6 +45,7 @@ func toStoryResponse(row db.GetStoriesWithinRadiusRow) StoryResponse {
 		IsAnonymous:  row.IsAnonymous,
 		ShowLocation: row.ShowLocation,
 		Username:     row.Username,
+		CropSettings:  row.CropSettings.RawMessage,
 	}
 
 	if val, ok := row.Lat.(float64); ok {
@@ -85,6 +88,7 @@ func toStoryResponseFromConnection(row db.GetConnectionStoriesRow) StoryResponse
 		IsAnonymous:  row.IsAnonymous,
 		ShowLocation: row.ShowLocation,
 		Username:     row.Username,
+		CropSettings:  row.CropSettings.RawMessage,
 	}
 
 	if val, ok := row.Lat.(float64); ok {
@@ -127,6 +131,7 @@ func toStoryResponseFromBounds(row db.GetStoriesInBoundsRow) StoryResponse {
 		IsAnonymous:  row.IsAnonymous,
 		ShowLocation: row.ShowLocation,
 		Username:     row.Username,
+		CropSettings:  row.CropSettings.RawMessage,
 	}
 
 	if val, ok := row.Lat.(float64); ok {
@@ -165,6 +170,7 @@ func toStoryResponseFromCreate(row db.CreateStoryRow) StoryResponse {
 		IsAnonymous:  row.IsAnonymous,
 		ShowLocation: row.ShowLocation,
 		Username:     "",
+		CropSettings:  row.CropSettings.RawMessage,
 	}
 
 	if val, ok := row.Lat.(float64); ok {
@@ -203,6 +209,7 @@ func toStoryResponseFromGet(row db.GetStoryByIDRow) StoryResponse {
 		IsAnonymous:  row.IsAnonymous,
 		ShowLocation: row.ShowLocation,
 		Username:     "",
+		CropSettings:  row.CropSettings.RawMessage,
 	}
 
 	if val, ok := row.Lat.(float64); ok {
@@ -241,6 +248,7 @@ func toStoryResponseFromUpdate(row db.UpdateStoryRow) StoryResponse {
 		IsAnonymous:  row.IsAnonymous,
 		ShowLocation: row.ShowLocation,
 		Username:     "",
+		CropSettings:  row.CropSettings.RawMessage,
 	}
 
 	if val, ok := row.Lat.(float64); ok {
@@ -278,6 +286,7 @@ func toStoryResponseFromActive(row db.GetActiveStoriesByUserIDRow) StoryResponse
 		IsAnonymous:  row.IsAnonymous,
 		ShowLocation: row.ShowLocation,
 		Username:     row.Username,
+		CropSettings:  row.CropSettings.RawMessage,
 	}
 
 	if val, ok := row.Lat.(float64); ok {

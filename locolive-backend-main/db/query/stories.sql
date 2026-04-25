@@ -9,9 +9,10 @@ INSERT INTO stories (
   is_anonymous,
   show_location,
   is_premium,
-  expires_at
+  expires_at,
+  crop_settings
 ) VALUES (
-  @user_id, @media_url, @media_type, @caption, @geohash, ST_SetSRID(ST_MakePoint(@lng::float8, @lat::float8), 4326), @is_anonymous, @show_location, @is_premium, @expires_at
+  @user_id, @media_url, @media_type, @caption, @geohash, ST_SetSRID(ST_MakePoint(@lng::float8, @lat::float8), 4326), @is_anonymous, @show_location, @is_premium, @expires_at, @crop_settings
 ) RETURNING *, ST_Y(geom::geometry) as lat, ST_X(geom::geometry) as lng;
 
 -- name: GetStoryByID :one

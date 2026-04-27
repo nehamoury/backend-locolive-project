@@ -2,10 +2,12 @@ package api
 
 import (
 	"errors"
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 
 	"privacy-social-backend/internal/token"
 )
@@ -150,5 +152,58 @@ func securityHeadersMiddleware() gin.HandlerFunc {
 		}
 
 		c.Next()
+	}
+}
+
+// privacyCheckMiddleware enforces privacy rules before accessing a target user's resource.
+// It assumes the target user ID is in the "id" route parameter.
+func (server *Server) privacyCheckMiddleware() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		payload, exists := ctx.Get(authorizationPayloadKey)
+		if !exists {
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+			return
+		}
+		authPayload := payload.(*token.Payload)
+
+		targetIDStr := ctx.Param("id")
+		if targetIDStr == "" {
+			ctx.Next()
+			return
+		}
+
+		targetID, err := uuid.Parse(targetIDStr)
+		if err != nil {
+			ctx.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "invalid user id"})
+			return
+		}
+
+		// Use the centralized privacy service
+		result := server.privacy.CanUserAccess(ctx, authPayload.UserID, targetID)
+		if !result.Allowed {
+			server.respondToPrivacyDenial(ctx, result.Reason)
+			return
+		}
+
+		ctx.Next()
+	}
+}
+
+// respondToPrivacyDenial maps privacy reasons to standard HTTP status codes.
+func (server *Server) respondToPrivacyDenial(ctx *gin.Context, reason interface{}) {
+	// Import privacy package if needed, but since it's used in CanUserAccess return, 
+	// we just handle it by string/type comparison here.
+	// We'll use a switch for clarity.
+	
+	switch fmt.Sprintf("%v", reason) {
+	case "blocked", "panic_mode", "deleted", "hidden":
+		// Hide existence if blocked, in panic mode, or inactive for too long
+		ctx.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "user not found"})
+	case "private":
+		ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "this account is private"})
+	case "banned":
+		ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "access denied: user is banned"})
+	default:
+		ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "access denied due to privacy settings"})
 	}
 }

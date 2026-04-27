@@ -134,8 +134,9 @@ func (server *Server) setupRouter() {
 	authRoutes.POST("/users/block", server.blockUser)
 	authRoutes.DELETE("/users/block/:id", server.unblockUser)
 	authRoutes.GET("/users/blocked", server.getBlockedUsers)
-	authRoutes.PUT("/location/ghost-mode", server.toggleGhostMode)
-	authRoutes.POST("/location/panic", server.panicMode)
+	authRoutes.PUT("/location/ghost-mode", server.toggleGhostMode) // Keep legacy for compatibility if any
+	authRoutes.POST("/users/ghost-mode", server.toggleGhostMode)
+	authRoutes.POST("/users/panic", server.panicMode)
 
 	// Story engagement
 	authRoutes.POST("/stories/:id/view", server.viewStory)
@@ -151,8 +152,8 @@ func (server *Server) setupRouter() {
 	// User Profiles
 	authRoutes.GET("/users/search", server.searchRateLimiter(), server.searchUsers)
 	authRoutes.GET("/users/nearby", server.getNearbyUsers)
-	authRoutes.GET("/users/:id", server.getUserProfile)
-	authRoutes.GET("/stories/user/:id", server.getUserStories)
+	authRoutes.GET("/users/:id", server.privacyCheckMiddleware(), server.getUserProfile)
+	authRoutes.GET("/stories/user/:id", server.privacyCheckMiddleware(), server.getUserStories)
 	authRoutes.GET("/profile/me", server.getMyProfile)
 	authRoutes.GET("/profile/visitors", server.getProfileVisitors)
 
@@ -160,7 +161,7 @@ func (server *Server) setupRouter() {
 	authRoutes.POST("/posts", server.createPost)
 	authRoutes.GET("/posts/feed", server.getConnectionsFeed)
 	authRoutes.GET("/posts/me", server.getMyPosts)
-	authRoutes.GET("/users/:id/posts", server.getUserPosts)
+	authRoutes.GET("/users/:id/posts", server.privacyCheckMiddleware(), server.getUserPosts)
 	authRoutes.DELETE("/posts/:id", server.deletePost)
 	authRoutes.POST("/posts/:id/like", server.likePost)
 	authRoutes.DELETE("/posts/:id/like", server.unlikePost)
@@ -174,7 +175,7 @@ func (server *Server) setupRouter() {
 	authRoutes.GET("/reels/feed", server.getReelsFeed)
 	authRoutes.GET("/reels/nearby", server.getNearbyReels)
 	authRoutes.GET("/reels/saved", server.getSavedReels)
-	authRoutes.GET("/users/:id/reels", server.getUserReels)
+	authRoutes.GET("/users/:id/reels", server.privacyCheckMiddleware(), server.getUserReels)
 	authRoutes.DELETE("/reels/:id", server.deleteReel)
 	authRoutes.POST("/reels/:id/like", server.likeReel)
 	authRoutes.DELETE("/reels/:id/like", server.unlikeReel)
@@ -188,7 +189,7 @@ func (server *Server) setupRouter() {
 	// Highlights
 	authRoutes.POST("/highlights", server.createHighlight)
 	authRoutes.GET("/highlights/me", server.getMyHighlights)
-	authRoutes.GET("/users/:id/highlights", server.getHighlights)
+	authRoutes.GET("/users/:id/highlights", server.privacyCheckMiddleware(), server.getHighlights)
 	authRoutes.GET("/highlights/:id", server.getHighlightDetails)
 	authRoutes.POST("/highlights/:id/stories", server.addStoryToHighlight)
 	authRoutes.DELETE("/highlights/:id/stories/:storyId", server.removeStoryFromHighlight)

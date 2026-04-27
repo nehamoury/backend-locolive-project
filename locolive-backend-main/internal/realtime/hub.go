@@ -254,6 +254,19 @@ func (h *Hub) BroadcastForceLogout(userID uuid.UUID, reason string) {
 	h.SendToUser(userID, data)
 }
 
+func (h *Hub) DisconnectUser(userID uuid.UUID) {
+	h.mutex.Lock()
+	defer h.mutex.Unlock()
+
+	if clients, ok := h.clients[userID]; ok {
+		for client := range clients {
+			delete(clients, client)
+			close(client.Send)
+		}
+		delete(h.clients, userID)
+	}
+}
+
 // ─── Admin Broadcasting ──────────────────────────────────────────────────
 
 // listenAdminActivity listens for admin activity notifications via Redis Pub/Sub

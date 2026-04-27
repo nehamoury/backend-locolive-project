@@ -350,11 +350,25 @@ func (server *Server) updateConnection(ctx *gin.Context) {
 	}
 	authPayload := getAuthPayload(ctx)
 
-	conn, err := server.store.UpdateConnectionStatus(ctx, db.UpdateConnectionStatusParams{
-		RequesterID: requesterID,
-		TargetID:    authPayload.UserID, // I am the target accepting the request
-		Status:      db.ConnectionStatus(req.Status),
+	var conn db.Connection
+	err := server.store.ExecTx(ctx, func(q *db.Queries) error {
+		var err error
+		conn, err = q.UpdateConnectionStatus(ctx, db.UpdateConnectionStatusParams{
+			RequesterID: requesterID,
+			TargetID:    authPayload.UserID,
+			Status:      db.ConnectionStatus(req.Status),
+		})
+		if err != nil {
+			return err
+		}
+
+		// Remove the 'connection_request' notification as it's now handled
+		return q.DeleteConnectionRequestNotifications(ctx, db.DeleteConnectionRequestNotificationsParams{
+			UserID:        authPayload.UserID,
+			RelatedUserID: uuid.NullUUID{UUID: requesterID, Valid: true},
+		})
 	})
+
 	if err != nil {
 		if err == sql.ErrNoRows {
 			ctx.JSON(http.StatusNotFound, gin.H{"error": "connection request not found or already handled"})
@@ -362,15 +376,6 @@ func (server *Server) updateConnection(ctx *gin.Context) {
 		}
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
-	}
-
-	// Remove the 'connection_request' notification as it's now handled
-	err = server.store.DeleteConnectionRequestNotifications(ctx, db.DeleteConnectionRequestNotificationsParams{
-		UserID:        authPayload.UserID,
-		RelatedUserID: uuid.NullUUID{UUID: requesterID, Valid: true},
-	})
-	if err != nil {
-		log.Error().Err(err).Msg("failed to delete connection request notification")
 	}
 
 	// Create notification if connection was accepted

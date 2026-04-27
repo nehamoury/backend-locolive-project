@@ -2,6 +2,7 @@ package api
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/redis/go-redis/v9"
@@ -60,10 +61,17 @@ func NewServer(
 
 	var opt *redis.Options
 	if config.RedisAddress != "" {
-		var parseErr error
-		opt, parseErr = redis.ParseURL(config.RedisAddress)
-		if parseErr != nil {
-			log.Warn().Err(parseErr).Str("address", config.RedisAddress).Msg("Failed to parse Redis URL, attempting simple address")
+		if strings.HasPrefix(config.RedisAddress, "redis://") || strings.HasPrefix(config.RedisAddress, "rediss://") {
+			var parseErr error
+			opt, parseErr = redis.ParseURL(config.RedisAddress)
+			if parseErr != nil {
+				log.Warn().Err(parseErr).Str("address", config.RedisAddress).Msg("Failed to parse Redis URL, attempting simple address")
+				opt = &redis.Options{
+					Addr: config.RedisAddress,
+				}
+			}
+		} else {
+			// Simple host:port address
 			opt = &redis.Options{
 				Addr: config.RedisAddress,
 			}

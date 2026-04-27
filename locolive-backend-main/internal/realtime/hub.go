@@ -35,6 +35,7 @@ var soundMap = map[string]string{
 	"reel_liked":     "chat_pop.wav", // Reusing for now
 	"reel_commented": "chat_pop.wav", // Reusing for now
 	"new_reel_nearby": "soft_ping.wav",
+	"force_logout":    "system_alert.wav",
 }
 
 func NewHub(rdb *redis.Client) *Hub {
@@ -237,6 +238,20 @@ func (h *Hub) BroadcastNewReelNearby(reel interface{}, targetUserIDs []uuid.UUID
 	for _, id := range targetUserIDs {
 		h.SendToUser(id, data)
 	}
+}
+
+func (h *Hub) BroadcastForceLogout(userID uuid.UUID, reason string) {
+	msg := WSMessage{
+		Type:    "force_logout",
+		SubType: "system",
+		Sound:   soundMap["force_logout"],
+		Payload: map[string]interface{}{
+			"reason": reason,
+		},
+		CreatedAt: time.Now().UTC(),
+	}
+	data, _ := json.Marshal(msg)
+	h.SendToUser(userID, data)
 }
 
 // ─── Admin Broadcasting ──────────────────────────────────────────────────

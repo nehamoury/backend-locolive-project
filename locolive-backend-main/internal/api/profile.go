@@ -160,6 +160,15 @@ func (server *Server) getUserProfile(ctx *gin.Context) {
 		rsp.ViewsCount = profile.TotalViews
 		rsp.CrossingsCount = profile.CrossingsCount
 
+		// FORCE Correct Counts (Unidirectional)
+		var followersCount, followingCount int64
+		server.store.GetDB().QueryRowContext(ctx, "SELECT COUNT(*) FROM connections WHERE target_id = $1 AND status = 'accepted'", userID).Scan(&followersCount)
+		server.store.GetDB().QueryRowContext(ctx, "SELECT COUNT(*) FROM connections WHERE requester_id = $1 AND status = 'accepted'", userID).Scan(&followingCount)
+		
+		rsp.FollowersCount = followersCount
+		rsp.FollowingCount = followingCount
+		rsp.ConnectionCount = followersCount + followingCount
+
 		// Cache for future requests
 		if rspJSON, err := json.Marshal(rsp); err == nil {
 			server.redis.Set(context.Background(), cacheKey, rspJSON, 5*time.Minute)

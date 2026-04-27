@@ -11,6 +11,7 @@ import (
 	"privacy-social-backend/internal/repository"
 	"privacy-social-backend/internal/service/admin"
 	"privacy-social-backend/internal/service/location"
+	"privacy-social-backend/internal/service/privacy"
 	"privacy-social-backend/internal/service/safety"
 	"privacy-social-backend/internal/service/storage"
 	"privacy-social-backend/internal/service/moderation"
@@ -43,6 +44,7 @@ type Server struct {
 	moderation *moderation.Service
 	mailer     util.Mailer
 	notification *notification.NotificationService
+	privacy    *privacy.Service
 }
 
 // NewServer creates a new HTTP server and setup routing
@@ -87,6 +89,7 @@ func NewServer(
 	usernameService := usernameservice.NewService(store, rdb)
 	adminService := admin.NewService(store, rdb)
 	modService := moderation.NewService(store)
+	privacyService := privacy.NewService(store, rdb)
 
 
 	// Initialize SMTP Mailer (recommended for Gmail App Passwords)
@@ -128,6 +131,7 @@ func NewServer(
 		storage:    storageService,
 		moderation: modService,
 		mailer:     mailer,
+		privacy:    privacyService,
 	}
 
 	// Initialize Notification Service (FCM)

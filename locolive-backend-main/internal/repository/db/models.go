@@ -627,6 +627,18 @@ type User struct {
 	UsernameNormalized     sql.NullString  `json:"username_normalized"`
 	IsPrivate              bool            `json:"is_private"`
 	PrivacyUpdatedAt       sql.NullTime    `json:"privacy_updated_at"`
+	PanicMode              bool            `json:"panic_mode"`
+	DeletedAt              sql.NullTime    `json:"deleted_at"`
+}
+
+type UserActivityLog struct {
+	ID        uuid.UUID             `json:"id"`
+	UserID    uuid.UUID             `json:"user_id"`
+	Action    string                `json:"action"`
+	Details   pqtype.NullRawMessage `json:"details"`
+	IpAddress sql.NullString        `json:"ip_address"`
+	UserAgent sql.NullString        `json:"user_agent"`
+	CreatedAt time.Time             `json:"created_at"`
 }
 
 type UserBadge struct {

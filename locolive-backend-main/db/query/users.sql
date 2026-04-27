@@ -243,3 +243,33 @@ UPDATE users SET role = sqlc.arg(role)::user_role WHERE id = $1 RETURNING *;
 SELECT * FROM users
 WHERE role IN ('admin', 'moderator')
 ORDER BY created_at DESC;
+
+-- Privacy & Security: Panic Mode
+
+-- name: TogglePanicMode :one
+UPDATE users
+SET panic_mode = $2
+WHERE id = $1
+RETURNING *;
+
+-- name: SoftDeleteUser :exec
+UPDATE users
+SET deleted_at = NOW()
+WHERE id = $1;
+
+-- name: RestoreUser :exec
+UPDATE users
+SET deleted_at = NULL, panic_mode = false
+WHERE id = $1;
+
+-- name: GetUserPrivacyState :one
+SELECT
+  id,
+  is_ghost_mode,
+  panic_mode,
+  is_private,
+  is_shadow_banned,
+  last_active_at,
+  deleted_at
+FROM users
+WHERE id = $1;

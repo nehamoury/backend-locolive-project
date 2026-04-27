@@ -64,6 +64,7 @@ type Querier interface {
 	// Story Views
 	CreateStoryView(ctx context.Context, arg CreateStoryViewParams) (StoryView, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
+	CreateUserAuditLog(ctx context.Context, arg CreateUserAuditLogParams) (UserActivityLog, error)
 	DecrementPostComments(ctx context.Context, id uuid.UUID) error
 	DecrementPostLikes(ctx context.Context, id uuid.UUID) error
 	DecrementReelComments(ctx context.Context, id uuid.UUID) error
@@ -106,6 +107,7 @@ type Querier interface {
 	GetActiveStoriesByUserID(ctx context.Context, userID uuid.UUID) ([]GetActiveStoriesByUserIDRow, error)
 	GetArchivedStories(ctx context.Context, arg GetArchivedStoriesParams) ([]ArchivedStory, error)
 	GetArchivedStory(ctx context.Context, arg GetArchivedStoryParams) (ArchivedStory, error)
+	GetAuditLogsByAction(ctx context.Context, arg GetAuditLogsByActionParams) ([]UserActivityLog, error)
 	GetBadge(ctx context.Context, id string) (Badge, error)
 	GetBlockedUsers(ctx context.Context, blockerID uuid.UUID) ([]GetBlockedUsersRow, error)
 	GetConnection(ctx context.Context, arg GetConnectionParams) (Connection, error)
@@ -159,6 +161,7 @@ type Querier interface {
 	GetUnreadMessageCount(ctx context.Context, receiverID uuid.NullUUID) (int64, error)
 	// Get user's activity status and visibility
 	GetUserActivityStatus(ctx context.Context, id uuid.UUID) (GetUserActivityStatusRow, error)
+	GetUserAuditLogs(ctx context.Context, arg GetUserAuditLogsParams) ([]UserActivityLog, error)
 	GetUserBadges(ctx context.Context, userID uuid.UUID) ([]GetUserBadgesRow, error)
 	GetUserByEmail(ctx context.Context, email sql.NullString) (User, error)
 	GetUserByGoogleID(ctx context.Context, googleID sql.NullString) (User, error)
@@ -174,6 +177,7 @@ type Querier interface {
 	GetUserFCMTokens(ctx context.Context, userID uuid.UUID) ([]string, error)
 	GetUserGroups(ctx context.Context, userID uuid.UUID) ([]Group, error)
 	GetUserMentions(ctx context.Context, arg GetUserMentionsParams) ([]GetUserMentionsRow, error)
+	GetUserPrivacyState(ctx context.Context, id uuid.UUID) (GetUserPrivacyStateRow, error)
 	GetUserProfile(ctx context.Context, id uuid.UUID) (GetUserProfileRow, error)
 	GetUserStreak(ctx context.Context, userID uuid.UUID) (UserStreak, error)
 	GetUserTrustScore(ctx context.Context, id uuid.UUID) (int32, error)
@@ -240,12 +244,16 @@ type Querier interface {
 	RemoveStoryFromHighlight(ctx context.Context, arg RemoveStoryFromHighlightParams) error
 	// Admin: Resolve report
 	ResolveReport(ctx context.Context, id uuid.UUID) (Report, error)
+	RestoreUser(ctx context.Context, id uuid.UUID) error
 	SaveMessage(ctx context.Context, id uuid.UUID) (Message, error)
 	SaveReel(ctx context.Context, arg SaveReelParams) (ReelSafe, error)
 	SearchUsers(ctx context.Context, query string) ([]SearchUsersRow, error)
 	SearchUsersAdmin(ctx context.Context, arg SearchUsersAdminParams) ([]User, error)
+	SoftDeleteUser(ctx context.Context, id uuid.UUID) error
 	// Privacy Features
 	ToggleGhostMode(ctx context.Context, arg ToggleGhostModeParams) (User, error)
+	// Privacy & Security: Panic Mode
+	TogglePanicMode(ctx context.Context, arg TogglePanicModeParams) (User, error)
 	TrackProfileView(ctx context.Context, arg TrackProfileViewParams) (ProfileView, error)
 	UnblockUser(ctx context.Context, arg UnblockUserParams) error
 	UnlikePost(ctx context.Context, arg UnlikePostParams) error

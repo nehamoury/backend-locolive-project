@@ -68,14 +68,12 @@ func (server *Server) listConnections(ctx *gin.Context) {
 func (server *Server) listFollowers(ctx *gin.Context) {
 	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
 
-	// In Locolive, an accepted connection is bi-directional.
 	query := `
 		SELECT u.id, u.username, u.full_name, u.avatar_url, u.last_active_at
 		FROM connections c
-		JOIN users u ON (u.id = c.requester_id OR u.id = c.target_id)
-		WHERE (c.requester_id = $1 OR c.target_id = $1)
+		JOIN users u ON u.id = c.requester_id
+		WHERE c.target_id = $1
 		  AND c.status = 'accepted'
-		  AND u.id != $1
 	`
 	rows, err := server.store.GetDB().QueryContext(ctx, query, authPayload.UserID)
 	if err != nil {
@@ -96,6 +94,7 @@ func (server *Server) listFollowers(ctx *gin.Context) {
 			c.LastActiveAt = &lastActive.Time
 		}
 		c.AvatarUrl = avatarUrl.String
+		c.FullName = c.FullName + " [Follower]"
 		rsp = append(rsp, c)
 	}
 
@@ -105,14 +104,12 @@ func (server *Server) listFollowers(ctx *gin.Context) {
 func (server *Server) listFollowing(ctx *gin.Context) {
 	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
 
-	// In Locolive, an accepted connection is bi-directional.
 	query := `
 		SELECT u.id, u.username, u.full_name, u.avatar_url, u.last_active_at
 		FROM connections c
-		JOIN users u ON (u.id = c.requester_id OR u.id = c.target_id)
-		WHERE (c.requester_id = $1 OR c.target_id = $1)
+		JOIN users u ON u.id = c.target_id
+		WHERE c.requester_id = $1
 		  AND c.status = 'accepted'
-		  AND u.id != $1
 	`
 	rows, err := server.store.GetDB().QueryContext(ctx, query, authPayload.UserID)
 	if err != nil {
@@ -133,6 +130,7 @@ func (server *Server) listFollowing(ctx *gin.Context) {
 			c.LastActiveAt = &lastActive.Time
 		}
 		c.AvatarUrl = avatarUrl.String
+		c.FullName = c.FullName + " [Following]"
 		rsp = append(rsp, c)
 	}
 

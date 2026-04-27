@@ -746,6 +746,21 @@ func (mr *MockStoreMockRecorder) CreateUser(ctx, arg any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateUser", reflect.TypeOf((*MockStore)(nil).CreateUser), ctx, arg)
 }
 
+// CreateUserAuditLog mocks base method.
+func (m *MockStore) CreateUserAuditLog(ctx context.Context, arg db.CreateUserAuditLogParams) (db.UserActivityLog, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateUserAuditLog", ctx, arg)
+	ret0, _ := ret[0].(db.UserActivityLog)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateUserAuditLog indicates an expected call of CreateUserAuditLog.
+func (mr *MockStoreMockRecorder) CreateUserAuditLog(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateUserAuditLog", reflect.TypeOf((*MockStore)(nil).CreateUserAuditLog), ctx, arg)
+}
+
 // DecrementPostComments mocks base method.
 func (m *MockStore) DecrementPostComments(ctx context.Context, id uuid.UUID) error {
 	m.ctrl.T.Helper()
@@ -1255,6 +1270,21 @@ func (m *MockStore) GetArchivedStory(ctx context.Context, arg db.GetArchivedStor
 func (mr *MockStoreMockRecorder) GetArchivedStory(ctx, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetArchivedStory", reflect.TypeOf((*MockStore)(nil).GetArchivedStory), ctx, arg)
+}
+
+// GetAuditLogsByAction mocks base method.
+func (m *MockStore) GetAuditLogsByAction(ctx context.Context, arg db.GetAuditLogsByActionParams) ([]db.UserActivityLog, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetAuditLogsByAction", ctx, arg)
+	ret0, _ := ret[0].([]db.UserActivityLog)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetAuditLogsByAction indicates an expected call of GetAuditLogsByAction.
+func (mr *MockStoreMockRecorder) GetAuditLogsByAction(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetAuditLogsByAction", reflect.TypeOf((*MockStore)(nil).GetAuditLogsByAction), ctx, arg)
 }
 
 // GetBadge mocks base method.
@@ -1946,6 +1976,21 @@ func (mr *MockStoreMockRecorder) GetUserActivityStatus(ctx, id any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserActivityStatus", reflect.TypeOf((*MockStore)(nil).GetUserActivityStatus), ctx, id)
 }
 
+// GetUserAuditLogs mocks base method.
+func (m *MockStore) GetUserAuditLogs(ctx context.Context, arg db.GetUserAuditLogsParams) ([]db.UserActivityLog, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUserAuditLogs", ctx, arg)
+	ret0, _ := ret[0].([]db.UserActivityLog)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUserAuditLogs indicates an expected call of GetUserAuditLogs.
+func (mr *MockStoreMockRecorder) GetUserAuditLogs(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserAuditLogs", reflect.TypeOf((*MockStore)(nil).GetUserAuditLogs), ctx, arg)
+}
+
 // GetUserBadges mocks base method.
 func (m *MockStore) GetUserBadges(ctx context.Context, userID uuid.UUID) ([]db.GetUserBadgesRow, error) {
 	m.ctrl.T.Helper()
@@ -2124,6 +2169,21 @@ func (m *MockStore) GetUserMentions(ctx context.Context, arg db.GetUserMentionsP
 func (mr *MockStoreMockRecorder) GetUserMentions(ctx, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserMentions", reflect.TypeOf((*MockStore)(nil).GetUserMentions), ctx, arg)
+}
+
+// GetUserPrivacyState mocks base method.
+func (m *MockStore) GetUserPrivacyState(ctx context.Context, id uuid.UUID) (db.GetUserPrivacyStateRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUserPrivacyState", ctx, id)
+	ret0, _ := ret[0].(db.GetUserPrivacyStateRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUserPrivacyState indicates an expected call of GetUserPrivacyState.
+func (mr *MockStoreMockRecorder) GetUserPrivacyState(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserPrivacyState", reflect.TypeOf((*MockStore)(nil).GetUserPrivacyState), ctx, id)
 }
 
 // GetUserProfile mocks base method.
@@ -2936,6 +2996,20 @@ func (mr *MockStoreMockRecorder) ResolveReport(ctx, id any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ResolveReport", reflect.TypeOf((*MockStore)(nil).ResolveReport), ctx, id)
 }
 
+// RestoreUser mocks base method.
+func (m *MockStore) RestoreUser(ctx context.Context, id uuid.UUID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "RestoreUser", ctx, id)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// RestoreUser indicates an expected call of RestoreUser.
+func (mr *MockStoreMockRecorder) RestoreUser(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RestoreUser", reflect.TypeOf((*MockStore)(nil).RestoreUser), ctx, id)
+}
+
 // SaveMessage mocks base method.
 func (m *MockStore) SaveMessage(ctx context.Context, id uuid.UUID) (db.Message, error) {
 	m.ctrl.T.Helper()
@@ -2996,6 +3070,20 @@ func (mr *MockStoreMockRecorder) SearchUsersAdmin(ctx, arg any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchUsersAdmin", reflect.TypeOf((*MockStore)(nil).SearchUsersAdmin), ctx, arg)
 }
 
+// SoftDeleteUser mocks base method.
+func (m *MockStore) SoftDeleteUser(ctx context.Context, id uuid.UUID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SoftDeleteUser", ctx, id)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// SoftDeleteUser indicates an expected call of SoftDeleteUser.
+func (mr *MockStoreMockRecorder) SoftDeleteUser(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SoftDeleteUser", reflect.TypeOf((*MockStore)(nil).SoftDeleteUser), ctx, id)
+}
+
 // ToggleGhostMode mocks base method.
 func (m *MockStore) ToggleGhostMode(ctx context.Context, arg db.ToggleGhostModeParams) (db.User, error) {
 	m.ctrl.T.Helper()
@@ -3009,6 +3097,21 @@ func (m *MockStore) ToggleGhostMode(ctx context.Context, arg db.ToggleGhostModeP
 func (mr *MockStoreMockRecorder) ToggleGhostMode(ctx, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ToggleGhostMode", reflect.TypeOf((*MockStore)(nil).ToggleGhostMode), ctx, arg)
+}
+
+// TogglePanicMode mocks base method.
+func (m *MockStore) TogglePanicMode(ctx context.Context, arg db.TogglePanicModeParams) (db.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "TogglePanicMode", ctx, arg)
+	ret0, _ := ret[0].(db.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// TogglePanicMode indicates an expected call of TogglePanicMode.
+func (mr *MockStoreMockRecorder) TogglePanicMode(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "TogglePanicMode", reflect.TypeOf((*MockStore)(nil).TogglePanicMode), ctx, arg)
 }
 
 // TrackProfileView mocks base method.

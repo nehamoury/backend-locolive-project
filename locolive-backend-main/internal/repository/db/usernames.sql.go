@@ -99,7 +99,7 @@ func (q *Queries) GetReservedUsernames(ctx context.Context) ([]string, error) {
 }
 
 const getUserByPreviousUsername = `-- name: GetUserByPreviousUsername :one
-SELECT u.id, u.phone, u.password_hash, u.username, u.full_name, u.avatar_url, u.bio, u.role, u.trust_level, u.is_verified, u.is_shadow_banned, u.last_active_at, u.created_at, u.is_ghost_mode, u.activity_streak, u.streak_updated_at, u.is_premium, u.streak_freezes_remaining, u.boost_expires_at, u.banner_url, u.theme, u.profile_visibility, u.email, u.website_url, u.links, u.google_id, u.ghost_mode_expires_at, u.interests, u.trust_score, u.username_normalized, u.is_private, u.privacy_updated_at FROM users u
+SELECT u.id, u.phone, u.password_hash, u.username, u.full_name, u.avatar_url, u.bio, u.role, u.trust_level, u.is_verified, u.is_shadow_banned, u.last_active_at, u.created_at, u.is_ghost_mode, u.activity_streak, u.streak_updated_at, u.is_premium, u.streak_freezes_remaining, u.boost_expires_at, u.banner_url, u.theme, u.profile_visibility, u.email, u.website_url, u.links, u.google_id, u.ghost_mode_expires_at, u.interests, u.trust_score, u.username_normalized, u.is_private, u.privacy_updated_at, u.panic_mode, u.deleted_at FROM users u
 JOIN username_history h ON u.id = h.user_id
 WHERE LOWER(h.old_username) = LOWER($1)
 ORDER BY h.changed_at DESC
@@ -143,13 +143,15 @@ func (q *Queries) GetUserByPreviousUsername(ctx context.Context, lower string) (
 		&i.UsernameNormalized,
 		&i.IsPrivate,
 		&i.PrivacyUpdatedAt,
+		&i.PanicMode,
+		&i.DeletedAt,
 	)
 	return i, err
 }
 
 const getUserByUsernameCaseInsensitive = `-- name: GetUserByUsernameCaseInsensitive :one
 
-SELECT id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at FROM users
+SELECT id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at FROM users
 WHERE LOWER(username) = LOWER($1) LIMIT 1
 `
 
@@ -191,6 +193,8 @@ func (q *Queries) GetUserByUsernameCaseInsensitive(ctx context.Context, lower st
 		&i.UsernameNormalized,
 		&i.IsPrivate,
 		&i.PrivacyUpdatedAt,
+		&i.PanicMode,
+		&i.DeletedAt,
 	)
 	return i, err
 }
@@ -291,7 +295,7 @@ const updateUsername = `-- name: UpdateUsername :one
 UPDATE users 
 SET username = $2, username_normalized = LOWER($2)
 WHERE id = $1
-RETURNING id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at
+RETURNING id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at
 `
 
 type UpdateUsernameParams struct {
@@ -337,6 +341,8 @@ func (q *Queries) UpdateUsername(ctx context.Context, arg UpdateUsernameParams) 
 		&i.UsernameNormalized,
 		&i.IsPrivate,
 		&i.PrivacyUpdatedAt,
+		&i.PanicMode,
+		&i.DeletedAt,
 	)
 	return i, err
 }

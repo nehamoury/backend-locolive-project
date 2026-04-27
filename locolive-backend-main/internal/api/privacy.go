@@ -10,6 +10,7 @@ import (
 	"github.com/google/uuid"
 
 	"privacy-social-backend/internal/repository/db"
+	"privacy-social-backend/internal/service/privacy"
 	"privacy-social-backend/internal/token"
 )
 
@@ -101,7 +102,6 @@ func (server *Server) blockUser(ctx *gin.Context) {
 		return
 	}
 
-	// Prevent blocking self
 	if payload.UserID == blockID {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "cannot block yourself"})
 		return
@@ -116,10 +116,20 @@ func (server *Server) blockUser(ctx *gin.Context) {
 		return
 	}
 
-	// Invalidate caches
+	// Invalidate ALL relevant caches
 	server.invalidateProfileCache(payload.UserID)
 	server.invalidateProfileCache(blockID)
 	server.redis.Del(context.Background(), "connections:"+payload.UserID.String())
+	server.privacy.InvalidateBlockCache(ctx, payload.UserID, blockID)
+
+	// Audit log
+	server.privacy.LogAction(ctx, payload.UserID, privacy.AuditActionUserBlocked,
+		map[string]interface{}{"blocked_user_id": blockID.String()},
+		ctx.ClientIP(), ctx.Request.UserAgent(),
+	)
+
+	// Real-time: notify blocked user to refresh state
+	server.hub.BroadcastForceLogout(blockID, "blocked")
 
 	ctx.JSON(http.StatusOK, gin.H{"message": "user blocked"})
 }
@@ -141,6 +151,15 @@ func (server *Server) unblockUser(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
 	}
+
+	// Invalidate block cache
+	server.privacy.InvalidateBlockCache(ctx, payload.UserID, targetID)
+
+	// Audit log
+	server.privacy.LogAction(ctx, payload.UserID, privacy.AuditActionUserUnblocked,
+		map[string]interface{}{"unblocked_user_id": targetID.String()},
+		ctx.ClientIP(), ctx.Request.UserAgent(),
+	)
 
 	ctx.JSON(http.StatusOK, gin.H{"message": "user unblocked"})
 }
@@ -200,7 +219,6 @@ func (server *Server) toggleGhostMode(ctx *gin.Context) {
 		}
 	}
 
-	// Call existing ToggleGhostMode query - it returns the updated user
 	user, err := server.store.ToggleGhostMode(ctx, db.ToggleGhostModeParams{
 		ID:                 payload.UserID,
 		IsGhostMode:        req.Enabled,
@@ -211,31 +229,56 @@ func (server *Server) toggleGhostMode(ctx *gin.Context) {
 		return
 	}
 
-	// Return the updated user object so frontend gets fresh data
+	// Invalidate privacy cache
+	server.privacy.InvalidateUserCache(ctx, payload.UserID)
+
+	// Audit log
+	action := privacy.AuditActionGhostEnabled
+	if !req.Enabled {
+		action = privacy.AuditActionGhostDisabled
+	}
+	server.privacy.LogAction(ctx, payload.UserID, action,
+		map[string]interface{}{"duration_min": req.Duration},
+		ctx.ClientIP(), ctx.Request.UserAgent(),
+	)
+
 	ctx.JSON(http.StatusOK, newUserResponse(user))
 }
 
 func (server *Server) panicMode(ctx *gin.Context) {
 	payload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
 
-	// 1. Immediate Redis Cleanup (Real-time visibility)
-	// Remove from Geo Index
-	server.redis.ZRem(ctx, "users:locations", payload.UserID.String())
-	// Clear crossings cache
-	server.redis.Del(ctx, "crossings:v3:"+payload.UserID.String())
-	// Clear profile cache
-	server.redis.Del(ctx, "profile:"+payload.UserID.String())
-
-	// 2. Clear all DB data ( CASCADE takes care of stories, crossings, connections, etc.)
-	err := server.store.DeleteAllUserData(ctx, payload.UserID)
+	// 1. Set panic_mode flag (temporary invisibility — NOT account deletion)
+	_, err := server.store.TogglePanicMode(ctx, db.TogglePanicModeParams{
+		ID:        payload.UserID,
+		PanicMode: true,
+	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
 	}
 
+	// 2. Immediate Redis cleanup (real-time visibility)
+	server.redis.ZRem(ctx, "users:locations", payload.UserID.String())
+	server.redis.Del(ctx, "crossings:v3:"+payload.UserID.String())
+	server.redis.Del(ctx, "profile:"+payload.UserID.String())
+	server.privacy.InvalidateUserCache(ctx, payload.UserID)
+
+	// 3. Block all sessions (forces re-auth)
+	server.store.BlockSession(ctx, payload.UserID)
+
+	// 4. Audit log
+	server.privacy.LogAction(ctx, payload.UserID, privacy.AuditActionPanicActivated,
+		map[string]interface{}{"source": "api"},
+		ctx.ClientIP(), ctx.Request.UserAgent(),
+	)
+
+	// 5. Real-time: force disconnect all active WebSocket connections
+	server.hub.BroadcastForceLogout(payload.UserID, "panic_mode")
+
 	ctx.JSON(http.StatusOK, gin.H{
 		"message": "Panic protocol complete. All traces scrubbed.",
-		"status": "scrubbed",
+		"status":  "scrubbed",
 	})
 }
 
@@ -290,56 +333,19 @@ func (server *Server) updateAccountPrivacy(ctx *gin.Context) {
 
 
 
+// canViewContent checks if viewerID can view content owned by ownerID.
+// Delegates to the centralized privacy service.
 func (server *Server) canViewContent(ctx *gin.Context, viewerID, ownerID uuid.UUID) (bool, string, error) {
-	// Self access
-	if viewerID == ownerID {
-		return true, "", nil
+	result := server.privacy.CanViewProfile(ctx, viewerID, ownerID)
+
+	if !result.Allowed {
+		return false, string(result.Reason), nil
 	}
 
-	// Check block status (both ways)
-	blocked, err := server.store.IsUserBlocked(ctx, db.IsUserBlockedParams{
-		BlockerID: ownerID,
-		BlockedID: viewerID,
-	})
-	if err != nil {
-		return false, "", err
-	}
-	if blocked {
-		return false, "blocked", nil
-	}
-
-	blockedByViewer, err := server.store.IsUserBlocked(ctx, db.IsUserBlockedParams{
-		BlockerID: viewerID,
-		BlockedID: ownerID,
-	})
-	if err != nil {
-		return false, "", err
-	}
-	if blockedByViewer {
-		return false, "blocked", nil
-	}
-
-	// Private account check
-	user, err := server.store.GetUserByID(ctx, ownerID)
-	if err != nil {
-		return false, "", err
-	}
-
-	if user.IsPrivate {
-		// Check connection status
-		conn, err := server.store.GetConnection(ctx, db.GetConnectionParams{
-			RequesterID: viewerID,
-			TargetID:    ownerID,
-		})
-		if err != nil {
-			if err == sql.ErrNoRows {
-				return false, "private", nil
-			}
-			return false, "", err
-		}
-		if conn.Status != "accepted" && conn.Status != "pending" {
-			return false, "private", nil
-		}
+	// CanViewProfile returns Allowed=true with Reason=private for private accounts
+	// that viewer isn't following. The API handler uses this to blank out sensitive data.
+	if result.Reason == privacy.ReasonPrivate {
+		return false, "private", nil
 	}
 
 	return true, "", nil

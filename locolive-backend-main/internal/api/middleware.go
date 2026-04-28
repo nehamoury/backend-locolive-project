@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -19,7 +20,7 @@ const (
 )
 
 // authMiddleware creates a gin middleware for authorization
-func authMiddleware(tokenMaker token.Maker) gin.HandlerFunc {
+func (server *Server) authMiddleware() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		var accessToken string
 
@@ -41,7 +42,6 @@ func authMiddleware(tokenMaker token.Maker) gin.HandlerFunc {
 		}
 
 		// 3. Try Query Param - STRICTLY LIMITED to WebSockets (/ws/*)
-		// This prevents tokens from leaking into logs via normal GET requests
 		if accessToken == "" && strings.HasPrefix(ctx.Request.URL.Path, "/api/ws") {
 			accessToken = ctx.Query("token")
 		}
@@ -51,8 +51,8 @@ func authMiddleware(tokenMaker token.Maker) gin.HandlerFunc {
 			return
 		}
 
-		// Verify Token and handle errors safely (no raw leaks)
-		payload, err := tokenMaker.VerifyToken(accessToken)
+		// Verify Token and handle errors safely
+		payload, err := server.tokenMaker.VerifyToken(accessToken)
 		if err != nil {
 			msg := "invalid or expired token"
 			if errors.Is(err, token.ErrExpiredToken) {
@@ -60,6 +60,24 @@ func authMiddleware(tokenMaker token.Maker) gin.HandlerFunc {
 			}
 			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": msg})
 			return
+		}
+
+		// CHECK REDIS BLACKLIST (Individual Token)
+		blacklisted, err := server.redis.Get(ctx, fmt.Sprintf("blacklist:%s", payload.ID.String())).Result()
+		if err == nil && blacklisted != "" {
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "session has been revoked"})
+			return
+		}
+
+		// CHECK GLOBAL REVOCATION (Logout All Devices)
+		revokeTimeStr, err := server.redis.Get(ctx, fmt.Sprintf("revoke_all:%s", payload.UserID.String())).Result()
+		if err == nil && revokeTimeStr != "" {
+			var revokeTime int64
+			fmt.Sscanf(revokeTimeStr, "%d", &revokeTime)
+			if payload.IssuedAt.Unix() < revokeTime {
+				ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "session expired due to security update"})
+				return
+			}
 		}
 
 		ctx.Set(authorizationPayloadKey, payload)
@@ -132,6 +150,7 @@ func securityHeadersMiddleware() gin.HandlerFunc {
 		c.Writer.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
 		c.Writer.Header().Set("X-XSS-Protection", "1; mode=block")
 		c.Writer.Header().Set("Permissions-Policy", "camera=(), microphone=(), geolocation=(self)")
+		c.Writer.Header().Set("Cross-Origin-Opener-Policy", "same-origin-allow-popups")
 
 		// Polished Content-Security-Policy (CSP)
 		// Allows external assets like Mapbox, Google Fonts, and local dev assets.
@@ -178,8 +197,8 @@ func (server *Server) privacyCheckMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// Use the centralized privacy service
-		result := server.privacy.CanUserAccess(ctx, authPayload.UserID, targetID)
+		// Use the centralized privacy service (lenient check for profiles)
+		result := server.privacy.CanViewProfile(ctx, authPayload.UserID, targetID)
 		if !result.Allowed {
 			server.respondToPrivacyDenial(ctx, result.Reason)
 			return
@@ -191,13 +210,8 @@ func (server *Server) privacyCheckMiddleware() gin.HandlerFunc {
 
 // respondToPrivacyDenial maps privacy reasons to standard HTTP status codes.
 func (server *Server) respondToPrivacyDenial(ctx *gin.Context, reason interface{}) {
-	// Import privacy package if needed, but since it's used in CanUserAccess return, 
-	// we just handle it by string/type comparison here.
-	// We'll use a switch for clarity.
-	
 	switch fmt.Sprintf("%v", reason) {
 	case "blocked", "panic_mode", "deleted", "hidden":
-		// Hide existence if blocked, in panic mode, or inactive for too long
 		ctx.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "user not found"})
 	case "private":
 		ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "this account is private"})
@@ -205,5 +219,29 @@ func (server *Server) respondToPrivacyDenial(ctx *gin.Context, reason interface{
 		ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "access denied: user is banned"})
 	default:
 		ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "access denied due to privacy settings"})
+	}
+}
+
+// rateLimitMiddleware provides Redis-based rate limiting
+func (server *Server) rateLimitMiddleware(limit int, duration time.Duration) gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		key := fmt.Sprintf("rl:%s:%s", ctx.FullPath(), ctx.ClientIP())
+		
+		count, err := server.redis.Incr(ctx, key).Result()
+		if err != nil {
+			ctx.Next()
+			return
+		}
+
+		if count == 1 {
+			server.redis.Expire(ctx, key, duration)
+		}
+
+		if count > int64(limit) {
+			ctx.AbortWithStatusJSON(http.StatusTooManyRequests, gin.H{"error": "rate limit exceeded"})
+			return
+		}
+
+		ctx.Next()
 	}
 }

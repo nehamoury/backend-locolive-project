@@ -319,6 +319,17 @@ type DailyStat struct {
 	CreatedAt        sql.NullTime  `json:"created_at"`
 }
 
+type DataExportJob struct {
+	ID           uuid.UUID      `json:"id"`
+	UserID       uuid.UUID      `json:"user_id"`
+	Status       string         `json:"status"`
+	FilePath     sql.NullString `json:"file_path"`
+	ExpiresAt    sql.NullTime   `json:"expires_at"`
+	ErrorMessage sql.NullString `json:"error_message"`
+	CreatedAt    time.Time      `json:"created_at"`
+	UpdatedAt    time.Time      `json:"updated_at"`
+}
+
 type EngagementEvent struct {
 	ID        uuid.UUID             `json:"id"`
 	UserID    uuid.UUID             `json:"user_id"`
@@ -414,6 +425,15 @@ type NotificationPreference struct {
 	MessageAlerts  sql.NullBool `json:"message_alerts"`
 	StoryAlerts    sql.NullBool `json:"story_alerts"`
 	UpdatedAt      sql.NullTime `json:"updated_at"`
+}
+
+type NotificationSetting struct {
+	UserID                uuid.UUID `json:"user_id"`
+	EmailNotifications    bool      `json:"email_notifications"`
+	PushNotifications     bool      `json:"push_notifications"`
+	MarketingEmails       bool      `json:"marketing_emails"`
+	ActivityNotifications bool      `json:"activity_notifications"`
+	UpdatedAt             time.Time `json:"updated_at"`
 }
 
 type PasswordReset struct {
@@ -594,6 +614,17 @@ type StoryView struct {
 	ViewCount int32     `json:"view_count"`
 }
 
+type SupportTicket struct {
+	ID          uuid.UUID `json:"id"`
+	UserID      uuid.UUID `json:"user_id"`
+	Subject     string    `json:"subject"`
+	Description string    `json:"description"`
+	Status      string    `json:"status"`
+	Priority    string    `json:"priority"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
 type User struct {
 	ID                     uuid.UUID       `json:"id"`
 	Phone                  string          `json:"phone"`
@@ -621,6 +652,8 @@ type User struct {
 	WebsiteUrl             sql.NullString  `json:"website_url"`
 	Links                  json.RawMessage `json:"links"`
 	GoogleID               sql.NullString  `json:"google_id"`
+	Provider               string          `json:"provider"`
+	IsProfileComplete      bool            `json:"is_profile_complete"`
 	GhostModeExpiresAt     sql.NullTime    `json:"ghost_mode_expires_at"`
 	Interests              []string        `json:"interests"`
 	TrustScore             int32           `json:"trust_score"`
@@ -629,6 +662,9 @@ type User struct {
 	PrivacyUpdatedAt       sql.NullTime    `json:"privacy_updated_at"`
 	PanicMode              bool            `json:"panic_mode"`
 	DeletedAt              sql.NullTime    `json:"deleted_at"`
+	TwoFaEnabled           bool            `json:"two_fa_enabled"`
+	TwoFaSecret            sql.NullString  `json:"two_fa_secret"`
+	LastPasswordChange     sql.NullTime    `json:"last_password_change"`
 }
 
 type UserActivityLog struct {
@@ -655,6 +691,14 @@ type UserFcmToken struct {
 	DeviceType string    `json:"device_type"`
 	LastUsedAt time.Time `json:"last_used_at"`
 	CreatedAt  time.Time `json:"created_at"`
+}
+
+type UserPreference struct {
+	UserID               uuid.UUID `json:"user_id"`
+	Theme                string    `json:"theme"`
+	Language             string    `json:"language"`
+	ContentFilterEnabled bool      `json:"content_filter_enabled"`
+	UpdatedAt            time.Time `json:"updated_at"`
 }
 
 type UserStreak struct {

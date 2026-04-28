@@ -5,9 +5,11 @@ INSERT INTO users (
   password_hash,
   username,
   full_name,
-  is_ghost_mode
+  is_ghost_mode,
+  provider,
+  is_profile_complete
 ) VALUES (
-  $1, $2, $3, $4, $5, $6
+  $1, $2, $3, $4, $5, $6, $7, $8
 ) RETURNING *;
 
 -- name: GetUserByPhone :one
@@ -189,8 +191,16 @@ RETURNING id, username, email, full_name;
 
 -- name: UpdateUserPassword :exec
 UPDATE users
-SET password_hash = $2
+SET password_hash = $2,
+    last_password_change = NOW()
 WHERE id = $1;
+
+-- name: UpdateTwoFA :one
+UPDATE users
+SET two_fa_enabled = $2,
+    two_fa_secret = $3
+WHERE id = $1
+RETURNING *;
 
 -- name: GetUserByEmail :one
 SELECT * FROM users
@@ -202,9 +212,23 @@ WHERE google_id = $1 LIMIT 1;
 
 -- name: UpdateUserGoogleID :one
 UPDATE users
-SET google_id = $2
+SET google_id = $2,
+    provider = COALESCE(sqlc.narg('provider'), provider)
 WHERE id = $1
 RETURNING *;
+
+-- name: CompleteUserProfile :one
+UPDATE users
+SET username = $2,
+    phone = $3,
+    is_profile_complete = true
+WHERE id = $1
+RETURNING *;
+
+-- name: GetIncompleteGoogleUsers :many
+SELECT * FROM users
+WHERE provider = 'google' AND is_profile_complete = false
+ORDER BY created_at DESC;
 
 
 -- name: SearchUsersAdmin :many

@@ -2,6 +2,7 @@ package api
 
 import (
 	"database/sql"
+	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -9,10 +10,13 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
+	"github.com/sqlc-dev/pqtype"
 
+	"github.com/rs/zerolog/log"
 	"privacy-social-backend/internal/repository/db"
 	"privacy-social-backend/internal/service/user"
 	"privacy-social-backend/internal/token"
+	"privacy-social-backend/internal/util"
 	usernameutil "privacy-social-backend/internal/util/username"
 )
 
@@ -38,6 +42,8 @@ type userResponse struct {
 	Email             string    `json:"email"`
 	IsGhostMode       bool      `json:"is_ghost_mode"`
 	Role              string    `json:"role"`
+	Provider          string    `json:"provider"`
+	IsProfileComplete bool      `json:"is_profile_complete"`
 	CreatedAt         time.Time `json:"created_at"`
 }
 
@@ -64,6 +70,8 @@ func newUserResponse(user db.User) userResponse {
 		Email:             user.Email.String,
 		IsGhostMode:       user.IsGhostMode,
 		Role:              string(user.Role),
+		Provider:          user.Provider,
+		IsProfileComplete: user.IsProfileComplete,
 		CreatedAt:         user.CreatedAt,
 	}
 }
@@ -244,11 +252,7 @@ func (server *Server) loginUser(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, rsp)
 }
 
-func (server *Server) logoutUser(ctx *gin.Context) {
-	ctx.SetCookie("access_token", "", -1, "/", "", false, true)
-	ctx.SetCookie("refresh_token", "", -1, "/api/users/renew_access", "", false, true)
-	ctx.JSON(http.StatusOK, gin.H{"message": "logged out successfully"})
-}
+// logoutUser is now handled in security.go
 
 type searchUsersRequest struct {
 	Query string `form:"q"`
@@ -297,6 +301,121 @@ func (server *Server) searchUsers(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, rsp)
 }
 
+// completeProfileRequest handles profile completion for Google OAuth users
+type completeProfileRequest struct {
+	Username string `json:"username" binding:"required,alphanum"`
+	Phone    string `json:"phone" binding:"required"`
+}
+
+func (server *Server) completeProfile(ctx *gin.Context) {
+	var req completeProfileRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, errorResponse(err))
+		return
+	}
+
+	// Normalize and validate username
+	req.Username = usernameutil.NormalizeUsername(req.Username)
+	if !usernameutil.IsValidUsername(req.Username) {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid username format. Must be 3-20 characters, start with a letter, and contain only a-z, 0-9, or underscore."})
+		return
+	}
+
+	// Get authenticated user from context
+	payload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+
+	// Check if username is already taken by another user
+	existingUser, err := server.store.GetUserByUsername(ctx, req.Username)
+	if err == nil && existingUser.ID != payload.UserID {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "username already taken"})
+		return
+	}
+
+	// Check if phone is already taken by another user
+	existingPhone, err := server.store.GetUserByPhone(ctx, req.Phone)
+	if err == nil && existingPhone.ID != payload.UserID {
+		ctx.JSON(http.StatusForbidden, gin.H{"error": "phone number already registered"})
+		return
+	}
+
+	// Complete the profile
+	user, err := server.store.CompleteUserProfile(ctx, db.CompleteUserProfileParams{
+		ID:       payload.UserID,
+		Username: req.Username,
+		Phone:    req.Phone,
+	})
+	if err != nil {
+		if pqErr, ok := err.(*pq.Error); ok {
+			switch pqErr.Code.Name() {
+			case "unique_violation":
+				ctx.JSON(http.StatusForbidden, gin.H{"error": "username or phone already exists"})
+				return
+			}
+		}
+		log.Error().Err(err).Msg("CompleteUserProfile failed in store")
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	// Generate new tokens for the updated user
+	accessToken, accessPayload, err := server.tokenMaker.CreateToken(user.Username, user.ID, string(user.Role), server.config.AccessTokenDuration)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	refreshToken, refreshPayload, err := server.tokenMaker.CreateToken(user.Username, user.ID, string(user.Role), server.config.RefreshTokenDuration)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	session, err := server.store.CreateSession(ctx, db.CreateSessionParams{
+		ID:           refreshPayload.ID,
+		UserID:       user.ID,
+		RefreshToken: refreshToken,
+		UserAgent:    ctx.Request.UserAgent(),
+		ClientIp:     ctx.ClientIP(),
+		IsBlocked:    false,
+		ExpiresAt:    refreshPayload.ExpiredAt,
+	})
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	// Set cookies
+	isProduction := server.config.Environment == "production"
+	ctx.SetCookie(
+		"access_token",
+		accessToken,
+		int(server.config.AccessTokenDuration.Seconds()),
+		"/",
+		"",
+		isProduction,
+		true,
+	)
+	ctx.SetCookie(
+		"refresh_token",
+		refreshToken,
+		int(server.config.RefreshTokenDuration.Seconds()),
+		"/api/users/renew_access",
+		"",
+		isProduction,
+		true,
+	)
+
+	rsp := loginUserResponse{
+		SessionID:             session.ID,
+		AccessToken:           accessToken,
+		AccessTokenExpiresAt:  accessPayload.ExpiredAt,
+		RefreshToken:          refreshToken,
+		RefreshTokenExpiresAt: refreshPayload.ExpiredAt,
+		User:                  newUserResponse(user),
+	}
+	ctx.JSON(http.StatusOK, rsp)
+}
+
 type updateEmailRequest struct {
 	Email string `json:"email" binding:"required,email"`
 }
@@ -329,31 +448,34 @@ func (server *Server) updateUserEmail(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{"email": resultUser.Email.String})
 }
 
-type updatePasswordRequest struct {
-	CurrentPassword string `json:"current_password" binding:"required,min=6"`
-	NewPassword     string `json:"new_password" binding:"required,min=6"`
-}
+// deleteAccount handles soft account deletion
+func (server *Server) deleteAccount(ctx *gin.Context) {
+	authPayload := getAuthPayload(ctx)
 
-func (server *Server) updateUserPassword(ctx *gin.Context) {
-	var req updatePasswordRequest
-	if err := ctx.ShouldBindJSON(&req); err != nil {
-		ctx.JSON(http.StatusBadRequest, errorResponse(err))
-		return
-	}
-
-	payload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
-
-	err := server.user.UpdatePassword(ctx, payload.UserID, req.CurrentPassword, req.NewPassword)
+	// 1. Soft delete in DB
+	err := server.store.SoftDeleteUser(ctx, authPayload.UserID)
 	if err != nil {
-		if err.Error() == "incorrect current password" {
-			ctx.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
-			return
-		}
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"message": "password updated successfully"})
+	// 2. Global revocation of all sessions
+	now := time.Now()
+	server.redis.Set(ctx, fmt.Sprintf("revoke_all:%s", authPayload.UserID.String()), now.Unix(), 24*time.Hour)
+
+	// 3. Log Audit Event
+	_, _ = server.store.CreateUserAuditLog(ctx, db.CreateUserAuditLogParams{
+		UserID:    authPayload.UserID,
+		Action:    "account_deleted",
+		Details:   pqtype.NullRawMessage{RawMessage: util.ToJSONB(map[string]interface{}{"status": "soft_deleted"}), Valid: true},
+		IpAddress: db.ToNullString(ctx.ClientIP()),
+		UserAgent: db.ToNullString(ctx.Request.UserAgent()),
+	})
+
+	// 4. Clear cookies
+	ctx.SetCookie("access_token", "", -1, "/", "", false, true)
+
+	ctx.JSON(http.StatusOK, successResponse("Account has been deactivated. You can restore it within 30 days by logging back in."))
 }
 
 // checkEmail handles GET /api/users/check-email

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -123,6 +124,10 @@ func NewServer(
 	bgWorker := worker.NewCleanupWorker(store)
 	bgWorker.Start()
 	bgWorker.StartCrossingDetector()
+
+	// Data Export Worker
+	exportWorker := worker.NewDataExportWorker(store, rdb)
+	go exportWorker.Start(context.Background())
 
 	server := &Server{
 		config:     config,

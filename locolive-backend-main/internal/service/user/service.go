@@ -16,10 +16,10 @@ import (
 )
 
 type CreateUserParams struct {
-	Phone    string
-	Email    string
-	Username string
-	FullName string
+	Phone       string
+	Email       string
+	Username    string
+	FullName    string
 	Password    string
 	IsGhostMode bool
 }
@@ -102,12 +102,14 @@ func (s *ServiceImpl) CreateUser(ctx context.Context, req CreateUserParams) (db.
 	}
 
 	arg := db.CreateUserParams{
-		Phone:        req.Phone,
-		Email:        sql.NullString{String: req.Email, Valid: req.Email != ""},
-		Username:     normalized, // Store normalized username
-		FullName:     req.FullName,
-		PasswordHash: hashedPassword,
-		IsGhostMode:  req.IsGhostMode,
+		Phone:             req.Phone,
+		Email:             sql.NullString{String: req.Email, Valid: req.Email != ""},
+		Username:          normalized, // Store normalized username
+		FullName:          req.FullName,
+		PasswordHash:      hashedPassword,
+		IsGhostMode:       req.IsGhostMode,
+		Provider:          "local",
+		IsProfileComplete: true,
 	}
 
 	user, err := s.store.CreateUser(ctx, arg)

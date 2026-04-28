@@ -42,3 +42,11 @@ func nullStringToStrPtr(ns sql.NullString) *string {
 	}
 	return nil
 }
+
+// successResponse standardizes successful API responses
+func successResponse(data interface{}) gin.H {
+	return gin.H{
+		"success": true,
+		"data":    data,
+	}
+}

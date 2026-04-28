@@ -236,6 +236,21 @@ func (mr *MockStoreMockRecorder) CheckUsernameExists(ctx, lower any) *gomock.Cal
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CheckUsernameExists", reflect.TypeOf((*MockStore)(nil).CheckUsernameExists), ctx, lower)
 }
 
+// CompleteUserProfile mocks base method.
+func (m *MockStore) CompleteUserProfile(ctx context.Context, arg db.CompleteUserProfileParams) (db.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CompleteUserProfile", ctx, arg)
+	ret0, _ := ret[0].(db.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CompleteUserProfile indicates an expected call of CompleteUserProfile.
+func (mr *MockStoreMockRecorder) CompleteUserProfile(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CompleteUserProfile", reflect.TypeOf((*MockStore)(nil).CompleteUserProfile), ctx, arg)
+}
+
 // CountAdminCrossings mocks base method.
 func (m *MockStore) CountAdminCrossings(ctx context.Context) (int64, error) {
 	m.ctrl.T.Helper()
@@ -459,6 +474,21 @@ func (m *MockStore) CreateCrossing(ctx context.Context, arg db.CreateCrossingPar
 func (mr *MockStoreMockRecorder) CreateCrossing(ctx, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateCrossing", reflect.TypeOf((*MockStore)(nil).CreateCrossing), ctx, arg)
+}
+
+// CreateDataExportJob mocks base method.
+func (m *MockStore) CreateDataExportJob(ctx context.Context, userID uuid.UUID) (db.DataExportJob, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateDataExportJob", ctx, userID)
+	ret0, _ := ret[0].(db.DataExportJob)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateDataExportJob indicates an expected call of CreateDataExportJob.
+func (mr *MockStoreMockRecorder) CreateDataExportJob(ctx, userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateDataExportJob", reflect.TypeOf((*MockStore)(nil).CreateDataExportJob), ctx, userID)
 }
 
 // CreateEngagementEvent mocks base method.
@@ -729,6 +759,21 @@ func (m *MockStore) CreateStoryView(ctx context.Context, arg db.CreateStoryViewP
 func (mr *MockStoreMockRecorder) CreateStoryView(ctx, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateStoryView", reflect.TypeOf((*MockStore)(nil).CreateStoryView), ctx, arg)
+}
+
+// CreateSupportTicket mocks base method.
+func (m *MockStore) CreateSupportTicket(ctx context.Context, arg db.CreateSupportTicketParams) (db.SupportTicket, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateSupportTicket", ctx, arg)
+	ret0, _ := ret[0].(db.SupportTicket)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateSupportTicket indicates an expected call of CreateSupportTicket.
+func (mr *MockStoreMockRecorder) CreateSupportTicket(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateSupportTicket", reflect.TypeOf((*MockStore)(nil).CreateSupportTicket), ctx, arg)
 }
 
 // CreateUser mocks base method.
@@ -1436,6 +1481,21 @@ func (mr *MockStoreMockRecorder) GetDailyStats(ctx, arg any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDailyStats", reflect.TypeOf((*MockStore)(nil).GetDailyStats), ctx, arg)
 }
 
+// GetDataExportJob mocks base method.
+func (m *MockStore) GetDataExportJob(ctx context.Context, id uuid.UUID) (db.DataExportJob, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetDataExportJob", ctx, id)
+	ret0, _ := ret[0].(db.DataExportJob)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetDataExportJob indicates an expected call of GetDataExportJob.
+func (mr *MockStoreMockRecorder) GetDataExportJob(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetDataExportJob", reflect.TypeOf((*MockStore)(nil).GetDataExportJob), ctx, id)
+}
+
 // GetEngagementStats mocks base method.
 func (m *MockStore) GetEngagementStats(ctx context.Context) (db.GetEngagementStatsRow, error) {
 	m.ctrl.T.Helper()
@@ -1526,6 +1586,21 @@ func (mr *MockStoreMockRecorder) GetHighlightDetails(ctx, highlightID any) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHighlightDetails", reflect.TypeOf((*MockStore)(nil).GetHighlightDetails), ctx, highlightID)
 }
 
+// GetIncompleteGoogleUsers mocks base method.
+func (m *MockStore) GetIncompleteGoogleUsers(ctx context.Context) ([]db.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetIncompleteGoogleUsers", ctx)
+	ret0, _ := ret[0].([]db.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetIncompleteGoogleUsers indicates an expected call of GetIncompleteGoogleUsers.
+func (mr *MockStoreMockRecorder) GetIncompleteGoogleUsers(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetIncompleteGoogleUsers", reflect.TypeOf((*MockStore)(nil).GetIncompleteGoogleUsers), ctx)
+}
+
 // GetLatestCrossingBetweenUsers mocks base method.
 func (m *MockStore) GetLatestCrossingBetweenUsers(ctx context.Context, arg db.GetLatestCrossingBetweenUsersParams) (db.Crossing, error) {
 	m.ctrl.T.Helper()
@@ -1539,6 +1614,21 @@ func (m *MockStore) GetLatestCrossingBetweenUsers(ctx context.Context, arg db.Ge
 func (mr *MockStoreMockRecorder) GetLatestCrossingBetweenUsers(ctx, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLatestCrossingBetweenUsers", reflect.TypeOf((*MockStore)(nil).GetLatestCrossingBetweenUsers), ctx, arg)
+}
+
+// GetLatestDataExportJob mocks base method.
+func (m *MockStore) GetLatestDataExportJob(ctx context.Context, userID uuid.UUID) (db.DataExportJob, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetLatestDataExportJob", ctx, userID)
+	ret0, _ := ret[0].(db.DataExportJob)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetLatestDataExportJob indicates an expected call of GetLatestDataExportJob.
+func (mr *MockStoreMockRecorder) GetLatestDataExportJob(ctx, userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLatestDataExportJob", reflect.TypeOf((*MockStore)(nil).GetLatestDataExportJob), ctx, userID)
 }
 
 // GetMessage mocks base method.
@@ -1614,6 +1704,21 @@ func (m *MockStore) GetNotificationPreferences(ctx context.Context, userID uuid.
 func (mr *MockStoreMockRecorder) GetNotificationPreferences(ctx, userID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNotificationPreferences", reflect.TypeOf((*MockStore)(nil).GetNotificationPreferences), ctx, userID)
+}
+
+// GetNotificationSettings mocks base method.
+func (m *MockStore) GetNotificationSettings(ctx context.Context, userID uuid.UUID) (db.NotificationSetting, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetNotificationSettings", ctx, userID)
+	ret0, _ := ret[0].(db.NotificationSetting)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetNotificationSettings indicates an expected call of GetNotificationSettings.
+func (mr *MockStoreMockRecorder) GetNotificationSettings(ctx, userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetNotificationSettings", reflect.TypeOf((*MockStore)(nil).GetNotificationSettings), ctx, userID)
 }
 
 // GetPasswordResetByToken mocks base method.
@@ -2171,6 +2276,21 @@ func (mr *MockStoreMockRecorder) GetUserMentions(ctx, arg any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserMentions", reflect.TypeOf((*MockStore)(nil).GetUserMentions), ctx, arg)
 }
 
+// GetUserPreferences mocks base method.
+func (m *MockStore) GetUserPreferences(ctx context.Context, userID uuid.UUID) (db.UserPreference, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUserPreferences", ctx, userID)
+	ret0, _ := ret[0].(db.UserPreference)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUserPreferences indicates an expected call of GetUserPreferences.
+func (mr *MockStoreMockRecorder) GetUserPreferences(ctx, userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserPreferences", reflect.TypeOf((*MockStore)(nil).GetUserPreferences), ctx, userID)
+}
+
 // GetUserPrivacyState mocks base method.
 func (m *MockStore) GetUserPrivacyState(ctx context.Context, id uuid.UUID) (db.GetUserPrivacyStateRow, error) {
 	m.ctrl.T.Helper()
@@ -2214,6 +2334,21 @@ func (m *MockStore) GetUserStreak(ctx context.Context, userID uuid.UUID) (db.Use
 func (mr *MockStoreMockRecorder) GetUserStreak(ctx, userID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserStreak", reflect.TypeOf((*MockStore)(nil).GetUserStreak), ctx, userID)
+}
+
+// GetUserSupportTickets mocks base method.
+func (m *MockStore) GetUserSupportTickets(ctx context.Context, userID uuid.UUID) ([]db.SupportTicket, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUserSupportTickets", ctx, userID)
+	ret0, _ := ret[0].([]db.SupportTicket)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUserSupportTickets indicates an expected call of GetUserSupportTickets.
+func (mr *MockStoreMockRecorder) GetUserSupportTickets(ctx, userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserSupportTickets", reflect.TypeOf((*MockStore)(nil).GetUserSupportTickets), ctx, userID)
 }
 
 // GetUserTrustScore mocks base method.
@@ -3215,6 +3350,21 @@ func (mr *MockStoreMockRecorder) UpdateConnectionStatus(ctx, arg any) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateConnectionStatus", reflect.TypeOf((*MockStore)(nil).UpdateConnectionStatus), ctx, arg)
 }
 
+// UpdateDataExportJob mocks base method.
+func (m *MockStore) UpdateDataExportJob(ctx context.Context, arg db.UpdateDataExportJobParams) (db.DataExportJob, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateDataExportJob", ctx, arg)
+	ret0, _ := ret[0].(db.DataExportJob)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateDataExportJob indicates an expected call of UpdateDataExportJob.
+func (mr *MockStoreMockRecorder) UpdateDataExportJob(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateDataExportJob", reflect.TypeOf((*MockStore)(nil).UpdateDataExportJob), ctx, arg)
+}
+
 // UpdateHighlightCover mocks base method.
 func (m *MockStore) UpdateHighlightCover(ctx context.Context, arg db.UpdateHighlightCoverParams) (db.HighlightGroup, error) {
 	m.ctrl.T.Helper()
@@ -3301,6 +3451,36 @@ func (m *MockStore) UpdateStory(ctx context.Context, arg db.UpdateStoryParams) (
 func (mr *MockStoreMockRecorder) UpdateStory(ctx, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateStory", reflect.TypeOf((*MockStore)(nil).UpdateStory), ctx, arg)
+}
+
+// UpdateSupportTicketStatus mocks base method.
+func (m *MockStore) UpdateSupportTicketStatus(ctx context.Context, arg db.UpdateSupportTicketStatusParams) (db.SupportTicket, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateSupportTicketStatus", ctx, arg)
+	ret0, _ := ret[0].(db.SupportTicket)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateSupportTicketStatus indicates an expected call of UpdateSupportTicketStatus.
+func (mr *MockStoreMockRecorder) UpdateSupportTicketStatus(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateSupportTicketStatus", reflect.TypeOf((*MockStore)(nil).UpdateSupportTicketStatus), ctx, arg)
+}
+
+// UpdateTwoFA mocks base method.
+func (m *MockStore) UpdateTwoFA(ctx context.Context, arg db.UpdateTwoFAParams) (db.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateTwoFA", ctx, arg)
+	ret0, _ := ret[0].(db.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateTwoFA indicates an expected call of UpdateTwoFA.
+func (mr *MockStoreMockRecorder) UpdateTwoFA(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateTwoFA", reflect.TypeOf((*MockStore)(nil).UpdateTwoFA), ctx, arg)
 }
 
 // UpdateUserActivity mocks base method.
@@ -3451,6 +3631,21 @@ func (mr *MockStoreMockRecorder) UpdateUsername(ctx, arg any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateUsername", reflect.TypeOf((*MockStore)(nil).UpdateUsername), ctx, arg)
 }
 
+// UpsertNotificationSettings mocks base method.
+func (m *MockStore) UpsertNotificationSettings(ctx context.Context, arg db.UpsertNotificationSettingsParams) (db.NotificationSetting, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpsertNotificationSettings", ctx, arg)
+	ret0, _ := ret[0].(db.NotificationSetting)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpsertNotificationSettings indicates an expected call of UpsertNotificationSettings.
+func (mr *MockStoreMockRecorder) UpsertNotificationSettings(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertNotificationSettings", reflect.TypeOf((*MockStore)(nil).UpsertNotificationSettings), ctx, arg)
+}
+
 // UpsertPrivacySettings mocks base method.
 func (m *MockStore) UpsertPrivacySettings(ctx context.Context, arg db.UpsertPrivacySettingsParams) (db.PrivacySetting, error) {
 	m.ctrl.T.Helper()
@@ -3464,4 +3659,19 @@ func (m *MockStore) UpsertPrivacySettings(ctx context.Context, arg db.UpsertPriv
 func (mr *MockStoreMockRecorder) UpsertPrivacySettings(ctx, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertPrivacySettings", reflect.TypeOf((*MockStore)(nil).UpsertPrivacySettings), ctx, arg)
+}
+
+// UpsertUserPreferences mocks base method.
+func (m *MockStore) UpsertUserPreferences(ctx context.Context, arg db.UpsertUserPreferencesParams) (db.UserPreference, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpsertUserPreferences", ctx, arg)
+	ret0, _ := ret[0].(db.UserPreference)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpsertUserPreferences indicates an expected call of UpsertUserPreferences.
+func (mr *MockStoreMockRecorder) UpsertUserPreferences(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertUserPreferences", reflect.TypeOf((*MockStore)(nil).UpsertUserPreferences), ctx, arg)
 }

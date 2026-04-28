@@ -73,10 +73,12 @@ func TestCreateUser(t *testing.T) {
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := db.CreateUserParams{
-					Username: user.Username,
-					FullName: user.FullName,
-					Phone:    user.Phone,
-					Email:    user.Email,
+					Username:          user.Username,
+					FullName:          user.FullName,
+					Phone:             user.Phone,
+					Email:             user.Email,
+					Provider:          "local",
+					IsProfileComplete: true,
 				}
 				store.EXPECT().
 					CreateUser(gomock.Any(), EqCreateUserParams(arg, password)).
@@ -140,6 +142,24 @@ func TestCreateUser(t *testing.T) {
 			defer ctrl.Finish()
 
 			store := mockdb.NewMockStore(ctrl)
+
+			// Username service calls GetReservedUsernames during NewServer initialization
+			store.EXPECT().
+				GetReservedUsernames(gomock.Any()).
+				Return([]string{}, nil).
+				AnyTimes()
+
+			// Username validation calls during user creation flow
+			store.EXPECT().
+				IsUsernameReserved(gomock.Any(), gomock.Any()).
+				Return(false, nil).
+				AnyTimes()
+
+			store.EXPECT().
+				CheckUsernameExists(gomock.Any(), gomock.Any()).
+				Return(false, nil).
+				AnyTimes()
+
 			tc.buildStubs(store)
 
 			server := newTestServer(t, store)

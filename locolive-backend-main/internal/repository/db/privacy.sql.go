@@ -64,7 +64,7 @@ SET
     is_private = $2,
     privacy_updated_at = NOW()
 WHERE id = $1
-RETURNING id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at
+RETURNING id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, provider, is_profile_complete, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at, two_fa_enabled, two_fa_secret, last_password_change
 `
 
 type UpdateAccountPrivacyParams struct {
@@ -102,6 +102,8 @@ func (q *Queries) UpdateAccountPrivacy(ctx context.Context, arg UpdateAccountPri
 		&i.WebsiteUrl,
 		&i.Links,
 		&i.GoogleID,
+		&i.Provider,
+		&i.IsProfileComplete,
 		&i.GhostModeExpiresAt,
 		pq.Array(&i.Interests),
 		&i.TrustScore,
@@ -110,6 +112,9 @@ func (q *Queries) UpdateAccountPrivacy(ctx context.Context, arg UpdateAccountPri
 		&i.PrivacyUpdatedAt,
 		&i.PanicMode,
 		&i.DeletedAt,
+		&i.TwoFaEnabled,
+		&i.TwoFaSecret,
+		&i.LastPasswordChange,
 	)
 	return i, err
 }

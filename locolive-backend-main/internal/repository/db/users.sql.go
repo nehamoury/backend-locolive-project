@@ -20,7 +20,7 @@ const banUser = `-- name: BanUser :one
 UPDATE users
 SET is_shadow_banned = $2
 WHERE id = $1
-RETURNING id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at
+RETURNING id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, provider, is_profile_complete, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at, two_fa_enabled, two_fa_secret, last_password_change
 `
 
 type BanUserParams struct {
@@ -58,6 +58,8 @@ func (q *Queries) BanUser(ctx context.Context, arg BanUserParams) (User, error) 
 		&i.WebsiteUrl,
 		&i.Links,
 		&i.GoogleID,
+		&i.Provider,
+		&i.IsProfileComplete,
 		&i.GhostModeExpiresAt,
 		pq.Array(&i.Interests),
 		&i.TrustScore,
@@ -66,6 +68,9 @@ func (q *Queries) BanUser(ctx context.Context, arg BanUserParams) (User, error) 
 		&i.PrivacyUpdatedAt,
 		&i.PanicMode,
 		&i.DeletedAt,
+		&i.TwoFaEnabled,
+		&i.TwoFaSecret,
+		&i.LastPasswordChange,
 	)
 	return i, err
 }
@@ -83,7 +88,7 @@ const boostUser = `-- name: BoostUser :one
 UPDATE users
 SET boost_expires_at = $2
 WHERE id = $1
-RETURNING id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at
+RETURNING id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, provider, is_profile_complete, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at, two_fa_enabled, two_fa_secret, last_password_change
 `
 
 type BoostUserParams struct {
@@ -121,6 +126,8 @@ func (q *Queries) BoostUser(ctx context.Context, arg BoostUserParams) (User, err
 		&i.WebsiteUrl,
 		&i.Links,
 		&i.GoogleID,
+		&i.Provider,
+		&i.IsProfileComplete,
 		&i.GhostModeExpiresAt,
 		pq.Array(&i.Interests),
 		&i.TrustScore,
@@ -129,6 +136,71 @@ func (q *Queries) BoostUser(ctx context.Context, arg BoostUserParams) (User, err
 		&i.PrivacyUpdatedAt,
 		&i.PanicMode,
 		&i.DeletedAt,
+		&i.TwoFaEnabled,
+		&i.TwoFaSecret,
+		&i.LastPasswordChange,
+	)
+	return i, err
+}
+
+const completeUserProfile = `-- name: CompleteUserProfile :one
+UPDATE users
+SET username = $2,
+    phone = $3,
+    is_profile_complete = true
+WHERE id = $1
+RETURNING id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, provider, is_profile_complete, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at, two_fa_enabled, two_fa_secret, last_password_change
+`
+
+type CompleteUserProfileParams struct {
+	ID       uuid.UUID `json:"id"`
+	Username string    `json:"username"`
+	Phone    string    `json:"phone"`
+}
+
+func (q *Queries) CompleteUserProfile(ctx context.Context, arg CompleteUserProfileParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, completeUserProfile, arg.ID, arg.Username, arg.Phone)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Phone,
+		&i.PasswordHash,
+		&i.Username,
+		&i.FullName,
+		&i.AvatarUrl,
+		&i.Bio,
+		&i.Role,
+		&i.TrustLevel,
+		&i.IsVerified,
+		&i.IsShadowBanned,
+		&i.LastActiveAt,
+		&i.CreatedAt,
+		&i.IsGhostMode,
+		&i.ActivityStreak,
+		&i.StreakUpdatedAt,
+		&i.IsPremium,
+		&i.StreakFreezesRemaining,
+		&i.BoostExpiresAt,
+		&i.BannerUrl,
+		&i.Theme,
+		&i.ProfileVisibility,
+		&i.Email,
+		&i.WebsiteUrl,
+		&i.Links,
+		&i.GoogleID,
+		&i.Provider,
+		&i.IsProfileComplete,
+		&i.GhostModeExpiresAt,
+		pq.Array(&i.Interests),
+		&i.TrustScore,
+		&i.UsernameNormalized,
+		&i.IsPrivate,
+		&i.PrivacyUpdatedAt,
+		&i.PanicMode,
+		&i.DeletedAt,
+		&i.TwoFaEnabled,
+		&i.TwoFaSecret,
+		&i.LastPasswordChange,
 	)
 	return i, err
 }
@@ -166,19 +238,23 @@ INSERT INTO users (
   password_hash,
   username,
   full_name,
-  is_ghost_mode
+  is_ghost_mode,
+  provider,
+  is_profile_complete
 ) VALUES (
-  $1, $2, $3, $4, $5, $6
-) RETURNING id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at
+  $1, $2, $3, $4, $5, $6, $7, $8
+) RETURNING id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, provider, is_profile_complete, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at, two_fa_enabled, two_fa_secret, last_password_change
 `
 
 type CreateUserParams struct {
-	Phone        string         `json:"phone"`
-	Email        sql.NullString `json:"email"`
-	PasswordHash string         `json:"password_hash"`
-	Username     string         `json:"username"`
-	FullName     string         `json:"full_name"`
-	IsGhostMode  bool           `json:"is_ghost_mode"`
+	Phone             string         `json:"phone"`
+	Email             sql.NullString `json:"email"`
+	PasswordHash      string         `json:"password_hash"`
+	Username          string         `json:"username"`
+	FullName          string         `json:"full_name"`
+	IsGhostMode       bool           `json:"is_ghost_mode"`
+	Provider          string         `json:"provider"`
+	IsProfileComplete bool           `json:"is_profile_complete"`
 }
 
 func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, error) {
@@ -189,6 +265,8 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		arg.Username,
 		arg.FullName,
 		arg.IsGhostMode,
+		arg.Provider,
+		arg.IsProfileComplete,
 	)
 	var i User
 	err := row.Scan(
@@ -218,6 +296,8 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.WebsiteUrl,
 		&i.Links,
 		&i.GoogleID,
+		&i.Provider,
+		&i.IsProfileComplete,
 		&i.GhostModeExpiresAt,
 		pq.Array(&i.Interests),
 		&i.TrustScore,
@@ -226,6 +306,9 @@ func (q *Queries) CreateUser(ctx context.Context, arg CreateUserParams) (User, e
 		&i.PrivacyUpdatedAt,
 		&i.PanicMode,
 		&i.DeletedAt,
+		&i.TwoFaEnabled,
+		&i.TwoFaSecret,
+		&i.LastPasswordChange,
 	)
 	return i, err
 }
@@ -249,6 +332,75 @@ WHERE id = $1
 func (q *Queries) DeleteUser(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.ExecContext(ctx, deleteUser, id)
 	return err
+}
+
+const getIncompleteGoogleUsers = `-- name: GetIncompleteGoogleUsers :many
+SELECT id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, provider, is_profile_complete, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at, two_fa_enabled, two_fa_secret, last_password_change FROM users
+WHERE provider = 'google' AND is_profile_complete = false
+ORDER BY created_at DESC
+`
+
+func (q *Queries) GetIncompleteGoogleUsers(ctx context.Context) ([]User, error) {
+	rows, err := q.db.QueryContext(ctx, getIncompleteGoogleUsers)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []User
+	for rows.Next() {
+		var i User
+		if err := rows.Scan(
+			&i.ID,
+			&i.Phone,
+			&i.PasswordHash,
+			&i.Username,
+			&i.FullName,
+			&i.AvatarUrl,
+			&i.Bio,
+			&i.Role,
+			&i.TrustLevel,
+			&i.IsVerified,
+			&i.IsShadowBanned,
+			&i.LastActiveAt,
+			&i.CreatedAt,
+			&i.IsGhostMode,
+			&i.ActivityStreak,
+			&i.StreakUpdatedAt,
+			&i.IsPremium,
+			&i.StreakFreezesRemaining,
+			&i.BoostExpiresAt,
+			&i.BannerUrl,
+			&i.Theme,
+			&i.ProfileVisibility,
+			&i.Email,
+			&i.WebsiteUrl,
+			&i.Links,
+			&i.GoogleID,
+			&i.Provider,
+			&i.IsProfileComplete,
+			&i.GhostModeExpiresAt,
+			pq.Array(&i.Interests),
+			&i.TrustScore,
+			&i.UsernameNormalized,
+			&i.IsPrivate,
+			&i.PrivacyUpdatedAt,
+			&i.PanicMode,
+			&i.DeletedAt,
+			&i.TwoFaEnabled,
+			&i.TwoFaSecret,
+			&i.LastPasswordChange,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const getSystemStats = `-- name: GetSystemStats :one
@@ -318,7 +470,7 @@ func (q *Queries) GetUserActivityStatus(ctx context.Context, id uuid.UUID) (GetU
 }
 
 const getUserByEmail = `-- name: GetUserByEmail :one
-SELECT id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at FROM users
+SELECT id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, provider, is_profile_complete, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at, two_fa_enabled, two_fa_secret, last_password_change FROM users
 WHERE email = $1 LIMIT 1
 `
 
@@ -352,6 +504,8 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email sql.NullString) (Use
 		&i.WebsiteUrl,
 		&i.Links,
 		&i.GoogleID,
+		&i.Provider,
+		&i.IsProfileComplete,
 		&i.GhostModeExpiresAt,
 		pq.Array(&i.Interests),
 		&i.TrustScore,
@@ -360,12 +514,15 @@ func (q *Queries) GetUserByEmail(ctx context.Context, email sql.NullString) (Use
 		&i.PrivacyUpdatedAt,
 		&i.PanicMode,
 		&i.DeletedAt,
+		&i.TwoFaEnabled,
+		&i.TwoFaSecret,
+		&i.LastPasswordChange,
 	)
 	return i, err
 }
 
 const getUserByGoogleID = `-- name: GetUserByGoogleID :one
-SELECT id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at FROM users
+SELECT id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, provider, is_profile_complete, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at, two_fa_enabled, two_fa_secret, last_password_change FROM users
 WHERE google_id = $1 LIMIT 1
 `
 
@@ -399,6 +556,8 @@ func (q *Queries) GetUserByGoogleID(ctx context.Context, googleID sql.NullString
 		&i.WebsiteUrl,
 		&i.Links,
 		&i.GoogleID,
+		&i.Provider,
+		&i.IsProfileComplete,
 		&i.GhostModeExpiresAt,
 		pq.Array(&i.Interests),
 		&i.TrustScore,
@@ -407,12 +566,15 @@ func (q *Queries) GetUserByGoogleID(ctx context.Context, googleID sql.NullString
 		&i.PrivacyUpdatedAt,
 		&i.PanicMode,
 		&i.DeletedAt,
+		&i.TwoFaEnabled,
+		&i.TwoFaSecret,
+		&i.LastPasswordChange,
 	)
 	return i, err
 }
 
 const getUserByID = `-- name: GetUserByID :one
-SELECT id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at FROM users
+SELECT id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, provider, is_profile_complete, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at, two_fa_enabled, two_fa_secret, last_password_change FROM users
 WHERE id = $1 LIMIT 1
 `
 
@@ -446,6 +608,8 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.WebsiteUrl,
 		&i.Links,
 		&i.GoogleID,
+		&i.Provider,
+		&i.IsProfileComplete,
 		&i.GhostModeExpiresAt,
 		pq.Array(&i.Interests),
 		&i.TrustScore,
@@ -454,12 +618,15 @@ func (q *Queries) GetUserByID(ctx context.Context, id uuid.UUID) (User, error) {
 		&i.PrivacyUpdatedAt,
 		&i.PanicMode,
 		&i.DeletedAt,
+		&i.TwoFaEnabled,
+		&i.TwoFaSecret,
+		&i.LastPasswordChange,
 	)
 	return i, err
 }
 
 const getUserByPhone = `-- name: GetUserByPhone :one
-SELECT id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at FROM users
+SELECT id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, provider, is_profile_complete, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at, two_fa_enabled, two_fa_secret, last_password_change FROM users
 WHERE phone = $1 LIMIT 1
 `
 
@@ -493,6 +660,8 @@ func (q *Queries) GetUserByPhone(ctx context.Context, phone string) (User, error
 		&i.WebsiteUrl,
 		&i.Links,
 		&i.GoogleID,
+		&i.Provider,
+		&i.IsProfileComplete,
 		&i.GhostModeExpiresAt,
 		pq.Array(&i.Interests),
 		&i.TrustScore,
@@ -501,12 +670,15 @@ func (q *Queries) GetUserByPhone(ctx context.Context, phone string) (User, error
 		&i.PrivacyUpdatedAt,
 		&i.PanicMode,
 		&i.DeletedAt,
+		&i.TwoFaEnabled,
+		&i.TwoFaSecret,
+		&i.LastPasswordChange,
 	)
 	return i, err
 }
 
 const getUserByUsername = `-- name: GetUserByUsername :one
-SELECT id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at FROM users
+SELECT id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, provider, is_profile_complete, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at, two_fa_enabled, two_fa_secret, last_password_change FROM users
 WHERE username = $1 LIMIT 1
 `
 
@@ -540,6 +712,8 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.WebsiteUrl,
 		&i.Links,
 		&i.GoogleID,
+		&i.Provider,
+		&i.IsProfileComplete,
 		&i.GhostModeExpiresAt,
 		pq.Array(&i.Interests),
 		&i.TrustScore,
@@ -548,6 +722,9 @@ func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User,
 		&i.PrivacyUpdatedAt,
 		&i.PanicMode,
 		&i.DeletedAt,
+		&i.TwoFaEnabled,
+		&i.TwoFaSecret,
+		&i.LastPasswordChange,
 	)
 	return i, err
 }
@@ -755,7 +932,7 @@ func (q *Queries) ListActiveUsersWithLocation(ctx context.Context) ([]ListActive
 }
 
 const listAdminUsers = `-- name: ListAdminUsers :many
-SELECT id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at FROM users
+SELECT id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, provider, is_profile_complete, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at, two_fa_enabled, two_fa_secret, last_password_change FROM users
 WHERE role IN ('admin', 'moderator')
 ORDER BY created_at DESC
 `
@@ -797,6 +974,8 @@ func (q *Queries) ListAdminUsers(ctx context.Context) ([]User, error) {
 			&i.WebsiteUrl,
 			&i.Links,
 			&i.GoogleID,
+			&i.Provider,
+			&i.IsProfileComplete,
 			&i.GhostModeExpiresAt,
 			pq.Array(&i.Interests),
 			&i.TrustScore,
@@ -805,6 +984,9 @@ func (q *Queries) ListAdminUsers(ctx context.Context) ([]User, error) {
 			&i.PrivacyUpdatedAt,
 			&i.PanicMode,
 			&i.DeletedAt,
+			&i.TwoFaEnabled,
+			&i.TwoFaSecret,
+			&i.LastPasswordChange,
 		); err != nil {
 			return nil, err
 		}
@@ -821,7 +1003,7 @@ func (q *Queries) ListAdminUsers(ctx context.Context) ([]User, error) {
 
 const listUsers = `-- name: ListUsers :many
 
-SELECT id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at FROM users
+SELECT id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, provider, is_profile_complete, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at, two_fa_enabled, two_fa_secret, last_password_change FROM users
 ORDER BY created_at DESC
 LIMIT $1 OFFSET $2
 `
@@ -868,6 +1050,8 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.WebsiteUrl,
 			&i.Links,
 			&i.GoogleID,
+			&i.Provider,
+			&i.IsProfileComplete,
 			&i.GhostModeExpiresAt,
 			pq.Array(&i.Interests),
 			&i.TrustScore,
@@ -876,6 +1060,9 @@ func (q *Queries) ListUsers(ctx context.Context, arg ListUsersParams) ([]User, e
 			&i.PrivacyUpdatedAt,
 			&i.PanicMode,
 			&i.DeletedAt,
+			&i.TwoFaEnabled,
+			&i.TwoFaSecret,
+			&i.LastPasswordChange,
 		); err != nil {
 			return nil, err
 		}
@@ -957,7 +1144,7 @@ func (q *Queries) SearchUsers(ctx context.Context, query string) ([]SearchUsersR
 }
 
 const searchUsersAdmin = `-- name: SearchUsersAdmin :many
-SELECT id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at FROM users
+SELECT id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, provider, is_profile_complete, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at, two_fa_enabled, two_fa_secret, last_password_change FROM users
 WHERE 
   (username ILIKE '%' || $3::text || '%' 
    OR full_name ILIKE '%' || $3::text || '%'
@@ -1008,6 +1195,8 @@ func (q *Queries) SearchUsersAdmin(ctx context.Context, arg SearchUsersAdminPara
 			&i.WebsiteUrl,
 			&i.Links,
 			&i.GoogleID,
+			&i.Provider,
+			&i.IsProfileComplete,
 			&i.GhostModeExpiresAt,
 			pq.Array(&i.Interests),
 			&i.TrustScore,
@@ -1016,6 +1205,9 @@ func (q *Queries) SearchUsersAdmin(ctx context.Context, arg SearchUsersAdminPara
 			&i.PrivacyUpdatedAt,
 			&i.PanicMode,
 			&i.DeletedAt,
+			&i.TwoFaEnabled,
+			&i.TwoFaSecret,
+			&i.LastPasswordChange,
 		); err != nil {
 			return nil, err
 		}
@@ -1047,7 +1239,7 @@ UPDATE users
 SET is_ghost_mode = $2,
     ghost_mode_expires_at = $3
 WHERE id = $1
-RETURNING id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at
+RETURNING id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, provider, is_profile_complete, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at, two_fa_enabled, two_fa_secret, last_password_change
 `
 
 type ToggleGhostModeParams struct {
@@ -1087,6 +1279,8 @@ func (q *Queries) ToggleGhostMode(ctx context.Context, arg ToggleGhostModeParams
 		&i.WebsiteUrl,
 		&i.Links,
 		&i.GoogleID,
+		&i.Provider,
+		&i.IsProfileComplete,
 		&i.GhostModeExpiresAt,
 		pq.Array(&i.Interests),
 		&i.TrustScore,
@@ -1095,6 +1289,9 @@ func (q *Queries) ToggleGhostMode(ctx context.Context, arg ToggleGhostModeParams
 		&i.PrivacyUpdatedAt,
 		&i.PanicMode,
 		&i.DeletedAt,
+		&i.TwoFaEnabled,
+		&i.TwoFaSecret,
+		&i.LastPasswordChange,
 	)
 	return i, err
 }
@@ -1104,7 +1301,7 @@ const togglePanicMode = `-- name: TogglePanicMode :one
 UPDATE users
 SET panic_mode = $2
 WHERE id = $1
-RETURNING id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at
+RETURNING id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, provider, is_profile_complete, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at, two_fa_enabled, two_fa_secret, last_password_change
 `
 
 type TogglePanicModeParams struct {
@@ -1143,6 +1340,8 @@ func (q *Queries) TogglePanicMode(ctx context.Context, arg TogglePanicModeParams
 		&i.WebsiteUrl,
 		&i.Links,
 		&i.GoogleID,
+		&i.Provider,
+		&i.IsProfileComplete,
 		&i.GhostModeExpiresAt,
 		pq.Array(&i.Interests),
 		&i.TrustScore,
@@ -1151,6 +1350,70 @@ func (q *Queries) TogglePanicMode(ctx context.Context, arg TogglePanicModeParams
 		&i.PrivacyUpdatedAt,
 		&i.PanicMode,
 		&i.DeletedAt,
+		&i.TwoFaEnabled,
+		&i.TwoFaSecret,
+		&i.LastPasswordChange,
+	)
+	return i, err
+}
+
+const updateTwoFA = `-- name: UpdateTwoFA :one
+UPDATE users
+SET two_fa_enabled = $2,
+    two_fa_secret = $3
+WHERE id = $1
+RETURNING id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, provider, is_profile_complete, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at, two_fa_enabled, two_fa_secret, last_password_change
+`
+
+type UpdateTwoFAParams struct {
+	ID           uuid.UUID      `json:"id"`
+	TwoFaEnabled bool           `json:"two_fa_enabled"`
+	TwoFaSecret  sql.NullString `json:"two_fa_secret"`
+}
+
+func (q *Queries) UpdateTwoFA(ctx context.Context, arg UpdateTwoFAParams) (User, error) {
+	row := q.db.QueryRowContext(ctx, updateTwoFA, arg.ID, arg.TwoFaEnabled, arg.TwoFaSecret)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Phone,
+		&i.PasswordHash,
+		&i.Username,
+		&i.FullName,
+		&i.AvatarUrl,
+		&i.Bio,
+		&i.Role,
+		&i.TrustLevel,
+		&i.IsVerified,
+		&i.IsShadowBanned,
+		&i.LastActiveAt,
+		&i.CreatedAt,
+		&i.IsGhostMode,
+		&i.ActivityStreak,
+		&i.StreakUpdatedAt,
+		&i.IsPremium,
+		&i.StreakFreezesRemaining,
+		&i.BoostExpiresAt,
+		&i.BannerUrl,
+		&i.Theme,
+		&i.ProfileVisibility,
+		&i.Email,
+		&i.WebsiteUrl,
+		&i.Links,
+		&i.GoogleID,
+		&i.Provider,
+		&i.IsProfileComplete,
+		&i.GhostModeExpiresAt,
+		pq.Array(&i.Interests),
+		&i.TrustScore,
+		&i.UsernameNormalized,
+		&i.IsPrivate,
+		&i.PrivacyUpdatedAt,
+		&i.PanicMode,
+		&i.DeletedAt,
+		&i.TwoFaEnabled,
+		&i.TwoFaSecret,
+		&i.LastPasswordChange,
 	)
 	return i, err
 }
@@ -1176,7 +1439,7 @@ SET
   END,
   streak_updated_at = now()
 WHERE id = $1
-RETURNING id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at
+RETURNING id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, provider, is_profile_complete, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at, two_fa_enabled, two_fa_secret, last_password_change
 `
 
 // Updates last_active_at and calculates activity streak
@@ -1210,6 +1473,8 @@ func (q *Queries) UpdateUserActivity(ctx context.Context, id uuid.UUID) (User, e
 		&i.WebsiteUrl,
 		&i.Links,
 		&i.GoogleID,
+		&i.Provider,
+		&i.IsProfileComplete,
 		&i.GhostModeExpiresAt,
 		pq.Array(&i.Interests),
 		&i.TrustScore,
@@ -1218,6 +1483,9 @@ func (q *Queries) UpdateUserActivity(ctx context.Context, id uuid.UUID) (User, e
 		&i.PrivacyUpdatedAt,
 		&i.PanicMode,
 		&i.DeletedAt,
+		&i.TwoFaEnabled,
+		&i.TwoFaSecret,
+		&i.LastPasswordChange,
 	)
 	return i, err
 }
@@ -1255,18 +1523,20 @@ func (q *Queries) UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams
 
 const updateUserGoogleID = `-- name: UpdateUserGoogleID :one
 UPDATE users
-SET google_id = $2
+SET google_id = $2,
+    provider = COALESCE($3, provider)
 WHERE id = $1
-RETURNING id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at
+RETURNING id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, provider, is_profile_complete, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at, two_fa_enabled, two_fa_secret, last_password_change
 `
 
 type UpdateUserGoogleIDParams struct {
 	ID       uuid.UUID      `json:"id"`
 	GoogleID sql.NullString `json:"google_id"`
+	Provider sql.NullString `json:"provider"`
 }
 
 func (q *Queries) UpdateUserGoogleID(ctx context.Context, arg UpdateUserGoogleIDParams) (User, error) {
-	row := q.db.QueryRowContext(ctx, updateUserGoogleID, arg.ID, arg.GoogleID)
+	row := q.db.QueryRowContext(ctx, updateUserGoogleID, arg.ID, arg.GoogleID, arg.Provider)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -1295,6 +1565,8 @@ func (q *Queries) UpdateUserGoogleID(ctx context.Context, arg UpdateUserGoogleID
 		&i.WebsiteUrl,
 		&i.Links,
 		&i.GoogleID,
+		&i.Provider,
+		&i.IsProfileComplete,
 		&i.GhostModeExpiresAt,
 		pq.Array(&i.Interests),
 		&i.TrustScore,
@@ -1303,13 +1575,17 @@ func (q *Queries) UpdateUserGoogleID(ctx context.Context, arg UpdateUserGoogleID
 		&i.PrivacyUpdatedAt,
 		&i.PanicMode,
 		&i.DeletedAt,
+		&i.TwoFaEnabled,
+		&i.TwoFaSecret,
+		&i.LastPasswordChange,
 	)
 	return i, err
 }
 
 const updateUserPassword = `-- name: UpdateUserPassword :exec
 UPDATE users
-SET password_hash = $2
+SET password_hash = $2,
+    last_password_change = NOW()
 WHERE id = $1
 `
 
@@ -1402,7 +1678,7 @@ func (q *Queries) UpdateUserProfile(ctx context.Context, arg UpdateUserProfilePa
 }
 
 const updateUserRole = `-- name: UpdateUserRole :one
-UPDATE users SET role = $2::user_role WHERE id = $1 RETURNING id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at
+UPDATE users SET role = $2::user_role WHERE id = $1 RETURNING id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, provider, is_profile_complete, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at, two_fa_enabled, two_fa_secret, last_password_change
 `
 
 type UpdateUserRoleParams struct {
@@ -1440,6 +1716,8 @@ func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) 
 		&i.WebsiteUrl,
 		&i.Links,
 		&i.GoogleID,
+		&i.Provider,
+		&i.IsProfileComplete,
 		&i.GhostModeExpiresAt,
 		pq.Array(&i.Interests),
 		&i.TrustScore,
@@ -1448,6 +1726,9 @@ func (q *Queries) UpdateUserRole(ctx context.Context, arg UpdateUserRoleParams) 
 		&i.PrivacyUpdatedAt,
 		&i.PanicMode,
 		&i.DeletedAt,
+		&i.TwoFaEnabled,
+		&i.TwoFaSecret,
+		&i.LastPasswordChange,
 	)
 	return i, err
 }
@@ -1456,7 +1737,7 @@ const updateUserTrust = `-- name: UpdateUserTrust :one
 UPDATE users
 SET trust_level = $2
 WHERE id = $1
-RETURNING id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at
+RETURNING id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, provider, is_profile_complete, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at, two_fa_enabled, two_fa_secret, last_password_change
 `
 
 type UpdateUserTrustParams struct {
@@ -1494,6 +1775,8 @@ func (q *Queries) UpdateUserTrust(ctx context.Context, arg UpdateUserTrustParams
 		&i.WebsiteUrl,
 		&i.Links,
 		&i.GoogleID,
+		&i.Provider,
+		&i.IsProfileComplete,
 		&i.GhostModeExpiresAt,
 		pq.Array(&i.Interests),
 		&i.TrustScore,
@@ -1502,6 +1785,9 @@ func (q *Queries) UpdateUserTrust(ctx context.Context, arg UpdateUserTrustParams
 		&i.PrivacyUpdatedAt,
 		&i.PanicMode,
 		&i.DeletedAt,
+		&i.TwoFaEnabled,
+		&i.TwoFaSecret,
+		&i.LastPasswordChange,
 	)
 	return i, err
 }

@@ -3,6 +3,7 @@ package api
 import (
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
+	"time"
 )
 
 func (server *Server) setupRouter() {
@@ -37,7 +38,7 @@ func (server *Server) setupRouter() {
 	})
 	api.POST("/users", server.authRateLimiter(), server.createUser)
 	api.POST("/users/login", server.authRateLimiter(), server.loginUser)
-	
+
 	// Username availability check (public with stricter rate limit)
 	api.GET("/users/check-username", server.usernameCheckRateLimiter(), server.checkUsername)
 	api.GET("/users/suggest-usernames", server.usernameCheckRateLimiter(), server.suggestUsernames)
@@ -52,7 +53,10 @@ func (server *Server) setupRouter() {
 
 	// Protected routes (as sub-group of api)
 	authRoutes := api.Group("/")
-	authRoutes.Use(authMiddleware(server.tokenMaker))
+	authRoutes.Use(server.authMiddleware())
+
+	// Profile completion (protected)
+	authRoutes.POST("/users/complete-profile", server.completeProfile)
 
 	// File upload
 	authRoutes.POST("/upload", server.uploadFile)
@@ -113,13 +117,30 @@ func (server *Server) setupRouter() {
 	authRoutes.PUT("/profile", server.updateProfile)
 	authRoutes.POST("/reports", server.createReport)
 	authRoutes.POST("/profile/boost", server.boostProfile)
-	authRoutes.PUT("/account/email", server.updateUserEmail)
-	authRoutes.PUT("/account/password", server.updateUserPassword)
-	
+	authRoutes.PUT("/account/email", server.rateLimitMiddleware(3, time.Hour), server.updateUserEmail)
+	authRoutes.PUT("/account/password", server.rateLimitMiddleware(3, time.Hour), server.updateUserPassword)
+	authRoutes.POST("/account/verify-password", server.rateLimitMiddleware(10, time.Minute), server.verifyPassword)
+	authRoutes.POST("/account/logout-all", server.logoutAllDevices)
+	authRoutes.DELETE("/account", server.deleteAccount)
+
+	// User Preferences & Settings
+	authRoutes.GET("/settings/preferences", server.getPreferences)
+	authRoutes.PUT("/settings/preferences", server.updatePreferences)
+	authRoutes.GET("/settings/notifications", server.getNotificationSettings)
+	authRoutes.PUT("/settings/notifications", server.updateNotificationSettings)
+
+	// Support System
+	authRoutes.POST("/support/tickets", server.rateLimitMiddleware(5, 24*time.Hour), server.createSupportTicket)
+	authRoutes.GET("/support/tickets", server.listMySupportTickets)
+
+	// Data & Privacy
+	authRoutes.POST("/account/data-export", server.requestDataExport)
+	authRoutes.GET("/account/data-export", server.getDataExportStatus)
+
 	// Username Management
 	authRoutes.POST("/users/reserve-username", server.reserveUsername)
 	authRoutes.PUT("/users/change-username", server.changeUsername)
-	
+
 	// Gamification & Stats
 	authRoutes.GET("/stats/streak", server.getStreak)
 	authRoutes.GET("/stats/daily", server.getDailyStats)
@@ -202,7 +223,7 @@ func (server *Server) setupRouter() {
 
 	// Admin routes
 	adminRoutes := api.Group("/admin")
-	adminRoutes.Use(authMiddleware(server.tokenMaker))
+	adminRoutes.Use(server.authMiddleware())
 	adminRoutes.Use(adminMiddleware())
 
 	adminRoutes.GET("/users", server.listUsers)
@@ -237,7 +258,7 @@ func (server *Server) setupRouter() {
 
 	// Search Users
 	adminRoutes.GET("/users/search", server.searchUsersAdmin)
-	
+
 	// Reserved Username Management
 	adminRoutes.GET("/reserved-usernames", server.listReservedUsernames)
 	adminRoutes.POST("/reserved-usernames", server.addReservedUsername)

@@ -13,16 +13,27 @@ import (
 )
 
 type googleLoginRequest struct {
-	IDToken string `json:"id_token"`
-	Code    string `json:"code"`
+	IDToken     string `json:"id_token"`
+	AccessToken string `json:"access_token"`
+	Code        string `json:"code"`
 }
 
 type googleUser struct {
-	Sub           string `json:"sub"`
-	Email         string `json:"email"`
-	EmailVerified bool   `json:"email_verified"`
-	Name          string `json:"name"`
-	Picture       string `json:"picture"`
+	Sub           string      `json:"sub"`
+	Email         string      `json:"email"`
+	EmailVerified interface{} `json:"email_verified"`
+	Name          string      `json:"name"`
+	Picture       string      `json:"picture"`
+}
+
+type googleLoginResponse struct {
+	SessionID                 string       `json:"session_id"`
+	AccessToken               string       `json:"access_token"`
+	AccessTokenExpiresAt      string       `json:"access_token_expires_at"`
+	RefreshToken              string       `json:"refresh_token"`
+	RefreshTokenExpiresAt     string       `json:"refresh_token_expires_at"`
+	User                      userResponse `json:"user"`
+	RequiresProfileCompletion bool         `json:"requires_profile_completion"`
 }
 
 func (server *Server) googleLogin(ctx *gin.Context) {
@@ -37,82 +48,113 @@ func (server *Server) googleLogin(ctx *gin.Context) {
 	var err error
 
 	if req.Code != "" {
-		// Exchange code for token
 		gUser, err = server.exchangeGoogleCode(req.Code)
 		if err != nil {
 			ctx.JSON(http.StatusUnauthorized, errorResponse(err))
 			return
 		}
 	} else if req.IDToken != "" {
-		// Verify existing ID Token
 		gUser, err = verifyGoogleToken(req.IDToken)
 		if err != nil {
 			ctx.JSON(http.StatusUnauthorized, errorResponse(err))
 			return
 		}
+	} else if req.AccessToken != "" {
+		gUser, err = fetchGoogleUserinfo(req.AccessToken)
+		if err != nil {
+			ctx.JSON(http.StatusUnauthorized, errorResponse(err))
+			return
+		}
 	} else {
-		ctx.JSON(http.StatusBadRequest, errorResponse(fmt.Errorf("either id_token or code is required")))
+		ctx.JSON(http.StatusBadRequest, errorResponse(fmt.Errorf("either id_token, access_token or code is required")))
 		return
 	}
 
+	var user db.User
+	var requiresProfileCompletion bool
+
 	// 2. Check if user exists by Google ID
-	user, err := server.store.GetUserByGoogleID(ctx, sql.NullString{String: gUser.Sub, Valid: true})
+	existingUser, err := server.store.GetUserByGoogleID(ctx, sql.NullString{String: gUser.Sub, Valid: true})
 	if err != nil {
 		if err == sql.ErrNoRows {
-			// 3. If not by Google ID, check by Email
-			user, err = server.store.GetUserByEmail(ctx, sql.NullString{String: gUser.Email, Valid: true})
+			// 3. Not found by Google ID, check by Email for account linking
+			existingUser, err = server.store.GetUserByEmail(ctx, sql.NullString{String: gUser.Email, Valid: true})
 			if err != nil {
 				if err == sql.ErrNoRows {
-					// 4. Create new user
+					// 4. Create new Google user (requires profile completion)
 					hashedPassword, _ := util.HashPassword(util.RandomString(12))
-					arg := db.CreateUserParams{
-						// Wait, schema says phone NOT NULL. This is valid constraint.
-						// We need a phone number. We can't easily get it from Google.
-						// Plan adjustment: We need to handle this. Maybe prompt user? Or set a placeholder?
-						// For now, let's assume we use a dummy phone or the email as phone if allowed? No, phone check.
-						// Hack: Use "google_<sub_id>" as phone?
-						Phone:        "google_" + gUser.Sub,
-						Username:     util.RandomString(10), // Temporary username
-						FullName:     gUser.Name,
-						PasswordHash: hashedPassword,
-					}
-					// Note: Schema has explicit email column now? Yes, 000016_add_email_to_users
-					// But CreateUserParams might not include it if the SQL wasn't updated to include email in insert.
-					// I need to check CreateUser SQL.
-
-					// Let's create the user with basic params first
-					user, err = server.store.CreateUser(ctx, arg)
+					user, err = server.store.CreateUser(ctx, db.CreateUserParams{
+						Phone:             "google_" + gUser.Sub,
+						Email:             sql.NullString{String: gUser.Email, Valid: true},
+						PasswordHash:      hashedPassword,
+						Username:          util.RandomString(10),
+						FullName:          gUser.Name,
+						IsGhostMode:       false,
+						Provider:          "google",
+						IsProfileComplete: false,
+					})
 					if err != nil {
 						ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 						return
 					}
 
-					// Update with email and google_id
-					// I need a transaction or separate updates.
-					// Let's just update Google ID and Email after creation if CreateUser doesn't support it.
+					// Update Google ID and avatar for the new user
+					user, err = server.store.UpdateUserGoogleID(ctx, db.UpdateUserGoogleIDParams{
+						ID:       user.ID,
+						GoogleID: sql.NullString{String: gUser.Sub, Valid: true},
+						Provider: sql.NullString{String: "google", Valid: true},
+					})
+					if err != nil {
+						ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+						return
+					}
+
+					// Set avatar from Google picture if available
+					if gUser.Picture != "" {
+						_, _ = server.store.UpdateUserProfile(ctx, db.UpdateUserProfileParams{
+							ID:        user.ID,
+							AvatarUrl: sql.NullString{String: gUser.Picture, Valid: true},
+						})
+					}
+
+					requiresProfileCompletion = true
 				} else {
 					ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 					return
 				}
-			}
+			} else {
+				// User exists by email - LINK accounts automatically
+				user, err = server.store.UpdateUserGoogleID(ctx, db.UpdateUserGoogleIDParams{
+					ID:       existingUser.ID,
+					GoogleID: sql.NullString{String: gUser.Sub, Valid: true},
+					Provider: sql.NullString{String: "linked", Valid: true},
+				})
+				if err != nil {
+					ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+					return
+				}
 
-			// Link Google ID if found by email or just created
-			// We need to update google_id here
-			user, err = server.store.UpdateUserGoogleID(ctx, db.UpdateUserGoogleIDParams{
-				ID:       user.ID,
-				GoogleID: sql.NullString{String: gUser.Sub, Valid: true},
-			})
-			if err != nil {
-				ctx.JSON(http.StatusInternalServerError, errorResponse(err))
-				return
+				// Update avatar from Google if not already set
+				if gUser.Picture != "" && !existingUser.AvatarUrl.Valid {
+					_, _ = server.store.UpdateUserProfile(ctx, db.UpdateUserProfileParams{
+						ID:        user.ID,
+						AvatarUrl: sql.NullString{String: gUser.Picture, Valid: true},
+					})
+				}
+
+				requiresProfileCompletion = !user.IsProfileComplete
 			}
 		} else {
 			ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 			return
 		}
+	} else {
+		// Found by Google ID
+		user = existingUser
+		requiresProfileCompletion = !user.IsProfileComplete
 	}
 
-	// 5. Generate Tokens (Same as loginUser)
+	// 5. Generate Tokens
 	accessToken, accessPayload, err := server.tokenMaker.CreateToken(user.Username, user.ID, string(user.Role), server.config.AccessTokenDuration)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
@@ -139,46 +181,59 @@ func (server *Server) googleLogin(ctx *gin.Context) {
 		return
 	}
 
-	rsp := loginUserResponse{
-		SessionID:             session.ID,
-		AccessToken:           accessToken,
-		AccessTokenExpiresAt:  accessPayload.ExpiredAt,
-		RefreshToken:          refreshToken,
-		RefreshTokenExpiresAt: refreshPayload.ExpiredAt,
-		User:                  newUserResponse(user),
+	// Set cookies
+	isProduction := server.config.Environment == "production"
+	ctx.SetCookie(
+		"access_token",
+		accessToken,
+		int(server.config.AccessTokenDuration.Seconds()),
+		"/",
+		"",
+		isProduction,
+		true,
+	)
+	ctx.SetCookie(
+		"refresh_token",
+		refreshToken,
+		int(server.config.RefreshTokenDuration.Seconds()),
+		"/api/users/renew_access",
+		"",
+		isProduction,
+		true,
+	)
+
+	rsp := googleLoginResponse{
+		SessionID:                 session.ID.String(),
+		AccessToken:               accessToken,
+		AccessTokenExpiresAt:      accessPayload.ExpiredAt.String(),
+		RefreshToken:              refreshToken,
+		RefreshTokenExpiresAt:     refreshPayload.ExpiredAt.String(),
+		User:                      newUserResponse(user),
+		RequiresProfileCompletion: requiresProfileCompletion,
 	}
 	ctx.JSON(http.StatusOK, rsp)
 }
 
 // GoogleCallback handles the redirect from Google and forwards it to Expo Go
 func (server *Server) googleCallback(ctx *gin.Context) {
-	// Expo Go URL (Configurable via ENV)
 	expoUrl := server.config.ExpoRedirectURL
 	if expoUrl == "" {
-		// Fallback to a sensible default or log a warning if needed, but better to enforce config
 		expoUrl = "exp://127.0.0.1:8081/--/google-auth"
 	}
 
-	// Forward all query parameters from Google (code, state, etc.)
 	location := fmt.Sprintf("%s?%s", expoUrl, ctx.Request.URL.RawQuery)
-
-	// Redirect to Expo Go
 	ctx.Redirect(http.StatusFound, location)
 }
 
 func (server *Server) exchangeGoogleCode(code string) (*googleUser, error) {
-	// Exchange code for token
 	tokenEndpoint := "https://oauth2.googleapis.com/token"
 
-	// Using standard POST form values as Google expects form-urlencoded mostly.
-
-	// Let's use http.PostForm
 	resp, err := http.PostForm(tokenEndpoint,
 		map[string][]string{
 			"code":          {code},
 			"client_id":     {server.config.GoogleClientID},
 			"client_secret": {server.config.GoogleClientSecret},
-			"redirect_uri":  {"postmessage"}, // Try "postmessage" first as it's common for mobile/SPA flows where no direct redirect URI matched
+			"redirect_uri":  {"postmessage"},
 			"grant_type":    {"authorization_code"},
 		})
 
@@ -204,7 +259,6 @@ func (server *Server) exchangeGoogleCode(code string) (*googleUser, error) {
 }
 
 func verifyGoogleToken(token string) (*googleUser, error) {
-	// Simple validation via Google Endpoint
 	resp, err := http.Get(fmt.Sprintf("https://www.googleapis.com/oauth2/v3/tokeninfo?id_token=%s", token))
 	if err != nil {
 		return nil, err
@@ -220,7 +274,50 @@ func verifyGoogleToken(token string) (*googleUser, error) {
 		return nil, err
 	}
 
-	if !gUser.EmailVerified {
+	verified := false
+	switch v := gUser.EmailVerified.(type) {
+	case bool:
+		verified = v
+	case string:
+		verified = (v == "true")
+	}
+
+	if !verified {
+		return nil, fmt.Errorf("email not verified")
+	}
+
+	return &gUser, nil
+}
+
+func fetchGoogleUserinfo(accessToken string) (*googleUser, error) {
+	resp, err := http.Get(fmt.Sprintf("https://www.googleapis.com/oauth2/v3/userinfo?access_token=%s", accessToken))
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to fetch userinfo: %s", resp.Status)
+	}
+
+	var gUser googleUser
+	if err := json.NewDecoder(resp.Body).Decode(&gUser); err != nil {
+		return nil, err
+	}
+
+	if gUser.Email == "" {
+		return nil, fmt.Errorf("email not found in userinfo")
+	}
+
+	verified := false
+	switch v := gUser.EmailVerified.(type) {
+	case bool:
+		verified = v
+	case string:
+		verified = (v == "true")
+	}
+
+	if !verified {
 		return nil, fmt.Errorf("email not verified")
 	}
 

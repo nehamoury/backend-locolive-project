@@ -3,15 +3,18 @@ package api
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/sqlc-dev/pqtype"
 
 	"privacy-social-backend/internal/repository/db"
 	"privacy-social-backend/internal/service/privacy"
 	"privacy-social-backend/internal/token"
+	"privacy-social-backend/internal/util"
 )
 
 // Privacy Settings Handlers
@@ -248,7 +251,7 @@ func (server *Server) toggleGhostMode(ctx *gin.Context) {
 func (server *Server) panicMode(ctx *gin.Context) {
 	payload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
 
-	// 1. Set panic_mode flag (temporary invisibility — NOT account deletion)
+	// 1. Set panic_mode flag
 	_, err := server.store.TogglePanicMode(ctx, db.TogglePanicModeParams{
 		ID:        payload.UserID,
 		PanicMode: true,
@@ -258,26 +261,29 @@ func (server *Server) panicMode(ctx *gin.Context) {
 		return
 	}
 
-	// 2. Immediate Redis cleanup (real-time visibility)
+	// 2. Redis cleanup
 	server.redis.ZRem(ctx, "users:locations", payload.UserID.String())
-	server.redis.Del(ctx, "crossings:v3:"+payload.UserID.String())
 	server.redis.Del(ctx, "profile:"+payload.UserID.String())
 	server.privacy.InvalidateUserCache(ctx, payload.UserID)
 
-	// 3. Block all sessions (forces re-auth)
-	server.store.BlockSession(ctx, payload.UserID)
+	// 3. GLOBAL SESSION REVOCATION (Logout all devices)
+	now := time.Now()
+	server.redis.Set(ctx, fmt.Sprintf("revoke_all:%s", payload.UserID.String()), now.Unix(), 24*time.Hour)
 
-	// 4. Audit log
-	server.privacy.LogAction(ctx, payload.UserID, privacy.AuditActionPanicActivated,
-		map[string]interface{}{"source": "api"},
-		ctx.ClientIP(), ctx.Request.UserAgent(),
-	)
+	// 4. Audit log (CRITICAL)
+	_, _ = server.store.CreateUserAuditLog(ctx, db.CreateUserAuditLogParams{
+		UserID:    payload.UserID,
+		Action:    "panic_mode_activated",
+		Details:   pqtype.NullRawMessage{RawMessage: util.ToJSONB(map[string]interface{}{"status": "emergency"}), Valid: true},
+		IpAddress: db.ToNullString(ctx.ClientIP()),
+		UserAgent: db.ToNullString(ctx.Request.UserAgent()),
+	})
 
-	// 5. Real-time: force disconnect all active WebSocket connections
+	// 5. Force disconnect WebSockets
 	server.hub.BroadcastForceLogout(payload.UserID, "panic_mode")
 
 	ctx.JSON(http.StatusOK, gin.H{
-		"message": "Panic protocol complete. All traces scrubbed.",
+		"message": "Panic protocol complete. All traces scrubbed and sessions revoked.",
 		"status":  "scrubbed",
 	})
 }

@@ -27,6 +27,7 @@ type Querier interface {
 	CheckGroupMembership(ctx context.Context, arg CheckGroupMembershipParams) (bool, error)
 	// Check if a username exists (case-insensitive)
 	CheckUsernameExists(ctx context.Context, lower string) (bool, error)
+	CompleteUserProfile(ctx context.Context, arg CompleteUserProfileParams) (User, error)
 	CountAdminCrossings(ctx context.Context) (int64, error)
 	CountArchivedStories(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountConnectionRequestsToday(ctx context.Context, requesterID uuid.UUID) (int64, error)
@@ -43,6 +44,7 @@ type Querier interface {
 	CreateBadge(ctx context.Context, arg CreateBadgeParams) (Badge, error)
 	CreateConnectionRequest(ctx context.Context, arg CreateConnectionRequestParams) (Connection, error)
 	CreateCrossing(ctx context.Context, arg CreateCrossingParams) (Crossing, error)
+	CreateDataExportJob(ctx context.Context, userID uuid.UUID) (DataExportJob, error)
 	CreateEngagementEvent(ctx context.Context, arg CreateEngagementEventParams) (EngagementEvent, error)
 	CreateGroup(ctx context.Context, arg CreateGroupParams) (Group, error)
 	CreateHighlight(ctx context.Context, arg CreateHighlightParams) (HighlightGroup, error)
@@ -63,6 +65,7 @@ type Querier interface {
 	CreateStoryReaction(ctx context.Context, arg CreateStoryReactionParams) (StoryReaction, error)
 	// Story Views
 	CreateStoryView(ctx context.Context, arg CreateStoryViewParams) (StoryView, error)
+	CreateSupportTicket(ctx context.Context, arg CreateSupportTicketParams) (SupportTicket, error)
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserAuditLog(ctx context.Context, arg CreateUserAuditLogParams) (UserActivityLog, error)
 	DecrementPostComments(ctx context.Context, id uuid.UUID) error
@@ -118,6 +121,7 @@ type Querier interface {
 	GetCrossingCount(ctx context.Context, arg GetCrossingCountParams) (int64, error)
 	GetCrossingsForUser(ctx context.Context, userID1 uuid.UUID) ([]Crossing, error)
 	GetDailyStats(ctx context.Context, arg GetDailyStatsParams) ([]DailyStat, error)
+	GetDataExportJob(ctx context.Context, id uuid.UUID) (DataExportJob, error)
 	GetEngagementStats(ctx context.Context) (GetEngagementStatsRow, error)
 	GetGroupByID(ctx context.Context, id uuid.UUID) (Group, error)
 	GetGroupMembers(ctx context.Context, groupID uuid.UUID) ([]GetGroupMembersRow, error)
@@ -125,12 +129,15 @@ type Querier interface {
 	GetHeatmapData(ctx context.Context) ([]GetHeatmapDataRow, error)
 	// Returns all archived stories belonging to a highlight
 	GetHighlightDetails(ctx context.Context, highlightID uuid.UUID) ([]GetHighlightDetailsRow, error)
+	GetIncompleteGoogleUsers(ctx context.Context) ([]User, error)
 	GetLatestCrossingBetweenUsers(ctx context.Context, arg GetLatestCrossingBetweenUsersParams) (Crossing, error)
+	GetLatestDataExportJob(ctx context.Context, userID uuid.UUID) (DataExportJob, error)
 	GetMessage(ctx context.Context, id uuid.UUID) (Message, error)
 	GetMessageReactions(ctx context.Context, messageID uuid.UUID) ([]GetMessageReactionsRow, error)
 	GetMyProfileViews(ctx context.Context, viewerID uuid.UUID) ([]GetMyProfileViewsRow, error)
 	GetNearbyUsersFromDB(ctx context.Context, arg GetNearbyUsersFromDBParams) ([]GetNearbyUsersFromDBRow, error)
 	GetNotificationPreferences(ctx context.Context, userID uuid.UUID) (NotificationPreference, error)
+	GetNotificationSettings(ctx context.Context, userID uuid.UUID) (NotificationSetting, error)
 	GetPasswordResetByToken(ctx context.Context, token string) (PasswordReset, error)
 	GetPostComment(ctx context.Context, id uuid.UUID) (PostComment, error)
 	GetPrivacySettings(ctx context.Context, userID uuid.UUID) (PrivacySetting, error)
@@ -177,9 +184,11 @@ type Querier interface {
 	GetUserFCMTokens(ctx context.Context, userID uuid.UUID) ([]string, error)
 	GetUserGroups(ctx context.Context, userID uuid.UUID) ([]Group, error)
 	GetUserMentions(ctx context.Context, arg GetUserMentionsParams) ([]GetUserMentionsRow, error)
+	GetUserPreferences(ctx context.Context, userID uuid.UUID) (UserPreference, error)
 	GetUserPrivacyState(ctx context.Context, id uuid.UUID) (GetUserPrivacyStateRow, error)
 	GetUserProfile(ctx context.Context, id uuid.UUID) (GetUserProfileRow, error)
 	GetUserStreak(ctx context.Context, userID uuid.UUID) (UserStreak, error)
+	GetUserSupportTickets(ctx context.Context, userID uuid.UUID) ([]SupportTicket, error)
 	GetUserTrustScore(ctx context.Context, id uuid.UUID) (int32, error)
 	// Get username change history for a user
 	GetUsernameHistory(ctx context.Context, userID uuid.UUID) ([]UsernameHistory, error)
@@ -261,12 +270,15 @@ type Querier interface {
 	UnsaveReel(ctx context.Context, arg UnsaveReelParams) error
 	UpdateAccountPrivacy(ctx context.Context, arg UpdateAccountPrivacyParams) (User, error)
 	UpdateConnectionStatus(ctx context.Context, arg UpdateConnectionStatusParams) (Connection, error)
+	UpdateDataExportJob(ctx context.Context, arg UpdateDataExportJobParams) (DataExportJob, error)
 	UpdateHighlightCover(ctx context.Context, arg UpdateHighlightCoverParams) (HighlightGroup, error)
 	UpdateMessage(ctx context.Context, arg UpdateMessageParams) (Message, error)
 	UpdateNotificationPreferences(ctx context.Context, arg UpdateNotificationPreferencesParams) (NotificationPreference, error)
 	UpdatePostCommentFlag(ctx context.Context, arg UpdatePostCommentFlagParams) error
 	UpdateReelCommentFlag(ctx context.Context, arg UpdateReelCommentFlagParams) error
 	UpdateStory(ctx context.Context, arg UpdateStoryParams) (UpdateStoryRow, error)
+	UpdateSupportTicketStatus(ctx context.Context, arg UpdateSupportTicketStatusParams) (SupportTicket, error)
+	UpdateTwoFA(ctx context.Context, arg UpdateTwoFAParams) (User, error)
 	// Updates last_active_at and calculates activity streak
 	UpdateUserActivity(ctx context.Context, id uuid.UUID) (User, error)
 	UpdateUserEmail(ctx context.Context, arg UpdateUserEmailParams) (UpdateUserEmailRow, error)
@@ -280,7 +292,9 @@ type Querier interface {
 	// Update user username with history tracking
 	// Note: This should be called within a transaction that also records history
 	UpdateUsername(ctx context.Context, arg UpdateUsernameParams) (User, error)
+	UpsertNotificationSettings(ctx context.Context, arg UpsertNotificationSettingsParams) (NotificationSetting, error)
 	UpsertPrivacySettings(ctx context.Context, arg UpsertPrivacySettingsParams) (PrivacySetting, error)
+	UpsertUserPreferences(ctx context.Context, arg UpsertUserPreferencesParams) (UserPreference, error)
 }
 
 var _ Querier = (*Queries)(nil)

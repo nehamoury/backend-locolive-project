@@ -1736,6 +1736,21 @@ func (mr *MockStoreMockRecorder) GetPasswordResetByToken(ctx, token any) *gomock
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPasswordResetByToken", reflect.TypeOf((*MockStore)(nil).GetPasswordResetByToken), ctx, token)
 }
 
+// GetPost mocks base method.
+func (m *MockStore) GetPost(ctx context.Context, id uuid.UUID) (db.Post, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetPost", ctx, id)
+	ret0, _ := ret[0].(db.Post)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetPost indicates an expected call of GetPost.
+func (mr *MockStoreMockRecorder) GetPost(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetPost", reflect.TypeOf((*MockStore)(nil).GetPost), ctx, id)
+}
+
 // GetPostComment mocks base method.
 func (m *MockStore) GetPostComment(ctx context.Context, id uuid.UUID) (db.PostComment, error) {
 	m.ctrl.T.Helper()

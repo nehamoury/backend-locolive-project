@@ -194,6 +194,33 @@ func (q *Queries) DeletePostComment(ctx context.Context, arg DeletePostCommentPa
 	return post_id, err
 }
 
+const getPost = `-- name: GetPost :one
+SELECT id, user_id, media_url, media_type, caption, location_name, geohash, geom, likes_count, comments_count, created_at, updated_at, body_text, shares_count, crop_settings FROM posts WHERE id = $1 LIMIT 1
+`
+
+func (q *Queries) GetPost(ctx context.Context, id uuid.UUID) (Post, error) {
+	row := q.db.QueryRowContext(ctx, getPost, id)
+	var i Post
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.MediaUrl,
+		&i.MediaType,
+		&i.Caption,
+		&i.LocationName,
+		&i.Geohash,
+		&i.Geom,
+		&i.LikesCount,
+		&i.CommentsCount,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.BodyText,
+		&i.SharesCount,
+		&i.CropSettings,
+	)
+	return i, err
+}
+
 const getPostComment = `-- name: GetPostComment :one
 SELECT id, post_id, user_id, content, created_at, is_flagged FROM post_comments WHERE id = $1 LIMIT 1
 `

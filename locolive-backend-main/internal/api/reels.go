@@ -521,6 +521,9 @@ func (server *Server) addReelComment(ctx *gin.Context) {
 				"New Reel Comment", fmt.Sprintf("%s commented on your reel: %s", commenter.Username, comment.Content),
 				map[string]uuid.UUID{"user": authPayload.UserID})
 		}
+
+		// Process @mentions in the comment
+		server.processMentions(ctx, req.Content, authPayload.UserID, commenter.Username, map[string]uuid.UUID{"user": authPayload.UserID})
 	}
 
 	ctx.JSON(http.StatusCreated, toReelCommentResponse(comment))

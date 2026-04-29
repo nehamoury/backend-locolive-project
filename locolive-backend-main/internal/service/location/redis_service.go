@@ -46,6 +46,7 @@ func NewRedisLocationService(redis *redis.Client, store repository.Store, hub *r
 // UpdateUserLocation updates user position in Redis, broadcasts nearby updates, and detects crossings
 func (s *RedisLocationService) UpdateUserLocation(ctx context.Context, userID uuid.UUID, lat, lng float64) error {
 	userIDStr := userID.String()
+	now := time.Now().UTC()
 
 	// ── Step 0: Distance-based optimization ─────────────────────────────
 	// Skip heavy processing if user barely moved (<20m)
@@ -66,12 +67,18 @@ func (s *RedisLocationService) UpdateUserLocation(ctx context.Context, userID uu
 		}
 	}
 
-	// ── Step 1: Always update GEO index (keeps TTL alive) ───────────────
-	err = s.redis.GeoAdd(ctx, userLocationsKey, &redis.GeoLocation{
+	// ── Step 1: Always update GEO index & Last Ping ─────────────────────
+	pipe := s.redis.Pipeline()
+	pipe.GeoAdd(ctx, userLocationsKey, &redis.GeoLocation{
 		Name:      userIDStr,
 		Longitude: lng,
 		Latitude:  lat,
-	}).Err()
+	})
+	pipe.ZAdd(ctx, "users:last_ping", redis.Z{
+		Score:  float64(now.Unix()),
+		Member: userIDStr,
+	})
+	_, err = pipe.Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to update geo location: %w", err)
 	}
@@ -143,7 +150,39 @@ func (s *RedisLocationService) UpdateUserLocation(ctx context.Context, userID uu
 
 	s.processCrossings(ctx, userID, crossingMatches)
 
+	// ── Step 6: Cleanup stale locations (Approx every 100 pings to keep it fast)
+	if time.Now().Unix()%100 == 0 {
+		go s.cleanupStaleLocations(context.Background())
+	}
+
 	return nil
+}
+
+// cleanupStaleLocations removes users who haven't pinged in over 1 hour from the GEO index
+func (s *RedisLocationService) cleanupStaleLocations(ctx context.Context) {
+	threshold := time.Now().Add(-1 * time.Hour).Unix()
+	
+	// Get stale users from our activity set
+	staleUserIDs, err := s.redis.ZRangeByScore(ctx, "users:last_ping", &redis.ZRangeBy{
+		Min: "-inf",
+		Max: fmt.Sprintf("%d", threshold),
+	}).Result()
+
+	if err != nil || len(staleUserIDs) == 0 {
+		return
+	}
+
+	log.Info().Int("stale_count", len(staleUserIDs)).Msg("[Location] Cleaning up stale locations")
+
+	pipe := s.redis.Pipeline()
+	for _, id := range staleUserIDs {
+		pipe.ZRem(ctx, userLocationsKey, id)
+		pipe.ZRem(ctx, "users:last_ping", id)
+	}
+	_, err = pipe.Exec(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("[Location] Failed to execute cleanup pipeline")
+	}
 }
 
 // broadcastNearbyUpdates sends a nearby_user_update WS event to all users within range
@@ -342,7 +381,13 @@ func (s *RedisLocationService) GetNearbyUsers(ctx context.Context, userID uuid.U
 }
 
 func (s *RedisLocationService) processCrossings(ctx context.Context, userID uuid.UUID, matches []redis.GeoLocation) {
+	maxCrossings := 3
+	processed := 0
+
 	for _, match := range matches {
+		if processed >= maxCrossings {
+			break
+		}
 		targetUserIDStr := match.Name
 		if targetUserIDStr == userID.String() {
 			continue
@@ -370,6 +415,13 @@ func (s *RedisLocationService) processCrossings(ctx context.Context, userID uuid
 
 		valid, err := s.validateCrossingPrivacy(ctx, userID, targetUserID)
 		if err != nil || !valid {
+			continue
+		}
+
+		// CRITICAL FIX: Only trigger crossing if the other user is actually online
+		// This prevents "ghost" notifications from stale Redis locations
+		if s.hub != nil && !s.hub.IsUserOnline(targetUserID) {
+			log.Debug().Str("target_id", targetUserIDStr).Msg("[Crossing] Skipped — target user is offline")
 			continue
 		}
 
@@ -460,6 +512,7 @@ func (s *RedisLocationService) processCrossings(ctx context.Context, userID uuid
 		s.invalidateCrossingsCache(ctx, targetUserID)
 
 		s.redis.Set(ctx, dedupKey, "1", crossingTTL)
+		processed++
 	}
 }
 

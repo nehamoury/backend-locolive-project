@@ -441,6 +441,19 @@ func (server *Server) addPostComment(ctx *gin.Context) {
 		"is_flagged": isFlagged,
 	})
 
+	// Send notification to post owner if it's not their own post
+	post, err := server.store.GetPost(ctx, postID)
+	if err == nil && post.UserID != authPayload.UserID {
+		commenter, _ := server.store.GetUserByID(ctx, authPayload.UserID)
+		server.createNotificationWithSound(ctx, post.UserID, "story_reaction", "reel_commented",
+			"New Comment", fmt.Sprintf("%s commented on your post: %s", commenter.Username, req.Content),
+			map[string]uuid.UUID{"user": authPayload.UserID})
+	}
+
+	// Process @mentions in the comment
+	commenter, _ := server.store.GetUserByID(ctx, authPayload.UserID)
+	server.processMentions(ctx, req.Content, authPayload.UserID, commenter.Username, map[string]uuid.UUID{"user": authPayload.UserID})
+
 	ctx.JSON(http.StatusCreated, postCommentResponse{
 		ID:        comment.ID,
 		PostID:    comment.PostID,

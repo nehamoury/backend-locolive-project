@@ -139,6 +139,7 @@ type Querier interface {
 	GetNotificationPreferences(ctx context.Context, userID uuid.UUID) (NotificationPreference, error)
 	GetNotificationSettings(ctx context.Context, userID uuid.UUID) (NotificationSetting, error)
 	GetPasswordResetByToken(ctx context.Context, token string) (PasswordReset, error)
+	GetPost(ctx context.Context, id uuid.UUID) (Post, error)
 	GetPostComment(ctx context.Context, id uuid.UUID) (PostComment, error)
 	GetPrivacySettings(ctx context.Context, userID uuid.UUID) (PrivacySetting, error)
 	GetProfileViewCount(ctx context.Context, viewedUserID uuid.UUID) (int64, error)

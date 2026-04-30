@@ -290,7 +290,7 @@ func (q *Queries) LikePost(ctx context.Context, arg LikePostParams) (PostLike, e
 }
 
 const listConnectionsPosts = `-- name: ListConnectionsPosts :many
-SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.location_name, p.crop_settings,
+SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings,
        p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
 
        u.username, u.full_name, u.avatar_url,
@@ -324,6 +324,7 @@ type ListConnectionsPostsRow struct {
 	MediaUrl      string                `json:"media_url"`
 	MediaType     string                `json:"media_type"`
 	Caption       sql.NullString        `json:"caption"`
+	BodyText      sql.NullString        `json:"body_text"`
 	LocationName  sql.NullString        `json:"location_name"`
 	CropSettings  pqtype.NullRawMessage `json:"crop_settings"`
 	LikesCount    int32                 `json:"likes_count"`
@@ -355,6 +356,7 @@ func (q *Queries) ListConnectionsPosts(ctx context.Context, arg ListConnectionsP
 			&i.MediaUrl,
 			&i.MediaType,
 			&i.Caption,
+			&i.BodyText,
 			&i.LocationName,
 			&i.CropSettings,
 			&i.LikesCount,
@@ -436,7 +438,7 @@ func (q *Queries) ListPostComments(ctx context.Context, postID uuid.UUID) ([]Lis
 }
 
 const listPostsByUserID = `-- name: ListPostsByUserID :many
-SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.location_name, p.crop_settings,
+SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings,
        p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
 
        u.username, u.full_name, u.avatar_url,
@@ -463,6 +465,7 @@ type ListPostsByUserIDRow struct {
 	MediaUrl      string                `json:"media_url"`
 	MediaType     string                `json:"media_type"`
 	Caption       sql.NullString        `json:"caption"`
+	BodyText      sql.NullString        `json:"body_text"`
 	LocationName  sql.NullString        `json:"location_name"`
 	CropSettings  pqtype.NullRawMessage `json:"crop_settings"`
 	LikesCount    int32                 `json:"likes_count"`
@@ -498,6 +501,7 @@ func (q *Queries) ListPostsByUserID(ctx context.Context, arg ListPostsByUserIDPa
 			&i.MediaUrl,
 			&i.MediaType,
 			&i.Caption,
+			&i.BodyText,
 			&i.LocationName,
 			&i.CropSettings,
 			&i.LikesCount,

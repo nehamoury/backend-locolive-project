@@ -14,7 +14,7 @@ RETURNING *,
     CASE WHEN geom IS NOT NULL THEN ST_X(geom::geometry) ELSE NULL END as lng_out;
 
 -- name: ListPostsByUserID :many
-SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.location_name, p.crop_settings,
+SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings,
        p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
 
        u.username, u.full_name, u.avatar_url,
@@ -29,7 +29,7 @@ LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
 
 -- name: ListConnectionsPosts :many
 -- Get posts from connections AND own posts
-SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.location_name, p.crop_settings,
+SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings,
        p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
 
        u.username, u.full_name, u.avatar_url,

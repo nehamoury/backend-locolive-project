@@ -523,7 +523,7 @@ func (server *Server) addReelComment(ctx *gin.Context) {
 		}
 
 		// Process @mentions in the comment
-		server.processMentions(ctx, req.Content, authPayload.UserID, commenter.Username, map[string]uuid.UUID{"user": authPayload.UserID})
+		server.processMentions(ctx, req.Content, authPayload.UserID, commenter.Username)
 	}
 
 	ctx.JSON(http.StatusCreated, toReelCommentResponse(comment))

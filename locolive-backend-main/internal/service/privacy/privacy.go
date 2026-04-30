@@ -167,9 +167,9 @@ func (s *Service) CanViewProfile(ctx context.Context, viewerID, targetID uuid.UU
 		return AccessResult{Allowed: false, Reason: ReasonDeleted}
 	}
 
-	// 2. Panic mode — completely invisible
+	// 2. Panic mode — visible but restricted
 	if state.PanicMode {
-		return AccessResult{Allowed: false, Reason: ReasonPanicMode}
+		return AccessResult{Allowed: true, Reason: ReasonPanicMode}
 	}
 
 	// For profile viewing: ghost/private/hidden users CAN be found,

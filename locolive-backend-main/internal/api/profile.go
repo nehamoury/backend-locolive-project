@@ -208,7 +208,7 @@ func (server *Server) getUserProfile(ctx *gin.Context) {
 			case "blocked":
 				ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 				return
-			case "private":
+			case "private", "panic_mode":
 				// Blank out private information
 				rsp.StoryCount = 0
 				rsp.PostCount = 0

@@ -30,7 +30,7 @@ func extractMentions(text string) []string {
 }
 
 // processMentions detects mentions in a text and sends notifications to the mentioned users
-func (server *Server) processMentions(ctx context.Context, text string, senderID uuid.UUID, senderUsername string, relatedIDs map[string]uuid.UUID) {
+func (server *Server) processMentions(ctx context.Context, text string, senderID uuid.UUID, senderUsername string) {
 	usernames := extractMentions(text)
 	if len(usernames) == 0 {
 		return

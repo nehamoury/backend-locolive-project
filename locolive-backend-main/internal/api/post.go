@@ -84,6 +84,7 @@ func toPostResponseFromList(p db.ListPostsByUserIDRow) postResponse {
 		MediaUrl:      p.MediaUrl,
 		MediaType:     p.MediaType,
 		Caption:       p.Caption.String,
+		BodyText:      p.BodyText.String,
 		LocationName:  p.LocationName.String,
 		LikesCount:    p.LikesCount,
 		CommentsCount: p.CommentsCount,
@@ -104,6 +105,7 @@ func toPostResponseFromConnections(p db.ListConnectionsPostsRow) postResponse {
 		MediaUrl:      p.MediaUrl,
 		MediaType:     p.MediaType,
 		Caption:       p.Caption.String,
+		BodyText:      p.BodyText.String,
 		LocationName:  p.LocationName.String,
 		LikesCount:    p.LikesCount,
 		CommentsCount: p.CommentsCount,
@@ -452,7 +454,7 @@ func (server *Server) addPostComment(ctx *gin.Context) {
 
 	// Process @mentions in the comment
 	commenter, _ := server.store.GetUserByID(ctx, authPayload.UserID)
-	server.processMentions(ctx, req.Content, authPayload.UserID, commenter.Username, map[string]uuid.UUID{"user": authPayload.UserID})
+	server.processMentions(ctx, req.Content, authPayload.UserID, commenter.Username)
 
 	ctx.JSON(http.StatusCreated, postCommentResponse{
 		ID:        comment.ID,

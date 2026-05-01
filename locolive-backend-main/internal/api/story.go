@@ -362,18 +362,15 @@ func (server *Server) getUserStories(ctx *gin.Context) {
 
 	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
 
-	canView, reason, err := server.canViewContent(ctx, authPayload.UserID, userID)
-	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
-		return
-	}
-	if !canView {
-		if reason == "blocked" {
-			ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+	// Use CENTRAL RULE ENGINE for content access (Stories)
+	result := server.privacy.CanUserAccess(ctx, authPayload.UserID, userID)
+	if !result.Allowed {
+		if result.Reason == "private" {
+			ctx.JSON(http.StatusForbidden, gin.H{"error": "This account is private"})
 			return
 		}
-		// If private, return empty array
-		ctx.JSON(http.StatusForbidden, gin.H{"error": "This account is private"})
+		// As per production spec: Blocked, Panic, or Ghost = Invisible (404)
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		return
 	}
 

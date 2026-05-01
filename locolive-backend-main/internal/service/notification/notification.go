@@ -26,10 +26,12 @@ func NewNotificationService(credentialsPath string) (*NotificationService, error
 	}, nil
 }
 
-func (s *NotificationService) SendPushNotification(ctx context.Context, token string, title, body string, data map[string]string) error {
+// SendPushNotification sends a notification to a single device token.
+// Returns a boolean indicating if the token is invalid/expired and should be removed.
+func (s *NotificationService) SendPushNotification(ctx context.Context, token string, title, body string, data map[string]string) (bool, error) {
 	client, err := s.app.Messaging(ctx)
 	if err != nil {
-		return err
+		return false, err
 	}
 
 	message := &messaging.Message{
@@ -39,25 +41,38 @@ func (s *NotificationService) SendPushNotification(ctx context.Context, token st
 		},
 		Data:  data,
 		Token: token,
+		Webpush: &messaging.WebpushConfig{
+			Notification: &messaging.WebpushNotification{
+				Icon: "/pwa-192x192.png",
+			},
+			FCMOptions: &messaging.WebpushFCMOptions{
+				Link: "/notifications",
+			},
+		},
 	}
 
 	response, err := client.Send(ctx, message)
 	if err != nil {
-		return err
+		// Check if the error is due to an invalid or unregistered token
+		if messaging.IsUnregistered(err) || messaging.IsInvalidArgument(err) {
+			log.Printf("Token %s is invalid or unregistered, should be removed: %v", token, err)
+			return true, nil
+		}
+		return false, err
 	}
 
 	log.Printf("Successfully sent message: %s", response)
-	return nil
+	return false, nil
 }
 
-func (s *NotificationService) SendMulticastNotification(ctx context.Context, tokens []string, title, body string, data map[string]string) error {
+func (s *NotificationService) SendMulticastNotification(ctx context.Context, tokens []string, title, body string, data map[string]string) ([]string, error) {
 	if len(tokens) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	client, err := s.app.Messaging(ctx)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	message := &messaging.MulticastMessage{
@@ -67,13 +82,30 @@ func (s *NotificationService) SendMulticastNotification(ctx context.Context, tok
 		},
 		Data:   data,
 		Tokens: tokens,
+		Webpush: &messaging.WebpushConfig{
+			Notification: &messaging.WebpushNotification{
+				Icon: "/pwa-192x192.png",
+			},
+		},
 	}
 
 	br, err := client.SendMulticast(ctx, message)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	log.Printf("%d messages were sent successfully", br.SuccessCount)
-	return nil
+	var invalidTokens []string
+	if br.FailureCount > 0 {
+		for idx, resp := range br.Responses {
+			if !resp.Success {
+				if messaging.IsUnregistered(resp.Error) {
+					invalidTokens = append(invalidTokens, tokens[idx])
+				}
+			}
+		}
+	}
+
+	log.Printf("%d messages were sent successfully, %d failed", br.SuccessCount, br.FailureCount)
+	return invalidTokens, nil
 }
+

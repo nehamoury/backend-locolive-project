@@ -108,10 +108,17 @@ WITH my_connections AS (
     UNION
     SELECT c2.requester_id as friend_id FROM connections c2 WHERE c2.target_id = $1 AND c2.status = 'accepted'
 ),
+blocked_users_list AS (
+    SELECT blocked_id as id FROM blocked_users WHERE blocker_id = $1
+    UNION
+    SELECT blocker_id as id FROM blocked_users WHERE blocked_id = $1
+),
 excluded_users AS (
     SELECT c3.target_id as id FROM connections c3 WHERE c3.requester_id = $1
     UNION
     SELECT c4.requester_id as id FROM connections c4 WHERE c4.target_id = $1
+    UNION
+    SELECT id FROM blocked_users_list
     UNION
     SELECT $1::uuid as id
 )

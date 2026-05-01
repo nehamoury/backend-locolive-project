@@ -5,19 +5,55 @@ import (
 	"time"
 
 	"privacy-social-backend/internal/repository"
+	"privacy-social-backend/internal/repository/db"
+	"privacy-social-backend/internal/service/notification"
 
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 )
 
 type CleanupWorker struct {
-	store repository.Store
+	store        repository.Store
+	notification *notification.NotificationService
 }
 
-func NewCleanupWorker(store repository.Store) *CleanupWorker {
+func NewCleanupWorker(store repository.Store, notification *notification.NotificationService) *CleanupWorker {
 	return &CleanupWorker{
-		store: store,
+		store:        store,
+		notification: notification,
 	}
 }
+
+// sendPushNotificationToUser fetches all FCM tokens for a user and sends a push notification
+func (worker *CleanupWorker) sendPushNotificationToUser(ctx context.Context, userID uuid.UUID, title, body string, data map[string]string) {
+	if worker.notification == nil {
+		return
+	}
+
+	tokens, err := worker.store.GetUserFCMTokens(ctx, userID)
+	if err != nil || len(tokens) == 0 {
+		return
+	}
+
+	// Send to all registered devices for this user
+	invalidTokens, err := worker.notification.SendMulticastNotification(ctx, tokens, title, body, data)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to send multicast push notification")
+		return
+	}
+
+	// Clean up invalid tokens
+	if len(invalidTokens) > 0 {
+		for _, token := range invalidTokens {
+			log.Info().Str("token", token).Str("user_id", userID.String()).Msg("removing invalid FCM token")
+			_ = worker.store.RemoveFCMToken(ctx, db.RemoveFCMTokenParams{
+				UserID: userID,
+				Token:  token,
+			})
+		}
+	}
+}
+
 
 func (worker *CleanupWorker) Start() {
 	ticker := time.NewTicker(10 * time.Minute)

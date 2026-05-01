@@ -59,6 +59,7 @@ type ProfileResponse struct {
 	DistanceKm        *float64   `json:"distance_km,omitempty"`
 	IsPrivate         bool       `json:"is_private"`
 	ConnectionStatus  string     `json:"connection_status"`
+	IsBlocked         bool       `json:"is_blocked"`
 }
 
 func mapProfileResponse(p db.GetUserProfileRow) ProfileResponse {
@@ -131,7 +132,24 @@ func (server *Server) getUserProfile(ctx *gin.Context) {
 		}
 	}
 
-	// Try Redis cache first
+	// 1. Enforce Privacy Settings FIRST using Central Rule Engine
+	// This prevents cache leakage for blocked/panic users.
+	authPayload, authExists := ctx.Get(authorizationPayloadKey)
+	if authExists && authPayload != nil {
+		payload := authPayload.(*token.Payload)
+		result := server.privacy.CanViewProfile(ctx, payload.UserID, userID)
+		
+		if !result.Allowed {
+			// As per production spec: Blocked, Panic, or Ghost = Invisible (404)
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+			return
+		}
+
+		// Note: "private" accounts are handled later after data is prepared
+		// because they return a 200 OK but with restricted content.
+	}
+
+	// 2. Try Redis cache for profile data
 	cacheKey := "profile:" + userID.String()
 	cachedData, err := server.redis.Get(context.Background(), cacheKey).Result()
 	
@@ -192,47 +210,38 @@ func (server *Server) getUserProfile(ctx *gin.Context) {
 			} else if err != sql.ErrNoRows {
 				log.Error().Err(err).Msg("failed to get connection status")
 			}
+
+			// Check if blocked
+			blocked, err := server.store.IsUserBlocked(ctx, db.IsUserBlockedParams{
+				BlockerID: payload.UserID,
+				BlockedID: userID,
+			})
+			if err == nil && blocked {
+				rsp.IsBlocked = true
+				rsp.ConnectionStatus = "blocked"
+			}
 		}
 	}
 
-	// Enforce Privacy Settings (Whether from cache or DB)
-	if exists && authPayload != nil {
+	// 3. Handle Private Account Restricted Visibility
+	// We check this after the cache/DB fetch so we have the 'IsPrivate' flag if unauthenticated,
+	// but use the 'result' from earlier if authenticated.
+	isPrivateDenial := false
+	if authExists && authPayload != nil {
 		payload := authPayload.(*token.Payload)
-		canView, reason, err := server.canViewContent(ctx, payload.UserID, userID)
-		if err != nil {
-			ctx.JSON(http.StatusInternalServerError, errorResponse(err))
-			return
-		}
-		if !canView {
-			switch reason {
-			case "blocked":
-				ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
-				return
-			case "private", "panic_mode":
-				// Blank out private information
-				rsp.StoryCount = 0
-				rsp.PostCount = 0
-				rsp.ReelsCount = 0
-				rsp.FollowingCount = 0
-				rsp.FollowersCount = 0
-				rsp.ConnectionCount = 0
-				rsp.ViewsCount = 0
-				rsp.CrossingsCount = 0
-				// Still allow them to see avatar, username, full_name, and bio
-			}
-		}
-
-		// Calculate distance if user is authenticated and viewing different profile
-		if payload.UserID != userID {
-			if viewerLat, viewerLng, viewerExists, err := server.location.GetUserLocation(context.Background(), payload.UserID); err == nil && viewerExists {
-				if profileLat, profileLng, profileExists, err := server.location.GetUserLocation(context.Background(), userID); err == nil && profileExists {
-					distKm := location.HaversineKm(viewerLat, viewerLng, profileLat, profileLng)
-					rsp.DistanceKm = &distKm
-				}
-			}
+		// We already checked result.Allowed at the start.
+		// Now we check if it's a 'private' restriction.
+		result := server.privacy.CanViewProfile(ctx, payload.UserID, userID)
+		if result.Reason == "private" {
+			isPrivateDenial = true
 		}
 	} else if rsp.IsPrivate {
-		// If unauthenticated and private
+		isPrivateDenial = true
+	}
+
+	if isPrivateDenial {
+		// Profile is "found" but "locked" (private)
+		// Blank out private information
 		rsp.StoryCount = 0
 		rsp.PostCount = 0
 		rsp.ReelsCount = 0
@@ -241,6 +250,20 @@ func (server *Server) getUserProfile(ctx *gin.Context) {
 		rsp.ConnectionCount = 0
 		rsp.ViewsCount = 0
 		rsp.CrossingsCount = 0
+		// Still allow avatar, username, full_name, and bio for discovery
+	}
+
+	// 4. Calculate distance if user is authenticated and viewing different profile
+	if authExists && authPayload != nil {
+		payload := authPayload.(*token.Payload)
+		if payload.UserID != userID {
+			if viewerLat, viewerLng, viewerExists, err := server.location.GetUserLocation(context.Background(), payload.UserID); err == nil && viewerExists {
+				if profileLat, profileLng, profileExists, err := server.location.GetUserLocation(context.Background(), userID); err == nil && profileExists {
+					distKm := location.HaversineKm(viewerLat, viewerLng, profileLat, profileLng)
+					rsp.DistanceKm = &distKm
+				}
+			}
+		}
 	}
 
 	ctx.JSON(http.StatusOK, rsp)

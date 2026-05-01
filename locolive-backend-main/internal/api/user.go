@@ -52,8 +52,10 @@ type searchUserResponse struct {
 	Username   string    `json:"username"`
 	FullName   string    `json:"full_name"`
 	AvatarUrl  string    `json:"avatar_url"`
-	IsVerified bool      `json:"is_verified"`
-	IsPrivate  bool      `json:"is_private"`
+	IsVerified       bool      `json:"is_verified"`
+	IsPrivate        bool      `json:"is_private"`
+	ConnectionStatus string    `json:"connection_status"`
+	IsBlocked        bool      `json:"is_blocked"`
 }
 
 func newUserResponse(user db.User) userResponse {
@@ -207,7 +209,7 @@ func (server *Server) loginUser(ctx *gin.Context) {
 	})
 	if err != nil {
 		if err.Error() == "user not found" {
-			ctx.JSON(http.StatusNotFound, errorResponse(err))
+			ctx.JSON(http.StatusUnauthorized, errorResponse(err))
 			return
 		}
 		if err.Error() == "incorrect password" {
@@ -273,6 +275,12 @@ func (server *Server) searchUsers(ctx *gin.Context) {
 		return
 	}
 
+	var currentUserID uuid.UUID
+	authPayload, authExists := ctx.Get(authorizationPayloadKey)
+	if authExists && authPayload != nil {
+		currentUserID = authPayload.(*token.Payload).UserID
+	}
+
 	users, err := server.user.SearchUsers(ctx, query)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
@@ -281,20 +289,58 @@ func (server *Server) searchUsers(ctx *gin.Context) {
 
 	// Initialize as empty array to avoid null in JSON
 	rsp := make([]searchUserResponse, 0, len(users))
+	// authPayload and authExists already declared above
+
 	for _, u := range users {
+		// 1. Exclude self from search
+		if authExists && authPayload != nil && authPayload.(*token.Payload).UserID == u.ID {
+			continue
+		}
+
+		// 2. CENTRAL PRIVACY CHECK: Filter out blocked users
+		if authExists && authPayload != nil {
+			result := server.privacy.CanViewProfile(ctx, authPayload.(*token.Payload).UserID, u.ID)
+			if !result.Allowed {
+				continue // Blocked, Panic, or Ghost (Invisible)
+			}
+		}
+
 		// Ensure avatar_url is a relative path starting with /
 		avatarUrl := u.AvatarUrl.String
 		if avatarUrl != "" && !strings.HasPrefix(avatarUrl, "http") && !strings.HasPrefix(avatarUrl, "/") {
 			avatarUrl = "/" + avatarUrl
 		}
 
+		// Get connection status
+		connStatus := "none"
+		if authExists {
+			conn, err := server.store.GetConnection(ctx, db.GetConnectionParams{
+				RequesterID: currentUserID,
+				TargetID:    u.ID,
+			})
+			if err == nil {
+				connStatus = string(conn.Status)
+			}
+
+			// Check if blocked
+			blocked, err := server.store.IsUserBlocked(ctx, db.IsUserBlockedParams{
+				BlockerID: currentUserID,
+				BlockedID: u.ID,
+			})
+			if err == nil && blocked {
+				connStatus = "blocked"
+			}
+		}
+
 		rsp = append(rsp, searchUserResponse{
-			ID:         u.ID,
-			Username:   u.Username,
-			FullName:   u.FullName,
-			AvatarUrl:  avatarUrl,
-			IsVerified: u.IsVerified,
-			IsPrivate:  u.IsPrivate,
+			ID:               u.ID,
+			Username:         u.Username,
+			FullName:         u.FullName,
+			AvatarUrl:        avatarUrl,
+			IsVerified:       u.IsVerified,
+			IsPrivate:        u.IsPrivate,
+			ConnectionStatus: connStatus,
+			IsBlocked:        connStatus == "blocked",
 		})
 	}
 

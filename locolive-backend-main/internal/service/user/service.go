@@ -134,6 +134,18 @@ func (s *ServiceImpl) LoginUser(ctx context.Context, req LoginUserParams) (*Logi
 		return nil, errors.New("incorrect password")
 	}
 
+	// ─── AUTO-RESTORE SOFT-DELETED ACCOUNTS ──────────────────────────────────────
+	if user.DeletedAt.Valid {
+		// Clear deleted_at and panic_mode
+		err = s.store.RestoreUser(ctx, user.ID)
+		if err != nil {
+			return nil, err
+		}
+		// Refresh user object to reflect changes in tokens/response
+		user, _ = s.store.GetUserByID(ctx, user.ID)
+	}
+	// ────────────────────────────────────────────────────────────────────────────
+
 	accessToken, accessPayload, err := s.tokenMaker.CreateToken(user.Username, user.ID, string(user.Role), s.config.AccessTokenDuration)
 	if err != nil {
 		return nil, err

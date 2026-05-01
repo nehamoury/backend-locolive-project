@@ -113,23 +113,28 @@ func (s *Service) CanUserAccess(ctx context.Context, viewerID, targetID uuid.UUI
 		return AccessResult{Allowed: false, Reason: ReasonDeleted}
 	}
 
+	// Helper to check if viewer is an accepted follower
+	isFollower, _ := s.isFollower(ctx, viewerID, targetID)
+
 	// 2. PANIC MODE CHECK
 	if state.PanicMode {
+		// Allow established connections to bypass total blackout for basic access
+		if isFollower {
+			return AccessResult{Allowed: true, Reason: ReasonPanicMode}
+		}
 		return AccessResult{Allowed: false, Reason: ReasonPanicMode}
 	}
 
 	// 3. GHOST MODE CHECK
 	if state.IsGhostMode {
+		if isFollower {
+			return AccessResult{Allowed: true, Reason: ReasonGhostMode}
+		}
 		return AccessResult{Allowed: false, Reason: ReasonGhostMode}
 	}
 
 	// 4. PRIVATE ACCOUNT CHECK
 	if state.IsPrivate {
-		isFollower, err := s.isFollower(ctx, viewerID, targetID)
-		if err != nil {
-			log.Error().Err(err).Msg("privacy: follower check failed")
-			return AccessResult{Allowed: false, Reason: ReasonPrivate}
-		}
 		if !isFollower {
 			return AccessResult{Allowed: false, Reason: ReasonPrivate}
 		}
@@ -138,7 +143,10 @@ func (s *Service) CanUserAccess(ctx context.Context, viewerID, targetID uuid.UUI
 	// 5. VISIBILITY ENGINE (last_active_at)
 	visibility := s.getVisibilityFromState(state)
 	if visibility == VisibilityHidden {
-		return AccessResult{Allowed: false, Reason: ReasonHidden}
+		// Even if hidden, followers can still access the "ghost" of the profile/chat
+		if !isFollower {
+			return AccessResult{Allowed: false, Reason: ReasonHidden}
+		}
 	}
 
 	// 6. DEFAULT — Public access allowed
@@ -146,8 +154,7 @@ func (s *Service) CanUserAccess(ctx context.Context, viewerID, targetID uuid.UUI
 }
 
 // CanViewProfile is a lenient variant for profile viewing.
-// It still blocks for blocked/panic users, but returns partial results
-// for private/ghost/hidden users (the API layer blanks out sensitive fields).
+// It follows the STRICT priority: Block > Panic > Ghost > Private
 func (s *Service) CanViewProfile(ctx context.Context, viewerID, targetID uuid.UUID) AccessResult {
 	if viewerID == targetID {
 		return AccessResult{Allowed: true}
@@ -155,10 +162,7 @@ func (s *Service) CanViewProfile(ctx context.Context, viewerID, targetID uuid.UU
 
 	// 1. Block check (bidirectional, cached)
 	blocked, err := s.isBlockedCached(ctx, viewerID, targetID)
-	if err != nil {
-		return AccessResult{Allowed: false, Reason: ReasonBlocked}
-	}
-	if blocked {
+	if err != nil || blocked {
 		return AccessResult{Allowed: false, Reason: ReasonBlocked}
 	}
 
@@ -167,16 +171,28 @@ func (s *Service) CanViewProfile(ctx context.Context, viewerID, targetID uuid.UU
 		return AccessResult{Allowed: false, Reason: ReasonDeleted}
 	}
 
-	// 2. Panic mode — visible but restricted
+	// Helper to check if viewer is an accepted follower
+	isFollower, _ := s.isFollower(ctx, viewerID, targetID)
+
+	// 2. Panic mode — Invisible to public, but visible to followers (with restricted stats)
 	if state.PanicMode {
-		return AccessResult{Allowed: true, Reason: ReasonPanicMode}
+		if isFollower {
+			return AccessResult{Allowed: true, Reason: ReasonPanicMode}
+		}
+		return AccessResult{Allowed: false, Reason: ReasonPanicMode}
 	}
 
-	// For profile viewing: ghost/private/hidden users CAN be found,
-	// but their content will be restricted. This is handled by the API layer.
+	// 3. Ghost mode — Similar to Panic
+	if state.IsGhostMode {
+		if isFollower {
+			return AccessResult{Allowed: true, Reason: ReasonGhostMode}
+		}
+		return AccessResult{Allowed: false, Reason: ReasonGhostMode}
+	}
+
+	// 4. Private Account check
 	if state.IsPrivate {
-		isFollower, err := s.isFollower(ctx, viewerID, targetID)
-		if err != nil || !isFollower {
+		if !isFollower {
 			// Allowed=true but Reason=private tells the API to blank out sensitive data
 			return AccessResult{Allowed: true, Reason: ReasonPrivate}
 		}
@@ -184,6 +200,7 @@ func (s *Service) CanViewProfile(ctx context.Context, viewerID, targetID uuid.UU
 
 	return AccessResult{Allowed: true}
 }
+
 
 // GetVisibilityState returns the current visibility state of a user
 func (s *Service) GetVisibilityState(lastActiveAt sql.NullTime) VisibilityState {

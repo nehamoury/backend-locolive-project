@@ -120,10 +120,23 @@ func NewServer(
 	)
 	log.Info().Str("host", host).Msg("Email Service Initialized (SMTP)")
 
+	// Initialize Notification Service (FCM)
+	var notificationService *notification.NotificationService
+	if config.FirebaseCredentialsPath != "" {
+		var notifErr error
+		notificationService, notifErr = notification.NewNotificationService(config.FirebaseCredentialsPath)
+		if notifErr != nil {
+			log.Error().Err(notifErr).Msg("Failed to initialize FCM Notification Service")
+		} else {
+			log.Info().Msg("FCM Notification Service Initialized")
+		}
+	}
+
 	// Initialize and Start Background Workers
-	bgWorker := worker.NewCleanupWorker(store)
+	bgWorker := worker.NewCleanupWorker(store, notificationService)
 	bgWorker.Start()
 	bgWorker.StartCrossingDetector()
+
 
 	// Data Export Worker
 	exportWorker := worker.NewDataExportWorker(store, rdb)
@@ -145,22 +158,13 @@ func NewServer(
 		moderation: modService,
 		mailer:     mailer,
 		privacy:    privacyService,
-	}
-
-	// Initialize Notification Service (FCM)
-	if config.FirebaseCredentialsPath != "" {
-		notificationService, err := notification.NewNotificationService(config.FirebaseCredentialsPath)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to initialize FCM Notification Service")
-		} else {
-			server.notification = notificationService
-			log.Info().Msg("FCM Notification Service Initialized")
-		}
+		notification: notificationService,
 	}
 
 	server.setupRouter()
 	return server, nil
 }
+
 
 // Start runs the HTTP/HTTPS server on a specific address
 func (server *Server) Start(address string) error {

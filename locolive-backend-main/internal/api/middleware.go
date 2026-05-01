@@ -160,7 +160,7 @@ func securityHeadersMiddleware() gin.HandlerFunc {
 			"script-src 'self' 'unsafe-inline' https://api.mapbox.com",
 			"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://api.mapbox.com",
 			"font-src 'self' https://fonts.gstatic.com",
-			"connect-src 'self' https://api.mapbox.com https://*.tiles.mapbox.com *", // Allow all connections (or narrow down to your API domain)
+			"connect-src 'self' https://api.mapbox.com https://*.tiles.mapbox.com ws: wss: localhost:* 127.0.0.1:* 192.168.*",
 			"worker-src 'self' blob:",
 		}, "; ")
 		c.Writer.Header().Set("Content-Security-Policy", csp)

@@ -119,22 +119,39 @@ func (server *Server) blockUser(ctx *gin.Context) {
 		return
 	}
 
-	// Invalidate ALL relevant caches
+	// 1. REMOVE MUTUAL CONNECTIONS (Followers)
+	// This ensures full isolation as per rule: Block > Follow
+	// Delete A -> B
+	_ = server.store.DeleteConnection(ctx, db.DeleteConnectionParams{
+		RequesterID: payload.UserID,
+		TargetID:    blockID,
+	})
+	// Delete B -> A
+	_ = server.store.DeleteConnection(ctx, db.DeleteConnectionParams{
+		RequesterID: blockID,
+		TargetID:    payload.UserID,
+	})
+
+	// 2. INVALIDATE ALL RELEVANT CACHES
 	server.invalidateProfileCache(payload.UserID)
 	server.invalidateProfileCache(blockID)
+	server.invalidateConversationCache(payload.UserID, blockID)
 	server.redis.Del(context.Background(), "connections:"+payload.UserID.String())
+	server.redis.Del(context.Background(), "connections:"+blockID.String())
 	server.privacy.InvalidateBlockCache(ctx, payload.UserID, blockID)
 
-	// Audit log
+	// 3. AUDIT LOG
 	server.privacy.LogAction(ctx, payload.UserID, privacy.AuditActionUserBlocked,
 		map[string]interface{}{"blocked_user_id": blockID.String()},
 		ctx.ClientIP(), ctx.Request.UserAgent(),
 	)
 
-	// Real-time: notify blocked user to refresh state
+	// 4. REAL-TIME ISOLATION
+	// Notify blocked user and force-disconnect their active sessions
 	server.hub.BroadcastForceLogout(blockID, "blocked")
+	server.hub.DisconnectUser(blockID)
 
-	ctx.JSON(http.StatusOK, gin.H{"message": "user blocked"})
+	ctx.JSON(http.StatusOK, gin.H{"message": "user blocked and isolated"})
 }
 
 func (server *Server) unblockUser(ctx *gin.Context) {

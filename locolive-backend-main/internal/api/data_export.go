@@ -42,7 +42,8 @@ func (server *Server) getDataExportStatus(ctx *gin.Context) {
 
 	job, err := server.store.GetLatestDataExportJob(ctx, authPayload.UserID)
 	if err != nil {
-		ctx.JSON(http.StatusNotFound, gin.H{"error": "no export requests found"})
+		// Return 200 with null instead of 404 to avoid browser console noise
+		ctx.JSON(http.StatusOK, successResponse(nil))
 		return
 	}
 

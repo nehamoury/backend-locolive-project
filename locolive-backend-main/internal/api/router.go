@@ -268,19 +268,19 @@ func (server *Server) setupRouter() {
 	router.Static("/uploads", "./uploads")
 
 	// Frontend static files (SPA with fallback to index.html)
-	router.Static("/assets", "../frontend/dist/assets")
-	router.StaticFile("/manifest.webmanifest", "../frontend/dist/manifest.webmanifest")
-	router.StaticFile("/sw.js", "../frontend/dist/sw.js")
-	router.StaticFile("/pwa-192x192.png", "../frontend/dist/pwa-192x192.png")
-	router.StaticFile("/pwa-512x512.png", "../frontend/dist/pwa-512x512.png")
-	router.StaticFile("/favicon.svg", "../frontend/dist/favicon.svg")
+	router.Static("/assets", "../../frontend/frontend/dist/assets")
+	router.StaticFile("/manifest.webmanifest", "../../frontend/frontend/dist/manifest.webmanifest")
+	router.StaticFile("/sw.js", "../../frontend/frontend/dist/sw.js")
+	router.StaticFile("/pwa-192x192.png", "../../frontend/frontend/dist/pwa-192x192.png")
+	router.StaticFile("/pwa-512x512.png", "../../frontend/frontend/dist/pwa-512x512.png")
+	router.StaticFile("/favicon.svg", "../../frontend/frontend/dist/favicon.svg")
 	router.GET("/favicon.ico", func(c *gin.Context) {
 		c.Status(204)
 	})
 
 	// SPA fallback: serve index.html for all unmatched routes (allows client-side routing)
 	router.NoRoute(func(c *gin.Context) {
-		c.File("../frontend/dist/index.html")
+		c.File("../../frontend/frontend/dist/index.html")
 	})
 
 	server.router = router

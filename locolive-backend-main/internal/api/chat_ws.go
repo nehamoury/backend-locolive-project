@@ -2,6 +2,7 @@ package api
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -20,12 +21,16 @@ var upgrader = websocket.Upgrader{
 			return true
 		}
 
-		// In production, check against allowed origins
 		origin := r.Header.Get("Origin")
+		// Also allow local network origins for mobile testing even if not in explicit debug mode
+		if origin != "" && (strings.Contains(origin, "localhost") || strings.Contains(origin, "127.0.0.1") || strings.HasPrefix(origin, "http://192.168.")) {
+			return true
+		}
+
 		allowedOrigins := []string{
 			"http://localhost:5173",
 			"http://localhost:3000",
-			"https://yourdomain.com", // Add your production domain
+			"https://locolive.appnity.co.in",
 		}
 
 		for _, allowed := range allowedOrigins {

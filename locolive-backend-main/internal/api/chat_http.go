@@ -18,72 +18,22 @@ import (
 
 const chatCacheTTL = 10 * time.Minute
 
-// checkConnection verifies that two users have an accepted connection AND no blocks exist
-func (server *Server) checkConnection(ctx context.Context, userID1, userID2 uuid.UUID) error {
-	// 1. Check for blocking (bi-directional)
-	// We need to check BOTH directions: userID1 blocks userID2 OR userID2 blocks userID1.
+// checkConnection verifies that two users can interact based on the centralized privacy rule engine
+func (server *Server) checkConnection(ctx context.Context, viewerID, targetID uuid.UUID) error {
+	// Use the CENTRAL RULE ENGINE for all access decisions
+	// This automatically handles: Block > Panic > Ghost > Private
+	result := server.privacy.CanUserAccess(ctx, viewerID, targetID)
 
-	// Check if userID2 (target) blocked userID1 (requester) - Crucial for privacy
-	isBlockedByTarget, err := server.store.IsUserBlocked(ctx, db.IsUserBlockedParams{
-		BlockerID: userID2,
-		BlockedID: userID1,
-	})
-	if err != nil {
-		return err
+	if !result.Allowed {
+		switch result.Reason {
+		case "blocked", "panic_mode", "ghost_mode":
+			return sql.ErrNoRows // Return 404 behavior (invisible)
+		case "private":
+			return fmt.Errorf("private account") // Handled as 403 by caller
+		default:
+			return sql.ErrNoRows
+		}
 	}
-	if isBlockedByTarget {
-		return sql.ErrNoRows // Treat as no connection (invisible)
-	}
-
-	// Check if userID1 (requester) blocked userID2 (target) - Usually UI prevents this, but API should too
-	isBlockedByRequester, err := server.store.IsUserBlocked(ctx, db.IsUserBlockedParams{
-		BlockerID: userID1,
-		BlockedID: userID2,
-	})
-	if err != nil {
-		return err
-	}
-	if isBlockedByRequester {
-		return sql.ErrNoRows
-	}
-
-	// 2. Check Connection Status
-	conn, err := server.store.GetConnection(ctx, db.GetConnectionParams{
-		RequesterID: userID1,
-		TargetID:    userID2,
-	})
-	if err != nil {
-		return err
-	}
-	if conn.Status != "accepted" {
-		return sql.ErrNoRows
-	}
-
-	// 3. Check Privacy Settings (Who Can Message) of Target (userID2)
-	// Only if strictly messaging logic is needed here. But checkConnection is used for GetChatHistory too.
-	// We probably want to allow seeing history even if settings change?
-	// But usually if someone says "Nobody can message me", they shouldn't receive NEW messages.
-	// Reading old ones might be ok.
-	// Let's enforce "Who Can Message" only in sendMessage, or purely here?
-	// If I set "Nobody", I probably don't want to be bothered properly.
-
-	// Let's fetch settings for target
-	settings, err := server.store.GetPrivacySettings(ctx, userID2)
-	if err != nil && err != sql.ErrNoRows {
-		return err
-	}
-
-	// Default to connections if no settings
-	whoCanMessage := "connections"
-	if err == nil && settings.WhoCanMessage.Valid {
-		whoCanMessage = settings.WhoCanMessage.String
-	}
-
-	if whoCanMessage == "nobody" {
-		return sql.ErrNoRows // Block access
-	}
-	// "connections" is already satisfied by step 2.
-	// "everyone" is also satisfied (since we enforce connection anyway for now).
 
 	return nil
 }
@@ -98,14 +48,23 @@ func (server *Server) getChatHistory(ctx *gin.Context) {
 	authPayload := getAuthPayload(ctx)
 
 	// Check for mutual connection
-	if err := server.checkConnection(ctx, authPayload.UserID, targetID); err != nil {
-		if err == sql.ErrNoRows {
-			ctx.JSON(http.StatusForbidden, gin.H{"error": "You must be connected to this user to chat."})
-			return
+	access := server.privacy.CanUserAccess(ctx, authPayload.UserID, targetID)
+	if !access.Allowed {
+		reason := "You must be connected to this user to chat."
+		switch access.Reason {
+		case "blocked":
+			reason = "This user has blocked you or you have blocked them."
+		case "panic_mode", "ghost_mode":
+			reason = "This user is currently unavailable due to their privacy settings."
+		case "private":
+			reason = "You must be an accepted follower to message this private account."
+		case "hidden":
+			reason = "This user is currently inactive."
 		}
-		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		ctx.JSON(http.StatusForbidden, gin.H{"error": reason})
 		return
 	}
+
 
 	// Create cache key with sorted IDs for consistency
 	ids := []string{authPayload.UserID.String(), targetID.String()}
@@ -229,13 +188,20 @@ func (server *Server) sendMessage(ctx *gin.Context) {
 
 	if req.ReceiverID != nil {
 		receiverID = uuid.NullUUID{UUID: *req.ReceiverID, Valid: true}
-		// Check for mutual connection before sending (1:1 only)
-		if err := server.checkConnection(ctx, authPayload.UserID, *req.ReceiverID); err != nil {
-			if err == sql.ErrNoRows {
-				ctx.JSON(http.StatusForbidden, gin.H{"error": "You must be connected to this user to send messages."})
-				return
+		
+		// Centralized Privacy Check: Block, Panic, Ghost, etc.
+		access := server.privacy.CanUserAccess(ctx, authPayload.UserID, *req.ReceiverID)
+		if !access.Allowed {
+			reason := "Access denied"
+			switch access.Reason {
+			case "blocked":
+				reason = "You cannot message this user."
+			case "panic_mode", "ghost_mode":
+				reason = "User is currently unavailable."
+			case "private":
+				reason = "You must be connected to this user to send messages."
 			}
-			ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+			ctx.JSON(http.StatusForbidden, gin.H{"error": reason})
 			return
 		}
 	}
@@ -793,6 +759,7 @@ func (server *Server) getConversationList(ctx *gin.Context) {
 		LastMessageAt time.Time `json:"last_message_at"`
 		LastSenderID  uuid.UUID `json:"last_sender_id"`
 		UnreadCount   int64     `json:"unread_count"`
+		IsBlocked     bool      `json:"is_blocked"`
 	}
 
 	response := make([]ConversationResponse, len(conversations))
@@ -801,6 +768,12 @@ func (server *Server) getConversationList(ctx *gin.Context) {
 		if count, ok := conv.UnreadCount.(int64); ok {
 			unreadCount = count
 		}
+
+		// Check if blocked
+		isBlocked, _ := server.store.IsUserBlocked(ctx, db.IsUserBlockedParams{
+			BlockerID: authPayload.UserID,
+			BlockedID: conv.ID,
+		})
 
 		response[i] = ConversationResponse{
 			ID:            conv.ID,
@@ -811,6 +784,7 @@ func (server *Server) getConversationList(ctx *gin.Context) {
 			LastMessageAt: conv.LastMessageAt,
 			LastSenderID:  conv.LastSenderID,
 			UnreadCount:   unreadCount,
+			IsBlocked:     isBlocked,
 		}
 	}
 

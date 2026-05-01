@@ -194,14 +194,14 @@ func (server *Server) getNearbyUsers(ctx *gin.Context) {
 		if err != nil {
 			continue
 		}
+
+		// CENTRAL PRIVACY CHECK: Filter out blocked users
+		result := server.privacy.CanViewProfile(ctx, authPayload.UserID, targetID)
+		if !result.Allowed {
+			continue // Blocked, Panic, or Ghost (Invisible)
+		}
+
 		user, err := server.store.GetUserByID(ctx, targetID)
-		if err != nil {
-			log.Debug().Str("target_id", targetID.String()).Err(err).Msg("[GetNearbyUsers] Failed to fetch user, skipping")
-			continue
-		}
-		if user.IsGhostMode {
-			continue
-		}
 
 		avatar := ""
 		if user.AvatarUrl.Valid {

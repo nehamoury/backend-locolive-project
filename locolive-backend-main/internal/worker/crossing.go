@@ -89,6 +89,18 @@ func (worker *CleanupWorker) detectCrossings() {
 		})
 		if err != nil {
 			log.Printf("failed to create crossing notification for user1: %v", err)
+		} else {
+			// Trigger Push Notification
+			go worker.sendPushNotificationToUser(
+				context.Background(),
+				c.User1,
+				title,
+				message,
+				map[string]string{
+					"type": "crossing_detected",
+					"crossing_id": crossing.ID.String(),
+				},
+			)
 		}
 
 		// Notification for user2
@@ -104,7 +116,20 @@ func (worker *CleanupWorker) detectCrossings() {
 		})
 		if err != nil {
 			log.Printf("failed to create crossing notification for user2: %v", err)
+		} else {
+			// Trigger Push Notification
+			go worker.sendPushNotificationToUser(
+				context.Background(),
+				c.User2,
+				title,
+				message,
+				map[string]string{
+					"type": "crossing_detected",
+					"crossing_id": crossing.ID.String(),
+				},
+			)
 		}
+
 	}
 
 	log.Printf("Processed %d potential crossings", len(crossings))

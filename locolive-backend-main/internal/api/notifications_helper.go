@@ -64,23 +64,59 @@ func (server *Server) createNotificationWithSound(
 		return notif, err
 	}
 
+	// AUTOMATICALLY send push notification for all persistent notifications
+	go server.sendPushNotificationToUser(
+		context.Background(),
+		userID,
+		title,
+		message,
+		map[string]string{
+			"type":    string(nType),
+			"subtype": subType,
+			"notif_id": notif.ID.String(),
+		},
+	)
+
 	return notif, nil
 }
+
 
 // sendPushNotificationToUser fetches all FCM tokens for a user and sends a push notification
 func (server *Server) sendPushNotificationToUser(ctx context.Context, userID uuid.UUID, title, body string, data map[string]string) {
 	if server.notification == nil {
+		log.Debug().Msg("FCM notification service not initialized, skipping push")
 		return
 	}
 
 	tokens, err := server.store.GetUserFCMTokens(ctx, userID)
-	if err != nil || len(tokens) == 0 {
+	if err != nil {
+		log.Error().Err(err).Str("user_id", userID.String()).Msg("failed to fetch FCM tokens for user")
+		return
+	}
+	
+	if len(tokens) == 0 {
 		return
 	}
 
 	// Send to all registered devices for this user
-	err = server.notification.SendMulticastNotification(ctx, tokens, title, body, data)
+	invalidTokens, err := server.notification.SendMulticastNotification(ctx, tokens, title, body, data)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to send multicast push notification")
+		return
+	}
+
+	// Clean up invalid tokens
+	if len(invalidTokens) > 0 {
+		for _, token := range invalidTokens {
+			log.Info().Str("token", token).Str("user_id", userID.String()).Msg("removing invalid FCM token")
+			err := server.store.RemoveFCMToken(ctx, db.RemoveFCMTokenParams{
+				UserID: userID,
+				Token:  token,
+			})
+			if err != nil {
+				log.Error().Err(err).Str("token", token).Msg("failed to remove invalid FCM token")
+			}
+		}
 	}
 }
+

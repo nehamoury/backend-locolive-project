@@ -2,8 +2,10 @@ package notification
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/messaging"
@@ -15,8 +17,24 @@ type NotificationService struct {
 }
 
 func NewNotificationService(credentialsPath string) (*NotificationService, error) {
+	// Explicitly extract project_id from the credentials file
+	// This fixes the "project ID is required" error for FCM
+	var projectID string
+	if data, err := os.ReadFile(credentialsPath); err == nil {
+		var creds struct {
+			ProjectID string `json:"project_id"`
+		}
+		if err := json.Unmarshal(data, &creds); err == nil {
+			projectID = creds.ProjectID
+		}
+	}
+
 	opt := option.WithCredentialsFile(credentialsPath)
-	app, err := firebase.NewApp(context.Background(), nil, opt)
+	config := &firebase.Config{
+		ProjectID: projectID,
+	}
+	
+	app, err := firebase.NewApp(context.Background(), config, opt)
 	if err != nil {
 		return nil, fmt.Errorf("error initializing firebase app: %v", err)
 	}

@@ -93,7 +93,7 @@ func (server *Server) createStory(ctx *gin.Context) {
 	// Gamification: Update user streak
 	go server.updateStreakLogic(authPayload.UserID)
 
-	ctx.JSON(http.StatusCreated, toStoryResponseFromCreate(*result))
+	ctx.JSON(http.StatusCreated, successResponse(toStoryResponseFromCreate(*result)))
 }
 
 type getFeedRequest struct {
@@ -115,10 +115,9 @@ func (server *Server) getFeed(ctx *gin.Context) {
 	if len(userGeohash) > 5 {
 		userGeohash = userGeohash[:5]
 	}
-	// cacheKey := "feed:" + userGeohash
+	cacheKey := "feed:" + userGeohash
 
-	/* // Disable cache for now to fix visibility issues
-	// Try to get from Redis cache first
+	// Try to get from Redis cache first (1 min TTL for safe load shedding)
 	cachedData, err := server.redis.Get(ctx, cacheKey).Result()
 	if err == nil && cachedData != "" {
 		// Cache hit - return cached data
@@ -126,7 +125,6 @@ func (server *Server) getFeed(ctx *gin.Context) {
 		ctx.Data(http.StatusOK, "application/json", []byte(cachedData))
 		return
 	}
-	*/
 
 	stories, message, radius, err := server.story.GetFeed(ctx, story.GetFeedParams{
 		UserID:    authPayload.UserID,
@@ -151,11 +149,9 @@ func (server *Server) getFeed(ctx *gin.Context) {
 		"search_radius": radius,
 	}
 
-	/* // Disable cache for now
-	// Cache the result for 5 minutes
+	// Cache the result for 1 minute
 	responseJSON, _ := json.Marshal(response)
-	server.redis.Set(ctx, cacheKey, responseJSON, feedCacheTTL)
-	*/
+	server.redis.Set(ctx, cacheKey, responseJSON, 1 * time.Minute)
 
 	ctx.Header("X-Cache", "MISS")
 	ctx.JSON(http.StatusOK, response)
@@ -186,7 +182,7 @@ func (server *Server) deleteUserStory(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"message": "story deleted successfully"})
+	ctx.JSON(http.StatusOK, successResponse("story deleted successfully"))
 }
 
 type updateStoryRequest struct {
@@ -254,7 +250,7 @@ func (server *Server) updateStory(ctx *gin.Context) {
 	// Convert to response
 	rsp := toStoryResponseFromUpdate(story)
 
-	ctx.JSON(http.StatusOK, rsp)
+	ctx.JSON(http.StatusOK, successResponse(rsp))
 }
 
 // getConnectionStories returns stories from connected users, ignoring radius
@@ -262,17 +258,15 @@ func (server *Server) getConnectionStories(ctx *gin.Context) {
 	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
 
 	// Cache key based on user ID
-	// cacheKey := "stories:connections:" + authPayload.UserID.String()
+	cacheKey := "stories:connections:" + authPayload.UserID.String()
 
-	/* // Disable cache for now to ensure instant visibility
-	// Try Redis cache first
+	// Try Redis cache first (1 min TTL)
 	cachedData, err := server.redis.Get(ctx, cacheKey).Result()
 	if err == nil && cachedData != "" {
 		ctx.Header("X-Cache", "HIT")
 		ctx.Data(http.StatusOK, "application/json", []byte(cachedData))
 		return
 	}
-	*/
 
 	stories, err := server.store.GetConnectionStories(ctx, authPayload.UserID)
 	if err != nil {
@@ -286,14 +280,11 @@ func (server *Server) getConnectionStories(ctx *gin.Context) {
 		storyResponses[i] = toStoryResponseFromConnection(story)
 	}
 
-	/* // Disable cache for now
-	// Cache for 5 minutes
+	// Cache for 1 minute
 	responseJSON, _ := json.Marshal(storyResponses)
-	server.redis.Set(ctx, cacheKey, responseJSON, feedCacheTTL)
-	*/
+	server.redis.Set(ctx, cacheKey, responseJSON, 1 * time.Minute)
 
-	ctx.Header("X-Cache", "MISS")
-	ctx.JSON(http.StatusOK, storyResponses)
+	ctx.JSON(http.StatusOK, successResponse(storyResponses))
 }
 
 // getStory retrieves a single story by ID
@@ -320,6 +311,14 @@ func (server *Server) getStory(ctx *gin.Context) {
 		return
 	}
 
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+
+	result := server.privacy.CanUserAccess(ctx, authPayload.UserID, story.UserID)
+	if !result.Allowed {
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "story not found"})
+		return
+	}
+
 	// Convert to response DTO
 	rsp := toStoryResponseFromGet(story)
 
@@ -332,7 +331,7 @@ func (server *Server) getStory(ctx *gin.Context) {
 		}
 	}
 
-	ctx.JSON(http.StatusOK, rsp)
+	ctx.JSON(http.StatusOK, successResponse(rsp))
 }
 
 func (server *Server) getMyStories(ctx *gin.Context) {
@@ -385,5 +384,5 @@ func (server *Server) getUserStories(ctx *gin.Context) {
 		storyResponses[i] = toStoryResponseFromActive(s)
 	}
 
-	ctx.JSON(http.StatusOK, storyResponses)
+	ctx.JSON(http.StatusOK, successResponse(storyResponses))
 }

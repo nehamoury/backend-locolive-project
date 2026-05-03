@@ -13,16 +13,22 @@ import (
 
 // Rate limit configurations
 var (
-	// General API rate limit: 500 requests per minute (increased from 100)
+	// General API rate limit: 100 requests per minute
 	generalRate = limiter.Rate{
 		Period: 1 * time.Minute,
-		Limit:  500,
+		Limit:  100,
 	}
 
-	// Auth endpoints: 500 requests per 1 minute (increased for development)
+	// Auth endpoints: 10 requests per 1 minute (Stricter for production)
 	authRate = limiter.Rate{
 		Period: 1 * time.Minute,
-		Limit:  500,
+		Limit:  10,
+	}
+
+	// Engagement (Likes/Follows): 60 per minute
+	engagementRate = limiter.Rate{
+		Period: 1 * time.Minute,
+		Limit:  60,
 	}
 
 	// Story creation: 50 per hour
@@ -49,10 +55,10 @@ var (
 		Limit:  10,
 	}
 
-	// Username availability check: 30 requests per minute (stricter for enumeration protection)
+	// Username availability check: 10 requests per minute
 	usernameCheckRate = limiter.Rate{
 		Period: 1 * time.Minute,
-		Limit:  30,
+		Limit:  10,
 	}
 )
 
@@ -129,7 +135,11 @@ func (server *Server) searchRateLimiter() gin.HandlerFunc {
 }
 
 // usernameCheckRateLimiter applies strict rate limiting for username availability checks
-// to prevent username enumeration attacks
 func (server *Server) usernameCheckRateLimiter() gin.HandlerFunc {
 	return server.createRateLimiter(usernameCheckRate)
+}
+
+// engagementRateLimiter applies rate limiting for likes and follows
+func (server *Server) engagementRateLimiter() gin.HandlerFunc {
+	return server.createRateLimiter(engagementRate)
 }

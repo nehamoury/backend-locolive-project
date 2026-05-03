@@ -60,10 +60,11 @@ func (s *S3Service) UploadFile(ctx context.Context, file multipart.File, fileHea
 	}
 
 	_, err := s.client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:      aws.String(s.bucketName),
-		Key:         aws.String(key),
-		Body:        file,
-		ContentType: aws.String(contentType),
+		Bucket:       aws.String(s.bucketName),
+		Key:          aws.String(key),
+		Body:         file,
+		ContentType:  aws.String(contentType),
+		CacheControl: aws.String("public, max-age=3600"),
 		// ACL is often not supported or needed for R2 depending on bucket settings, but public-read is common for S3
 		// ACL: types.ObjectCannedACLPublicRead,
 	})

@@ -119,6 +119,14 @@ func ValidateUsername(input string) (normalized string, valid bool, errorCode st
 
 	normalized = NormalizeUsername(input)
 
+	// Reject inputs that require dropping disallowed characters.
+	// Allowed transformations are: trim spaces, lowercase, and optional leading '@'.
+	raw := strings.TrimSpace(strings.ToLower(input))
+	raw = strings.TrimPrefix(raw, "@")
+	if normalized != "" && raw != normalized {
+		return normalized, false, "invalid_format"
+	}
+
 	if normalized == "" {
 		return "", false, "invalid_chars"
 	}

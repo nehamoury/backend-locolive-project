@@ -26,6 +26,17 @@ func (q *Queries) AdminDeletePostComment(ctx context.Context, id uuid.UUID) (uui
 	return post_id, err
 }
 
+const countPostsByUserID = `-- name: CountPostsByUserID :one
+SELECT COUNT(*) FROM posts WHERE user_id = $1
+`
+
+func (q *Queries) CountPostsByUserID(ctx context.Context, userID uuid.UUID) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPostsByUserID, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createPost = `-- name: CreatePost :one
 INSERT INTO posts (user_id, media_url, media_type, caption, body_text, location_name, geohash, geom, crop_settings)
 VALUES (
@@ -154,15 +165,6 @@ func (q *Queries) DecrementPostComments(ctx context.Context, id uuid.UUID) error
 	return err
 }
 
-const decrementPostLikes = `-- name: DecrementPostLikes :exec
-UPDATE posts SET likes_count = GREATEST(0, likes_count - 1) WHERE id = $1
-`
-
-func (q *Queries) DecrementPostLikes(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.ExecContext(ctx, decrementPostLikes, id)
-	return err
-}
-
 const deletePost = `-- name: DeletePost :exec
 DELETE FROM posts WHERE id = $1 AND user_id = $2
 `
@@ -248,15 +250,6 @@ func (q *Queries) IncrementPostComments(ctx context.Context, id uuid.UUID) error
 	return err
 }
 
-const incrementPostLikes = `-- name: IncrementPostLikes :exec
-UPDATE posts SET likes_count = likes_count + 1 WHERE id = $1
-`
-
-func (q *Queries) IncrementPostLikes(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.ExecContext(ctx, incrementPostLikes, id)
-	return err
-}
-
 const incrementPostShares = `-- name: IncrementPostShares :exec
 UPDATE posts SET shares_count = shares_count + 1 WHERE id = $1
 `
@@ -266,27 +259,30 @@ func (q *Queries) IncrementPostShares(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-const likePost = `-- name: LikePost :one
-INSERT INTO post_likes (post_id, user_id) VALUES ($1, $2)
-ON CONFLICT (post_id, user_id) DO NOTHING
-RETURNING id, post_id, user_id, created_at
+const likePostAtomic = `-- name: LikePostAtomic :one
+WITH inserted AS (
+    INSERT INTO post_likes (post_id, user_id)
+    VALUES ($1, $2)
+    ON CONFLICT (post_id, user_id) DO NOTHING
+    RETURNING post_id
+)
+UPDATE posts p
+SET likes_count = p.likes_count + 1
+FROM inserted i
+WHERE p.id = i.post_id
+RETURNING p.likes_count
 `
 
-type LikePostParams struct {
-	PostID uuid.UUID `json:"post_id"`
-	UserID uuid.UUID `json:"user_id"`
+type LikePostAtomicParams struct {
+	PostID  uuid.UUID `json:"post_id"`
+	LikerID uuid.UUID `json:"liker_id"`
 }
 
-func (q *Queries) LikePost(ctx context.Context, arg LikePostParams) (PostLike, error) {
-	row := q.db.QueryRowContext(ctx, likePost, arg.PostID, arg.UserID)
-	var i PostLike
-	err := row.Scan(
-		&i.ID,
-		&i.PostID,
-		&i.UserID,
-		&i.CreatedAt,
-	)
-	return i, err
+func (q *Queries) LikePostAtomic(ctx context.Context, arg LikePostAtomicParams) (int32, error) {
+	row := q.db.QueryRowContext(ctx, likePostAtomic, arg.PostID, arg.LikerID)
+	var likes_count int32
+	err := row.Scan(&likes_count)
+	return likes_count, err
 }
 
 const listConnectionsPosts = `-- name: ListConnectionsPosts :many
@@ -370,6 +366,52 @@ func (q *Queries) ListConnectionsPosts(ctx context.Context, arg ListConnectionsP
 			&i.LatOut,
 			&i.LngOut,
 			&i.LikedByViewer,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLikedPostsByUserID = `-- name: ListLikedPostsByUserID :many
+SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.location_name, p.geohash, p.geom, p.likes_count, p.comments_count, p.created_at, p.updated_at, p.body_text, p.shares_count, p.crop_settings FROM posts p
+JOIN post_likes pl ON p.id = pl.post_id
+WHERE pl.user_id = $1
+ORDER BY pl.created_at DESC
+`
+
+func (q *Queries) ListLikedPostsByUserID(ctx context.Context, userID uuid.UUID) ([]Post, error) {
+	rows, err := q.db.QueryContext(ctx, listLikedPostsByUserID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Post
+	for rows.Next() {
+		var i Post
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.MediaUrl,
+			&i.MediaType,
+			&i.Caption,
+			&i.LocationName,
+			&i.Geohash,
+			&i.Geom,
+			&i.LikesCount,
+			&i.CommentsCount,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.BodyText,
+			&i.SharesCount,
+			&i.CropSettings,
 		); err != nil {
 			return nil, err
 		}
@@ -529,16 +571,27 @@ func (q *Queries) ListPostsByUserID(ctx context.Context, arg ListPostsByUserIDPa
 	return items, nil
 }
 
-const unlikePost = `-- name: UnlikePost :exec
-DELETE FROM post_likes WHERE post_id = $1 AND user_id = $2
+const unlikePostAtomic = `-- name: UnlikePostAtomic :one
+WITH deleted AS (
+    DELETE FROM post_likes
+    WHERE post_likes.post_id = $1 AND post_likes.user_id = $2
+    RETURNING post_id
+)
+UPDATE posts p
+SET likes_count = GREATEST(0, p.likes_count - 1)
+FROM deleted d
+WHERE p.id = d.post_id
+RETURNING p.likes_count
 `
 
-type UnlikePostParams struct {
-	PostID uuid.UUID `json:"post_id"`
-	UserID uuid.UUID `json:"user_id"`
+type UnlikePostAtomicParams struct {
+	PostID  uuid.UUID `json:"post_id"`
+	LikerID uuid.UUID `json:"liker_id"`
 }
 
-func (q *Queries) UnlikePost(ctx context.Context, arg UnlikePostParams) error {
-	_, err := q.db.ExecContext(ctx, unlikePost, arg.PostID, arg.UserID)
-	return err
+func (q *Queries) UnlikePostAtomic(ctx context.Context, arg UnlikePostAtomicParams) (int32, error) {
+	row := q.db.QueryRowContext(ctx, unlikePostAtomic, arg.PostID, arg.LikerID)
+	var likes_count int32
+	err := row.Scan(&likes_count)
+	return likes_count, err
 }

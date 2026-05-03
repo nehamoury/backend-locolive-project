@@ -38,10 +38,20 @@ type connectionResponse struct {
 	MutualCount   int64            `json:"mutual_count"`
 }
 
-func (server *Server) listConnections(ctx *gin.Context) {
+// listMeConnections returns the current user's connections (bidirectional)
+// GET /api/me/connections
+func (server *Server) listMeConnections(ctx *gin.Context) {
 	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+	viewerID := authPayload.UserID
 
-	connections, err := server.store.ListConnections(ctx, authPayload.UserID)
+	// DEBUG: Log viewer and target
+	log.Info().
+		Str("viewer_id", viewerID.String()).
+		Str("target_id", viewerID.String()).
+		Str("endpoint", "/me/connections").
+		Msg("[PRIVACY DEBUG] Fetching connections")
+
+	connections, err := server.store.ListConnections(ctx, viewerID)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
@@ -65,8 +75,77 @@ func (server *Server) listConnections(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, rsp)
 }
 
-func (server *Server) listFollowers(ctx *gin.Context) {
+// listUserConnections returns a specific user's connections with privacy enforcement
+// GET /api/users/:id/connections
+func (server *Server) listUserConnections(ctx *gin.Context) {
 	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+	viewerID := authPayload.UserID
+
+	targetID, err := uuid.Parse(ctx.Param("id"))
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, errorResponse(err))
+		return
+	}
+
+	// DEBUG: Log viewer and target
+	log.Info().
+		Str("viewer_id", viewerID.String()).
+		Str("target_id", targetID.String()).
+		Str("endpoint", "/users/:id/connections").
+		Msg("[PRIVACY DEBUG] Fetching user connections")
+
+	// PRIVACY CHECK: viewer vs target
+	result := server.privacy.CanUserAccess(ctx, viewerID, targetID)
+	if !result.Allowed {
+		log.Warn().
+			Str("viewer_id", viewerID.String()).
+			Str("target_id", targetID.String()).
+			Str("reason", string(result.Reason)).
+			Msg("[PRIVACY BLOCKED] Connections access denied")
+		if result.Reason == "private" {
+			ctx.JSON(http.StatusForbidden, gin.H{"error": "this account is private"})
+			return
+		}
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+
+	connections, err := server.store.ListConnections(ctx, targetID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	rsp := make([]friendResponse, len(connections))
+	for i, c := range connections {
+		var lastActive *time.Time
+		if c.LastActiveAt.Valid {
+			lastActive = &c.LastActiveAt.Time
+		}
+		rsp[i] = friendResponse{
+			ID:           c.ID,
+			Username:     c.Username,
+			FullName:     c.FullName,
+			AvatarUrl:    c.AvatarUrl.String,
+			LastActiveAt: lastActive,
+		}
+	}
+
+	ctx.JSON(http.StatusOK, rsp)
+}
+
+// listMeFollowers returns the current user's followers
+// GET /api/me/followers
+func (server *Server) listMeFollowers(ctx *gin.Context) {
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+	viewerID := authPayload.UserID
+
+	// DEBUG: Log viewer and target
+	log.Info().
+		Str("viewer_id", viewerID.String()).
+		Str("target_id", viewerID.String()).
+		Str("endpoint", "/me/followers").
+		Msg("[PRIVACY DEBUG] Fetching followers")
 
 	query := `
 		SELECT u.id, u.username, u.full_name, u.avatar_url, u.last_active_at
@@ -75,7 +154,7 @@ func (server *Server) listFollowers(ctx *gin.Context) {
 		WHERE c.target_id = $1
 		  AND c.status = 'accepted'
 	`
-	rows, err := server.store.GetDB().QueryContext(ctx, query, authPayload.UserID)
+	rows, err := server.store.GetDB().QueryContext(ctx, query, viewerID)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
@@ -94,15 +173,91 @@ func (server *Server) listFollowers(ctx *gin.Context) {
 			c.LastActiveAt = &lastActive.Time
 		}
 		c.AvatarUrl = avatarUrl.String
-		c.FullName = c.FullName + " [Follower]"
 		rsp = append(rsp, c)
 	}
 
 	ctx.JSON(http.StatusOK, rsp)
 }
 
-func (server *Server) listFollowing(ctx *gin.Context) {
+// listUserFollowers returns a specific user's followers with privacy enforcement
+// GET /api/users/:id/followers
+func (server *Server) listUserFollowers(ctx *gin.Context) {
 	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+	viewerID := authPayload.UserID
+
+	targetID, err := uuid.Parse(ctx.Param("id"))
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, errorResponse(err))
+		return
+	}
+
+	// DEBUG: Log viewer and target
+	log.Info().
+		Str("viewer_id", viewerID.String()).
+		Str("target_id", targetID.String()).
+		Str("endpoint", "/users/:id/followers").
+		Msg("[PRIVACY DEBUG] Fetching user followers")
+
+	// PRIVACY CHECK: viewer vs target
+	result := server.privacy.CanUserAccess(ctx, viewerID, targetID)
+	if !result.Allowed {
+		log.Warn().
+			Str("viewer_id", viewerID.String()).
+			Str("target_id", targetID.String()).
+			Str("reason", string(result.Reason)).
+			Msg("[PRIVACY BLOCKED] Followers access denied")
+		if result.Reason == "private" {
+			ctx.JSON(http.StatusForbidden, gin.H{"error": "this account is private"})
+			return
+		}
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+
+	query := `
+		SELECT u.id, u.username, u.full_name, u.avatar_url, u.last_active_at
+		FROM connections c
+		JOIN users u ON u.id = c.requester_id
+		WHERE c.target_id = $1
+		  AND c.status = 'accepted'
+	`
+	rows, err := server.store.GetDB().QueryContext(ctx, query, targetID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+	defer rows.Close()
+
+	var rsp []friendResponse
+	for rows.Next() {
+		var c friendResponse
+		var lastActive sql.NullTime
+		var avatarUrl sql.NullString
+		if err := rows.Scan(&c.ID, &c.Username, &c.FullName, &avatarUrl, &lastActive); err != nil {
+			continue
+		}
+		if lastActive.Valid {
+			c.LastActiveAt = &lastActive.Time
+		}
+		c.AvatarUrl = avatarUrl.String
+		rsp = append(rsp, c)
+	}
+
+	ctx.JSON(http.StatusOK, rsp)
+}
+
+// listMeFollowing returns the current user's following list
+// GET /api/me/following
+func (server *Server) listMeFollowing(ctx *gin.Context) {
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+	viewerID := authPayload.UserID
+
+	// DEBUG: Log viewer and target
+	log.Info().
+		Str("viewer_id", viewerID.String()).
+		Str("target_id", viewerID.String()).
+		Str("endpoint", "/me/following").
+		Msg("[PRIVACY DEBUG] Fetching following")
 
 	query := `
 		SELECT u.id, u.username, u.full_name, u.avatar_url, u.last_active_at
@@ -111,7 +266,7 @@ func (server *Server) listFollowing(ctx *gin.Context) {
 		WHERE c.requester_id = $1
 		  AND c.status = 'accepted'
 	`
-	rows, err := server.store.GetDB().QueryContext(ctx, query, authPayload.UserID)
+	rows, err := server.store.GetDB().QueryContext(ctx, query, viewerID)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
@@ -130,7 +285,73 @@ func (server *Server) listFollowing(ctx *gin.Context) {
 			c.LastActiveAt = &lastActive.Time
 		}
 		c.AvatarUrl = avatarUrl.String
-		c.FullName = c.FullName + " [Following]"
+		rsp = append(rsp, c)
+	}
+
+	ctx.JSON(http.StatusOK, rsp)
+}
+
+// listUserFollowing returns a specific user's following list with privacy enforcement
+// GET /api/users/:id/following
+func (server *Server) listUserFollowing(ctx *gin.Context) {
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+	viewerID := authPayload.UserID
+
+	targetID, err := uuid.Parse(ctx.Param("id"))
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, errorResponse(err))
+		return
+	}
+
+	// DEBUG: Log viewer and target
+	log.Info().
+		Str("viewer_id", viewerID.String()).
+		Str("target_id", targetID.String()).
+		Str("endpoint", "/users/:id/following").
+		Msg("[PRIVACY DEBUG] Fetching user following")
+
+	// PRIVACY CHECK: viewer vs target
+	result := server.privacy.CanUserAccess(ctx, viewerID, targetID)
+	if !result.Allowed {
+		log.Warn().
+			Str("viewer_id", viewerID.String()).
+			Str("target_id", targetID.String()).
+			Str("reason", string(result.Reason)).
+			Msg("[PRIVACY BLOCKED] Following access denied")
+		if result.Reason == "private" {
+			ctx.JSON(http.StatusForbidden, gin.H{"error": "this account is private"})
+			return
+		}
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+		return
+	}
+
+	query := `
+		SELECT u.id, u.username, u.full_name, u.avatar_url, u.last_active_at
+		FROM connections c
+		JOIN users u ON u.id = c.target_id
+		WHERE c.requester_id = $1
+		  AND c.status = 'accepted'
+	`
+	rows, err := server.store.GetDB().QueryContext(ctx, query, targetID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+	defer rows.Close()
+
+	var rsp []friendResponse
+	for rows.Next() {
+		var c friendResponse
+		var lastActive sql.NullTime
+		var avatarUrl sql.NullString
+		if err := rows.Scan(&c.ID, &c.Username, &c.FullName, &avatarUrl, &lastActive); err != nil {
+			continue
+		}
+		if lastActive.Valid {
+			c.LastActiveAt = &lastActive.Time
+		}
+		c.AvatarUrl = avatarUrl.String
 		rsp = append(rsp, c)
 	}
 
@@ -228,7 +449,7 @@ func (server *Server) sendConnectionRequest(ctx *gin.Context) {
 
 	if err == nil {
 		if existing.Status == "accepted" {
-			ctx.JSON(http.StatusOK, gin.H{"message": "already connected", "is_match": false})
+			ctx.JSON(http.StatusOK, successResponse(gin.H{"message": "already connected", "is_match": false}))
 			return
 		}
 
@@ -255,16 +476,16 @@ func (server *Server) sendConnectionRequest(ctx *gin.Context) {
 			server.hub.SendToUser(targetID, msg)
 			server.hub.SendToUser(authPayload.UserID, msg)
 
-			ctx.JSON(http.StatusOK, gin.H{
+			ctx.JSON(http.StatusOK, successResponse(gin.H{
 				"status":   conn.Status,
 				"is_match": true,
-			})
+			}))
 			return
 		}
 
 		// If I was the requester, it's just a duplicate
 		if existing.RequesterID == authPayload.UserID && existing.Status == "pending" {
-			ctx.JSON(http.StatusOK, gin.H{"message": "connection request already sent", "is_match": false})
+			ctx.JSON(http.StatusOK, successResponse(gin.H{"message": "connection request already sent", "is_match": false}))
 			return
 		}
 	}
@@ -285,7 +506,7 @@ func (server *Server) sendConnectionRequest(ctx *gin.Context) {
 		if pqErr, ok := err.(*pq.Error); ok {
 			switch pqErr.Code.Name() {
 			case "unique_violation":
-				ctx.JSON(http.StatusOK, gin.H{"message": "connection request already sent", "is_match": false})
+				ctx.JSON(http.StatusOK, successResponse(gin.H{"message": "connection request already sent", "is_match": false}))
 				return
 			}
 		}
@@ -312,10 +533,10 @@ func (server *Server) sendConnectionRequest(ctx *gin.Context) {
 			server.redis.Del(ctx, "profile:"+authPayload.UserID.String())
 			server.redis.Del(ctx, "profile:"+targetID.String())
 
-			ctx.JSON(http.StatusCreated, gin.H{
+			ctx.JSON(http.StatusCreated, successResponse(gin.H{
 				"status":   conn.Status,
 				"is_match": false,
-			})
+			}))
 			return
 		}
 	}
@@ -326,10 +547,10 @@ func (server *Server) sendConnectionRequest(ctx *gin.Context) {
 		"New Connection Request", fmt.Sprintf("%s wants to connect with you!", sender.Username), 
 		map[string]uuid.UUID{"user": authPayload.UserID})
 
-	ctx.JSON(http.StatusCreated, gin.H{
+	ctx.JSON(http.StatusCreated, successResponse(gin.H{
 		"status":   conn.Status,
 		"is_match": false,
-	})
+	}))
 }
 
 type updateConnectionRequest struct {
@@ -411,7 +632,7 @@ func (server *Server) updateConnection(ctx *gin.Context) {
 		server.hub.SendToUser(authPayload.UserID, msg)
 	}
 
-	ctx.JSON(http.StatusOK, conn)
+	ctx.JSON(http.StatusOK, successResponse(conn))
 }
 
 func (server *Server) deleteConnection(ctx *gin.Context) {
@@ -437,7 +658,7 @@ func (server *Server) deleteConnection(ctx *gin.Context) {
 	server.redis.Del(ctx, "profile:"+authPayload.UserID.String())
 	server.redis.Del(ctx, "profile:"+targetUserID.String())
 
-	ctx.JSON(http.StatusOK, gin.H{"message": "connection deleted"})
+	ctx.JSON(http.StatusOK, successResponse(gin.H{"message": "connection deleted"}))
 }
 
 type suggestedConnectionResponse struct {

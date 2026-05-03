@@ -7,7 +7,12 @@ import (
 )
 
 func (server *Server) setupRouter() {
-	router := gin.Default()
+	router := gin.New()
+
+	// Global Middlewares
+	router.Use(requestIDMiddleware())
+	router.Use(loggerMiddleware())
+	router.Use(gin.Recovery())
 
 	// CORS Middleware
 	router.Use(corsMiddleware(server.config.FrontendURL))
@@ -37,7 +42,11 @@ func (server *Server) setupRouter() {
 		})
 	})
 	api.POST("/users", server.authRateLimiter(), server.createUser)
+	api.POST("/users/register", server.authRateLimiter(), server.createUser)
 	api.POST("/users/login", server.authRateLimiter(), server.loginUser)
+	api.POST("/users/renew-access", server.renewAccessToken)
+	// Hard rate limit for logs to prevent DOS
+	api.POST("/logs/client", server.rateLimitMiddleware(5, time.Minute), server.logClientError)
 
 	// Username availability check (public with stricter rate limit)
 	api.GET("/users/check-username", server.usernameCheckRateLimiter(), server.checkUsername)
@@ -79,15 +88,29 @@ func (server *Server) setupRouter() {
 	authRoutes.GET("/stories/archived", server.getArchivedStories)
 	authRoutes.DELETE("/stories/archived/:id", server.deleteArchivedStory)
 
-	authRoutes.GET("/connections", server.listConnections)
-	authRoutes.GET("/connections/followers", server.listFollowers)
-	authRoutes.GET("/connections/following", server.listFollowing)
+	// --- CONNECTIONS / FOLLOWERS / FOLLOWING (PROPERLY STRUCTURED) ---
+	// Current user endpoints (/me/*) - always for authenticated user
+	authRoutes.GET("/me/connections", server.listMeConnections)
+	authRoutes.GET("/me/followers", server.listMeFollowers)
+	authRoutes.GET("/me/following", server.listMeFollowing)
+
+	// Target user endpoints (/users/:id/*) - for viewing other profiles with privacy checks
+	authRoutes.GET("/users/:id/connections", server.listUserConnections)
+	authRoutes.GET("/users/:id/followers", server.listUserFollowers)
+	authRoutes.GET("/users/:id/following", server.listUserFollowing)
+
+	// Legacy endpoints (kept for backward compatibility during transition)
+	authRoutes.GET("/connections", server.listMeConnections)
+	authRoutes.GET("/connections/followers", server.listMeFollowers)
+	authRoutes.GET("/connections/following", server.listMeFollowing)
+
+	// Other connection-related endpoints
 	authRoutes.GET("/connections/suggested", server.getSuggestedConnections)
 	authRoutes.GET("/connections/requests", server.listPendingRequests)
 	authRoutes.GET("/connections/sent", server.listSentRequests)
-	authRoutes.POST("/connections/request", server.sendConnectionRequest)
-	authRoutes.POST("/connections/update", server.updateConnection)
-	authRoutes.DELETE("/connections/:id", server.deleteConnection)
+	authRoutes.POST("/connections/request", server.engagementRateLimiter(), server.sendConnectionRequest)
+	authRoutes.POST("/connections/update", server.engagementRateLimiter(), server.updateConnection)
+	authRoutes.DELETE("/connections/:id", server.engagementRateLimiter(), server.deleteConnection)
 
 	// Notifications
 	authRoutes.GET("/notifications", server.getNotifications)
@@ -184,11 +207,11 @@ func (server *Server) setupRouter() {
 	authRoutes.GET("/posts/me", server.getMyPosts)
 	authRoutes.GET("/users/:id/posts", server.privacyCheckMiddleware(), server.getUserPosts)
 	authRoutes.DELETE("/posts/:id", server.deletePost)
-	authRoutes.POST("/posts/:id/like", server.likePost)
-	authRoutes.DELETE("/posts/:id/like", server.unlikePost)
+	authRoutes.POST("/posts/:id/like", server.engagementRateLimiter(), server.likePost)
+	authRoutes.DELETE("/posts/:id/like", server.engagementRateLimiter(), server.unlikePost)
 	authRoutes.GET("/posts/:id/comments", server.listPostComments)
 	authRoutes.POST("/posts/:id/comments", server.addPostComment)
-	authRoutes.POST("/posts/:id/share", server.sharePost)
+	authRoutes.POST("/posts/:id/share", server.engagementRateLimiter(), server.sharePost)
 	authRoutes.DELETE("/posts/:id/comments/:commentId", server.deletePostComment)
 
 	// Reels
@@ -198,13 +221,13 @@ func (server *Server) setupRouter() {
 	authRoutes.GET("/reels/saved", server.getSavedReels)
 	authRoutes.GET("/users/:id/reels", server.privacyCheckMiddleware(), server.getUserReels)
 	authRoutes.DELETE("/reels/:id", server.deleteReel)
-	authRoutes.POST("/reels/:id/like", server.likeReel)
-	authRoutes.DELETE("/reels/:id/like", server.unlikeReel)
+	authRoutes.POST("/reels/:id/like", server.engagementRateLimiter(), server.likeReel)
+	authRoutes.DELETE("/reels/:id/like", server.engagementRateLimiter(), server.unlikeReel)
 	authRoutes.POST("/reels/:id/comments", server.addReelComment)
 	authRoutes.GET("/reels/:id/comments", server.listReelComments)
-	authRoutes.POST("/reels/:id/share", server.shareReel)
-	authRoutes.POST("/reels/:id/save", server.saveReel)
-	authRoutes.DELETE("/reels/:id/save", server.unsaveReel)
+	authRoutes.POST("/reels/:id/share", server.engagementRateLimiter(), server.shareReel)
+	authRoutes.POST("/reels/:id/save", server.engagementRateLimiter(), server.saveReel)
+	authRoutes.DELETE("/reels/:id/save", server.engagementRateLimiter(), server.unsaveReel)
 	authRoutes.DELETE("/reels/:id/comments/:commentId", server.deleteReelComment)
 
 	// Highlights
@@ -226,27 +249,46 @@ func (server *Server) setupRouter() {
 	adminRoutes.Use(server.authMiddleware())
 	adminRoutes.Use(adminMiddleware())
 
+	// A. Dashboard
+	adminRoutes.GET("/dashboard", server.getAdminDashboard)
+
+	// B. User Management
 	adminRoutes.GET("/users", server.listUsers)
-	adminRoutes.POST("/users/ban", server.banUser)
-	adminRoutes.DELETE("/users/:id", server.deleteUser)
-	adminRoutes.PUT("/users/:id/password", server.adminResetUserPassword)
-	adminRoutes.GET("/stats", server.getStats)
+	adminRoutes.GET("/users/:id", server.getAdminUserDetail)
+	adminRoutes.POST("/users/:id/actions", server.handleAdminUserAction)
+	adminRoutes.GET("/users/search", server.searchUsersAdmin) // Keep for legacy/compat
+
+	// C. Content Moderation
+	adminRoutes.GET("/content", server.listAdminContent)
+	adminRoutes.DELETE("/stories/:id", server.deleteStory)
+	adminRoutes.DELETE("/posts/:id", server.deletePost) // Admin override
+	adminRoutes.DELETE("/reels/:id", server.deleteReel) // Admin override
+
+	// D. Reports System
 	adminRoutes.GET("/reports", server.listReports)
 	adminRoutes.PUT("/reports/:id/resolve", server.resolveReport)
-	adminRoutes.GET("/stories", server.listAllStories)
-	adminRoutes.DELETE("/stories/:id", server.deleteStory)
+
+	// E. Blocks / Privacy
+	adminRoutes.GET("/blocks", server.listAdminBlocks)
+
+	// F. Engagement Inspector
+	adminRoutes.GET("/engagement", server.inspectEngagement)
+
+	// G. Logs / Error Viewer
+	adminRoutes.GET("/logs", server.listAdminLogs)
+	adminRoutes.GET("/activity/logs", server.listActivityLogs) // Legacy
+
+	// H. System Monitor
+	adminRoutes.GET("/system", server.getSystemMonitor)
+
+	// Existing Admin Tools (Keep or adapt)
 	adminRoutes.GET("/activity", server.activityWebSocket)
-	adminRoutes.GET("/activity/logs", server.listActivityLogs)
 	adminRoutes.GET("/comments", server.listAllComments)
 	adminRoutes.POST("/comments/moderate", server.moderateComment)
 	adminRoutes.GET("/map/active", server.getMapActiveUsers)
 	adminRoutes.GET("/crossings", server.listAdminCrossings)
-
-	// Notifications
 	adminRoutes.POST("/notifications/send", server.sendBroadcastNotification)
 	adminRoutes.GET("/notifications", server.listAdminNotifications)
-
-	// Settings
 	adminRoutes.GET("/settings", server.getAppSettings)
 	adminRoutes.PUT("/settings", server.updateAppSettings)
 
@@ -256,19 +298,24 @@ func (server *Server) setupRouter() {
 	adminRoutes.PUT("/admins/:id", server.updateAdminUser)
 	adminRoutes.DELETE("/admins/:id", server.deleteAdminUser)
 
-	// Search Users
-	adminRoutes.GET("/users/search", server.searchUsersAdmin)
-
 	// Reserved Username Management
 	adminRoutes.GET("/reserved-usernames", server.listReservedUsernames)
 	adminRoutes.POST("/reserved-usernames", server.addReservedUsername)
 	adminRoutes.DELETE("/reserved-usernames/:username", server.removeReservedUsername)
 
-	// Serve uploaded media files
+	// Serve uploaded media files with 1-year cache
 	router.Static("/uploads", "./uploads")
+	router.Group("/uploads").Use(func(c *gin.Context) {
+		c.Header("Cache-Control", "public, max-age=31536000, immutable")
+	})
 
-	// Frontend static files (SPA with fallback to index.html)
-	router.Static("/assets", "../../frontend/frontend/dist/assets")
+	// Frontend static files with cache
+	assets := router.Group("/assets")
+	assets.Use(func(c *gin.Context) {
+		c.Header("Cache-Control", "public, max-age=31536000, immutable")
+	})
+	assets.Static("", "../../frontend/frontend/dist/assets")
+
 	router.StaticFile("/manifest.webmanifest", "../../frontend/frontend/dist/manifest.webmanifest")
 	router.StaticFile("/sw.js", "../../frontend/frontend/dist/sw.js")
 	router.StaticFile("/pwa-192x192.png", "../../frontend/frontend/dist/pwa-192x192.png")
@@ -278,8 +325,9 @@ func (server *Server) setupRouter() {
 		c.Status(204)
 	})
 
-	// SPA fallback: serve index.html for all unmatched routes (allows client-side routing)
+	// SPA fallback: serve index.html - NEVER CACHE THIS
 	router.NoRoute(func(c *gin.Context) {
+		c.Header("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate, max-age=0")
 		c.File("../../frontend/frontend/dist/index.html")
 	})
 

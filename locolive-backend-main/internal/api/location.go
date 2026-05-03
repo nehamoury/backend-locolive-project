@@ -109,8 +109,26 @@ func (server *Server) updateLocation(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{"status": "updated"})
 }
 
+type getHeatmapRequest struct {
+	North float64 `form:"north" binding:"required"`
+	South float64 `form:"south" binding:"required"`
+	East  float64 `form:"east" binding:"required"`
+	West  float64 `form:"west" binding:"required"`
+}
+
 func (server *Server) getHeatmap(ctx *gin.Context) {
-	data, err := server.store.GetHeatmapData(ctx)
+	var req getHeatmapRequest
+	if err := ctx.ShouldBindQuery(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, errorResponse(err))
+		return
+	}
+
+	data, err := server.store.GetHeatmapByBounds(ctx, db.GetHeatmapByBoundsParams{
+		North: req.North,
+		South: req.South,
+		East:  req.East,
+		West:  req.West,
+	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
@@ -133,7 +151,7 @@ func (server *Server) getHeatmap(ctx *gin.Context) {
 		}
 	}
 
-	ctx.JSON(http.StatusOK, rsp)
+	ctx.JSON(http.StatusOK, successResponse(rsp))
 }
 
 type getNearbyUsersRequest struct {

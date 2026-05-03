@@ -53,19 +53,30 @@ LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
 -- name: DeletePost :exec
 DELETE FROM posts WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);
 
--- name: LikePost :one
-INSERT INTO post_likes (post_id, user_id) VALUES (sqlc.arg(post_id), sqlc.arg(user_id))
-ON CONFLICT (post_id, user_id) DO NOTHING
-RETURNING *;
+-- name: LikePostAtomic :one
+WITH inserted AS (
+    INSERT INTO post_likes (post_id, user_id)
+    VALUES (sqlc.arg(post_id), sqlc.arg(liker_id))
+    ON CONFLICT (post_id, user_id) DO NOTHING
+    RETURNING post_id
+)
+UPDATE posts p
+SET likes_count = p.likes_count + 1
+FROM inserted i
+WHERE p.id = i.post_id
+RETURNING p.likes_count;
 
--- name: UnlikePost :exec
-DELETE FROM post_likes WHERE post_id = sqlc.arg(post_id) AND user_id = sqlc.arg(user_id);
-
--- name: IncrementPostLikes :exec
-UPDATE posts SET likes_count = likes_count + 1 WHERE id = sqlc.arg(id);
-
--- name: DecrementPostLikes :exec
-UPDATE posts SET likes_count = GREATEST(0, likes_count - 1) WHERE id = sqlc.arg(id);
+-- name: UnlikePostAtomic :one
+WITH deleted AS (
+    DELETE FROM post_likes
+    WHERE post_likes.post_id = sqlc.arg(post_id) AND post_likes.user_id = sqlc.arg(liker_id)
+    RETURNING post_id
+)
+UPDATE posts p
+SET likes_count = GREATEST(0, p.likes_count - 1)
+FROM deleted d
+WHERE p.id = d.post_id
+RETURNING p.likes_count;
 
 -- name: IncrementPostShares :exec
 UPDATE posts SET shares_count = shares_count + 1 WHERE id = sqlc.arg(id);
@@ -103,3 +114,14 @@ UPDATE posts SET comments_count = comments_count + 1 WHERE id = sqlc.arg(id);
 -- name: DecrementPostComments :exec
 UPDATE posts SET comments_count = GREATEST(0, comments_count - 1) WHERE id = sqlc.arg(id);
 
+-- name: GetPost :one
+SELECT * FROM posts WHERE id = sqlc.arg(id) LIMIT 1;
+
+-- name: CountPostsByUserID :one
+SELECT COUNT(*) FROM posts WHERE user_id = sqlc.arg(user_id);
+
+-- name: ListLikedPostsByUserID :many
+SELECT p.* FROM posts p
+JOIN post_likes pl ON p.id = pl.post_id
+WHERE pl.user_id = sqlc.arg(user_id)
+ORDER BY pl.created_at DESC;

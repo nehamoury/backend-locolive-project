@@ -3,12 +3,16 @@ package main
 import (
 	"context"
 	"database/sql"
+	"net/http"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"privacy-social-backend/internal/api"
 	"privacy-social-backend/internal/config"
 	"privacy-social-backend/internal/repository"
 	"privacy-social-backend/internal/service/storage"
+	"syscall"
+	"time"
 
 	_ "github.com/lib/pq"
 	"github.com/rs/zerolog"
@@ -18,7 +22,10 @@ import (
 func main() {
 	// Setup logging
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
-	log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	// Default to JSON for production, ConsoleWriter for development
+	if os.Getenv("ENVIRONMENT") != "production" {
+		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339})
+	}
 
 	// Load configuration
 	config, err := config.LoadConfig(".")
@@ -31,6 +38,7 @@ func main() {
 	if err != nil {
 		log.Fatal().Err(err).Msg("cannot connect to db")
 	}
+	defer conn.Close()
 
 	store := repository.NewStore(conn)
 
@@ -57,10 +65,44 @@ func main() {
 		log.Fatal().Err(err).Msg("cannot create server")
 	}
 
-	log.Info().Str("address", config.ServerAddress).Msg("Starting Locolive API server")
-	err = server.Start(config.ServerAddress)
-	if err != nil {
-		log.Fatal().Err(err).Msg("cannot start server")
-
+	// Setup http.Server for graceful shutdown
+	httpServer := &http.Server{
+		Addr:    config.ServerAddress,
+		Handler: server.GetRouter(), // We'll need to add this getter
 	}
+
+	// Initializing the server in a goroutine so that
+	// it won't block the graceful shutdown handling below
+	go func() {
+		log.Info().Str("address", config.ServerAddress).Msg("Starting Locolive API server")
+		if err := httpServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatal().Err(err).Msg("cannot start server")
+		}
+	}()
+
+	// Wait for interrupt signal to gracefully shutdown the server with
+	// a timeout of 5 seconds.
+	quit := make(chan os.Signal, 1)
+	// kill (no param) default send syscall.SIGTERM
+	// kill -2 is syscall.SIGINT
+	// kill -9 is syscall.SIGKILL but can't be caught, so no need to add it
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Info().Msg("Shutting down server...")
+
+	// The context is used to inform the server it has 5 seconds to finish
+	// the request it is currently handling
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := httpServer.Shutdown(ctx); err != nil {
+		log.Fatal().Err(err).Msg("Server forced to shutdown")
+	}
+
+	// Close other resources (Redis, etc.)
+	if err := server.Close(); err != nil {
+		log.Error().Err(err).Msg("Error closing server resources")
+	}
+
+	log.Info().Msg("Server exiting")
 }

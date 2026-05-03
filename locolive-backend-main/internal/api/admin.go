@@ -14,6 +14,9 @@ import (
 	"privacy-social-backend/internal/repository/db"
 	"privacy-social-backend/internal/token"
 	"strconv"
+	"fmt"
+	"encoding/json"
+	"github.com/sqlc-dev/pqtype"
 )
 
 const (
@@ -59,10 +62,11 @@ func (server *Server) listUsers(ctx *gin.Context) {
 		return
 	}
 
+	query := ctx.Query("q")
 	users, count, err := server.admin.ListUsers(ctx, admin.ListUsersParams{
 		PageID:   req.PageID,
 		PageSize: req.PageSize,
-	})
+	}, query)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
@@ -156,23 +160,23 @@ func (server *Server) deleteUser(ctx *gin.Context) {
 	})
 }
 
-// Admin: Get Statistics (with Redis caching)
-func (server *Server) getStats(ctx *gin.Context) {
-	response, isCached, err := server.admin.GetStats(ctx)
+// Admin: Get Dashboard Data
+func (server *Server) getAdminDashboard(ctx *gin.Context) {
+	stats, _, err := server.admin.GetStats(ctx)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
 	}
 
-	if isCached {
-		ctx.Header("X-Cache", "HIT")
-	} else {
-		ctx.Header("X-Cache", "MISS")
-	}
+	// Add dynamic data
+	stats["activeWebsockets"] = server.hub.GetTotalConnections()
+	
+	// Error count (last 1h) - mock for now or query logs table if exists
+	stats["errorsLastHour"] = 0 
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"success": true,
-		"data":    response,
+		"data":    stats,
 	})
 }
 
@@ -1025,4 +1029,190 @@ func (server *Server) deleteAdminUser(ctx *gin.Context) {
 		"success": true,
 		"data":    newAdminUserResponse(updatedUser),
 	})
+}
+// ─── New Admin Handlers ──────────────────────────────────────────────────
+
+// Admin: Get User Detail
+func (server *Server) getAdminUserDetail(ctx *gin.Context) {
+	detail, err := server.admin.GetAdminUserDetail(ctx, ctx.Param("id"))
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    detail,
+	})
+}
+
+// Admin: Handle User Actions
+type adminUserActionRequest struct {
+	Action string `json:"action" binding:"required,oneof=ban unban revoke_sessions soft_delete"`
+}
+
+func (server *Server) handleAdminUserAction(ctx *gin.Context) {
+	uid, ok := parseUUIDParam(ctx, ctx.Param("id"), "id")
+	if !ok {
+		return
+	}
+
+	var req adminUserActionRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, errorResponse(err))
+		return
+	}
+
+	var err error
+	var message string
+
+	switch req.Action {
+	case "ban":
+		_, err = server.store.BanUser(ctx, db.BanUserParams{ID: uid, IsShadowBanned: true})
+		message = "user banned"
+	case "unban":
+		_, err = server.store.BanUser(ctx, db.BanUserParams{ID: uid, IsShadowBanned: false})
+		message = "user unbanned"
+	case "revoke_sessions":
+		err = server.store.BlockSession(ctx, uid)
+		// Also add to Redis revoke_all
+		server.redis.Set(ctx, fmt.Sprintf("revoke_all:%s", uid.String()), time.Now().Unix(), 24*time.Hour)
+		message = "all sessions revoked"
+	case "soft_delete":
+		err = server.store.SoftDeleteUser(ctx, uid)
+		message = "user soft deleted"
+	}
+
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	// Log admin action
+	server.logAdminAction(ctx, "user_action", uid, gin.H{"action": req.Action})
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    gin.H{"message": message},
+	})
+}
+
+// Admin: List Content (Posts + Reels)
+func (server *Server) listAdminContent(ctx *gin.Context) {
+	page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(ctx.DefaultQuery("page_size", "20"))
+	contentType := ctx.DefaultQuery("type", "all") // all, post, reel
+
+	// This is a simplified version. In production, you'd have a specialized query.
+	// For MVP, we combine or just list stories if that's what was there.
+	
+	stories, _ := server.store.ListAllStories(ctx, db.ListAllStoriesParams{
+		Limit:  int32(pageSize),
+		Offset: int32((page - 1) * pageSize),
+	})
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"items":     stories,
+			"page":      page,
+			"page_size": pageSize,
+			"type":      contentType,
+		},
+	})
+}
+
+// Admin: List Blocks
+func (server *Server) listAdminBlocks(ctx *gin.Context) {
+	page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(ctx.DefaultQuery("page_size", "20"))
+
+	blocks, err := server.admin.ListAdminBlocks(ctx, int32(page), int32(pageSize))
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"items": blocks,
+		},
+	})
+}
+
+// Admin: Inspect Engagement
+func (server *Server) inspectEngagement(ctx *gin.Context) {
+	userID := ctx.Query("user_id")
+	if userID == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "user_id is required"})
+		return
+	}
+
+	engagement, err := server.admin.InspectEngagement(ctx, userID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    engagement,
+	})
+}
+
+// Admin: List Logs
+func (server *Server) listAdminLogs(ctx *gin.Context) {
+	page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(ctx.DefaultQuery("page_size", "50"))
+	level := ctx.DefaultQuery("level", "all")
+
+	logs, err := server.admin.ListActivityLogs(ctx, int32(pageSize), int32((page-1)*pageSize))
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"items":     logs,
+			"page":      page,
+			"page_size": pageSize,
+			"level":     level,
+		},
+	})
+}
+
+// Admin: System Monitor
+func (server *Server) getSystemMonitor(ctx *gin.Context) {
+	monitor, err := server.admin.GetSystemMonitor(ctx)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data":    monitor,
+	})
+}
+
+// Helper: Log Admin Action
+func (server *Server) logAdminAction(ctx *gin.Context, action string, targetID uuid.UUID, details gin.H) {
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+	
+	detailsJSON, _ := json.Marshal(details)
+	
+	_, err := server.store.CreateActivityLog(ctx, db.CreateActivityLogParams{
+		UserID:     authPayload.UserID,
+		ActionType: "admin_" + action,
+		TargetID:   uuid.NullUUID{UUID: targetID, Valid: true},
+		TargetType: sql.NullString{String: "user", Valid: true},
+		Details:    pqtype.NullRawMessage{RawMessage: detailsJSON, Valid: true},
+	})
+	
+	if err != nil {
+		log.Error().Err(err).Msg("failed to log admin action")
+	}
 }

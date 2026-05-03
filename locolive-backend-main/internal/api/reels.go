@@ -281,7 +281,7 @@ func (server *Server) createReel(ctx *gin.Context) {
 		}
 	}
 
-	ctx.JSON(http.StatusCreated, toReelResponseFromCreate(reel))
+	ctx.JSON(http.StatusCreated, successResponse(toReelResponseFromCreate(reel)))
 }
 
 // getReelsFeed returns a paginated feed of reels.
@@ -365,28 +365,15 @@ func (server *Server) getUserReels(ctx *gin.Context) {
 
 	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
 
-	// Privacy checks: ghost mode, blocked users
-	targetUser, err := server.store.GetUserByID(ctx, targetUserID)
-	if err != nil {
-		ctx.JSON(http.StatusNotFound, errorResponse(fmt.Errorf("user not found")))
-		return
-	}
-
-	// Check if viewing user is blocked
-	if targetUserID != authPayload.UserID {
-		blocked, _ := server.store.IsUserBlocked(ctx, db.IsUserBlockedParams{
-			BlockerID: targetUserID,
-			BlockedID: authPayload.UserID,
-		})
-		if blocked {
-			ctx.JSON(http.StatusForbidden, errorResponse(fmt.Errorf("user has blocked you")))
+	// Use CENTRAL RULE ENGINE for content access (Reels)
+	result := server.privacy.CanUserAccess(ctx, authPayload.UserID, targetUserID)
+	if !result.Allowed {
+		if result.Reason == "private" {
+			ctx.JSON(http.StatusForbidden, gin.H{"error": "This account is private"})
 			return
 		}
-	}
-
-	// If target user is in ghost mode and not viewing own reels, deny access
-	if targetUser.IsGhostMode && targetUserID != authPayload.UserID {
-		ctx.JSON(http.StatusForbidden, errorResponse(fmt.Errorf("user is in ghost mode")))
+		// As per production spec: Blocked, Panic, or Ghost = Invisible (404)
+		ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 		return
 	}
 
@@ -418,72 +405,74 @@ func (server *Server) getUserReels(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, gin.H{"reels": rsp, "page": page, "page_size": pageSize})
 }
 
-// likeReel likes a reel.
+// likeReel likes a reel atomically.
 func (server *Server) likeReel(ctx *gin.Context) {
-	reelID, err := uuid.Parse(ctx.Param("id"))
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errorResponse(err))
+	reelID, ok := parseUUIDParam(ctx, ctx.Param("id"), "reel_id")
+	if !ok {
 		return
 	}
 
-	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+	authPayload := getAuthPayload(ctx)
 
-	_, err = server.store.LikeReel(ctx, db.LikeReelParams{
-		ReelID: reelID,
-		UserID: authPayload.UserID,
+	likesCount, err := server.store.LikeReelAtomic(ctx, db.LikeReelAtomicParams{
+		ReelID:  reelID,
+		LikerID: authPayload.UserID,
 	})
-	if err != nil {
-		// Conflict is fine
-		ctx.JSON(http.StatusOK, gin.H{"message": "liked"})
-		return
-	}
-
-	_ = server.store.IncrementReelLikes(ctx, reelID)
-
-	// WebSocket event & Persistent Notification to owner
-	reel, err := server.store.GetReel(ctx, reelID)
-	if err == nil {
-		// Get liker username
-		liker, _ := server.store.GetUserByID(ctx, authPayload.UserID)
-		server.hub.BroadcastReelLiked(reelID, reel.UserID, authPayload.UserID, liker.Username)
-
-		if reel.UserID != authPayload.UserID {
-			server.createNotificationWithSound(ctx, reel.UserID, "reel_liked", "reel_liked",
-				"Reel Liked", fmt.Sprintf("%s liked your reel!", liker.Username),
-				map[string]uuid.UUID{"user": authPayload.UserID})
-		}
-	}
-
-	ctx.JSON(http.StatusOK, gin.H{"message": "liked"})
-}
-
-// unlikeReel unlikes a reel.
-func (server *Server) unlikeReel(ctx *gin.Context) {
-	reelID, err := uuid.Parse(ctx.Param("id"))
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errorResponse(err))
-		return
-	}
-
-	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
-
-	if err := server.store.UnlikeReel(ctx, db.UnlikeReelParams{
-		ReelID: reelID,
-		UserID: authPayload.UserID,
-	}); err != nil {
+	if err != nil && err != sql.ErrNoRows {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
 	}
 
-	_ = server.store.DecrementReelLikes(ctx, reelID)
-	ctx.JSON(http.StatusOK, gin.H{"message": "unliked"})
+	// Broadcase if it was a new like
+	if err == nil {
+		// WebSocket event & Persistent Notification to owner
+		reel, err := server.store.GetReel(ctx, reelID)
+		if err == nil {
+			liker, _ := server.store.GetUserByID(ctx, authPayload.UserID)
+			server.hub.BroadcastReelLiked(reelID, reel.UserID, authPayload.UserID, liker.Username)
+
+			if reel.UserID != authPayload.UserID {
+				server.createNotificationWithSound(ctx, reel.UserID, "reel_liked", "reel_liked",
+					"Reel Liked", fmt.Sprintf("%s liked your reel!", liker.Username),
+					map[string]uuid.UUID{"user": authPayload.UserID})
+			}
+		}
+	}
+
+	ctx.JSON(http.StatusOK, successResponse(gin.H{
+		"message":     "liked",
+		"likes_count": likesCount,
+	}))
+}
+
+// unlikeReel unlikes a reel atomically.
+func (server *Server) unlikeReel(ctx *gin.Context) {
+	reelID, ok := parseUUIDParam(ctx, ctx.Param("id"), "reel_id")
+	if !ok {
+		return
+	}
+
+	authPayload := getAuthPayload(ctx)
+
+	likesCount, err := server.store.UnlikeReelAtomic(ctx, db.UnlikeReelAtomicParams{
+		ReelID:  reelID,
+		LikerID: authPayload.UserID,
+	})
+	if err != nil && err != sql.ErrNoRows {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, successResponse(gin.H{
+		"message":     "unliked",
+		"likes_count": likesCount,
+	}))
 }
 
 // addReelComment adds a comment to a reel.
 func (server *Server) addReelComment(ctx *gin.Context) {
-	reelID, err := uuid.Parse(ctx.Param("id"))
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errorResponse(err))
+	reelID, ok := parseUUIDParam(ctx, ctx.Param("id"), "reel_id")
+	if !ok {
 		return
 	}
 
@@ -493,7 +482,7 @@ func (server *Server) addReelComment(ctx *gin.Context) {
 		return
 	}
 
-	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+	authPayload := getAuthPayload(ctx)
 
 	isFlagged, _ := server.moderation.ModerateText(req.Content)
 
@@ -522,18 +511,16 @@ func (server *Server) addReelComment(ctx *gin.Context) {
 				map[string]uuid.UUID{"user": authPayload.UserID})
 		}
 
-		// Process @mentions in the comment
 		server.processMentions(ctx, req.Content, authPayload.UserID, commenter.Username)
 	}
 
-	ctx.JSON(http.StatusCreated, toReelCommentResponse(comment))
+	ctx.JSON(http.StatusCreated, successResponse(toReelCommentResponse(comment)))
 }
 
 // listReelComments returns comments for a reel.
 func (server *Server) listReelComments(ctx *gin.Context) {
-	reelID, err := uuid.Parse(ctx.Param("id"))
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errorResponse(err))
+	reelID, ok := parseUUIDParam(ctx, ctx.Param("id"), "reel_id")
+	if !ok {
 		return
 	}
 
@@ -548,52 +535,55 @@ func (server *Server) listReelComments(ctx *gin.Context) {
 		rsp[i] = toReelCommentResponseFromList(c)
 	}
 
-	ctx.JSON(http.StatusOK, rsp)
+	ctx.JSON(http.StatusOK, successResponse(rsp))
 }
 
-// saveReel saves a reel to bookmarks.
+// saveReel saves a reel to bookmarks atomically.
 func (server *Server) saveReel(ctx *gin.Context) {
-	reelID, err := uuid.Parse(ctx.Param("id"))
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errorResponse(err))
+	reelID, ok := parseUUIDParam(ctx, ctx.Param("id"), "reel_id")
+	if !ok {
 		return
 	}
 
-	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+	authPayload := getAuthPayload(ctx)
 
-	_, err = server.store.SaveReel(ctx, db.SaveReelParams{
-		ReelID: reelID,
-		UserID: authPayload.UserID,
+	savesCount, err := server.store.SaveReelAtomic(ctx, db.SaveReelAtomicParams{
+		ReelID:  reelID,
+		SaverID: authPayload.UserID,
 	})
-	if err != nil {
-		ctx.JSON(http.StatusOK, gin.H{"message": "saved"})
-		return
-	}
-
-	_ = server.store.IncrementReelSaves(ctx, reelID)
-	ctx.JSON(http.StatusOK, gin.H{"message": "saved"})
-}
-
-// unsaveReel removes a reel from bookmarks.
-func (server *Server) unsaveReel(ctx *gin.Context) {
-	reelID, err := uuid.Parse(ctx.Param("id"))
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errorResponse(err))
-		return
-	}
-
-	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
-
-	if err := server.store.UnsaveReel(ctx, db.UnsaveReelParams{
-		ReelID: reelID,
-		UserID: authPayload.UserID,
-	}); err != nil {
+	if err != nil && err != sql.ErrNoRows {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
 	}
 
-	_ = server.store.DecrementReelSaves(ctx, reelID)
-	ctx.JSON(http.StatusOK, gin.H{"message": "unsaved"})
+	ctx.JSON(http.StatusOK, successResponse(gin.H{
+		"message":     "saved",
+		"saves_count": savesCount,
+	}))
+}
+
+// unsaveReel removes a reel from bookmarks atomically.
+func (server *Server) unsaveReel(ctx *gin.Context) {
+	reelID, ok := parseUUIDParam(ctx, ctx.Param("id"), "reel_id")
+	if !ok {
+		return
+	}
+
+	authPayload := getAuthPayload(ctx)
+
+	savesCount, err := server.store.UnsaveReelAtomic(ctx, db.UnsaveReelAtomicParams{
+		ReelID:  reelID,
+		SaverID: authPayload.UserID,
+	})
+	if err != nil && err != sql.ErrNoRows {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, successResponse(gin.H{
+		"message":     "unsaved",
+		"saves_count": savesCount,
+	}))
 }
 
 // shareReel increments the share counter and broadcasts activity.

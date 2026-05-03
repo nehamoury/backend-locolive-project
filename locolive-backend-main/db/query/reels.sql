@@ -61,20 +61,30 @@ WHERE r.user_id = sqlc.arg(user_id)
 ORDER BY r.created_at DESC
 LIMIT $1 OFFSET $2;
 
--- name: LikeReel :one
-INSERT INTO reel_likes (reel_id, user_id)
-VALUES ($1, $2)
-ON CONFLICT (reel_id, user_id) DO NOTHING
-RETURNING *;
+-- name: LikeReelAtomic :one
+WITH inserted AS (
+    INSERT INTO reel_likes (reel_id, user_id)
+    VALUES (sqlc.arg(reel_id), sqlc.arg(liker_id))
+    ON CONFLICT (reel_id, user_id) DO NOTHING
+    RETURNING reel_id
+)
+UPDATE reels r
+SET likes_count = r.likes_count + 1
+FROM inserted i
+WHERE r.id = i.reel_id
+RETURNING r.likes_count;
 
--- name: UnlikeReel :exec
-DELETE FROM reel_likes WHERE reel_id = $1 AND user_id = $2;
-
--- name: IncrementReelLikes :exec
-UPDATE reels SET likes_count = likes_count + 1 WHERE id = $1;
-
--- name: DecrementReelLikes :exec
-UPDATE reels SET likes_count = likes_count - 1 WHERE id = $1;
+-- name: UnlikeReelAtomic :one
+WITH deleted AS (
+    DELETE FROM reel_likes 
+    WHERE reel_likes.reel_id = sqlc.arg(reel_id) AND reel_likes.user_id = sqlc.arg(liker_id)
+    RETURNING reel_id
+)
+UPDATE reels r
+SET likes_count = GREATEST(0, r.likes_count - 1)
+FROM deleted d
+WHERE r.id = d.reel_id
+RETURNING r.likes_count;
 
 -- name: CreateReelComment :one
 INSERT INTO reel_comments (reel_id, user_id, content, is_flagged)
@@ -94,20 +104,30 @@ ORDER BY rc.created_at DESC;
 -- name: IncrementReelComments :exec
 UPDATE reels SET comments_count = comments_count + 1 WHERE id = $1;
 
--- name: SaveReel :one
-INSERT INTO reel_saves (reel_id, user_id)
-VALUES ($1, $2)
-ON CONFLICT (reel_id, user_id) DO NOTHING
-RETURNING *;
+-- name: SaveReelAtomic :one
+WITH inserted AS (
+    INSERT INTO reel_saves (reel_id, user_id)
+    VALUES (sqlc.arg(reel_id), sqlc.arg(saver_id))
+    ON CONFLICT (reel_id, user_id) DO NOTHING
+    RETURNING reel_id
+)
+UPDATE reels r
+SET saves_count = r.saves_count + 1
+FROM inserted i
+WHERE r.id = i.reel_id
+RETURNING r.saves_count;
 
--- name: UnsaveReel :exec
-DELETE FROM reel_saves WHERE reel_id = $1 AND user_id = $2;
-
--- name: IncrementReelSaves :exec
-UPDATE reels SET saves_count = saves_count + 1 WHERE id = $1;
-
--- name: DecrementReelSaves :exec
-UPDATE reels SET saves_count = saves_count - 1 WHERE id = $1;
+-- name: UnsaveReelAtomic :one
+WITH deleted AS (
+    DELETE FROM reel_saves
+    WHERE reel_saves.reel_id = sqlc.arg(reel_id) AND reel_saves.user_id = sqlc.arg(saver_id)
+    RETURNING reel_id
+)
+UPDATE reels r
+SET saves_count = GREATEST(0, r.saves_count - 1)
+FROM deleted d
+WHERE r.id = d.reel_id
+RETURNING r.saves_count;
 
 -- name: IncrementReelShares :exec
 UPDATE reels SET shares_count = shares_count + 1 WHERE id = $1;
@@ -148,3 +168,12 @@ JOIN users u ON r.user_id = u.id
 WHERE rs.user_id = $1
 ORDER BY rs.created_at DESC
 LIMIT $2 OFFSET $3;
+
+-- name: CountReelsByUserID :one
+SELECT COUNT(*) FROM reels WHERE user_id = sqlc.arg(user_id);
+
+-- name: ListLikedReelsByUserID :many
+SELECT r.* FROM reels r
+JOIN reel_likes rl ON r.id = rl.reel_id
+WHERE rl.user_id = sqlc.arg(user_id)
+ORDER BY rl.created_at DESC;

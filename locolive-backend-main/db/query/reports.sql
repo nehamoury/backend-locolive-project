@@ -34,3 +34,6 @@ RETURNING *;
 UPDATE reports
 SET priority_score = priority_score + 1
 WHERE target_id = $1 AND is_resolved = false;
+
+-- name: CountReportsAgainstUser :one
+SELECT COUNT(*) FROM reports WHERE target_id = $1 AND target_type = 'user';

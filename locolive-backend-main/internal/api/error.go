@@ -46,12 +46,6 @@ func errorResponse(err error) gin.H {
 		return gin.H{"success": false, "error": "unknown error"}
 	}
 
-	// Log full error details with stack trace context
-	log.Error().
-		Str("error", err.Error()).
-		Str("type", "api_error").
-		Msg("API error occurred")
-
 	// Check if it's a known application error
 	var appErr *AppError
 	if errors.As(err, &appErr) {
@@ -88,17 +82,7 @@ func errorResponse(err error) gin.H {
 		}
 	}
 
-	// File operation errors
-	if strings.Contains(strings.ToLower(err.Error()), "file") ||
-		strings.Contains(strings.ToLower(err.Error()), "upload") {
-		return gin.H{
-			"success": false,
-			"error":   "file operation failed",
-		}
-	}
-
 	// Production: generic error message
-	// Development: detailed error (if needed for debugging)
 	if isProduction() {
 		return gin.H{
 			"success": false,

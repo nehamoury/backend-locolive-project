@@ -204,11 +204,15 @@ func requireBodyMatchUser(t *testing.T, body *bytes.Buffer, user db.User) {
 	}
 
 	var got struct {
-		User userResponse `json:"user"`
+		Success bool `json:"success"`
+		Data    struct {
+			User userResponse `json:"user"`
+		} `json:"data"`
 	}
 	err = json.Unmarshal(data, &got)
 	require.NoError(t, err)
-	require.Equal(t, user.Username, got.User.Username)
-	require.Equal(t, user.FullName, got.User.FullName)
+	require.True(t, got.Success)
+	require.Equal(t, user.Username, got.Data.User.Username)
+	require.Equal(t, user.FullName, got.Data.User.FullName)
 	// Password is not returned, so we can't check it directly here, but schema validation covers it.
 }

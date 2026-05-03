@@ -80,6 +80,54 @@ func (q *Queries) GetBlockedUsers(ctx context.Context, blockerID uuid.UUID) ([]G
 	return items, nil
 }
 
+const getBlocksForUser = `-- name: GetBlocksForUser :many
+SELECT b.id, b.blocker_id, b.blocked_id, b.created_at, u1.username as blocker_username, u2.username as blocked_username
+FROM blocked_users b
+JOIN users u1 ON b.blocker_id = u1.id
+JOIN users u2 ON b.blocked_id = u2.id
+WHERE b.blocker_id = $1 OR b.blocked_id = $1
+ORDER BY b.created_at DESC
+`
+
+type GetBlocksForUserRow struct {
+	ID              uuid.UUID    `json:"id"`
+	BlockerID       uuid.UUID    `json:"blocker_id"`
+	BlockedID       uuid.UUID    `json:"blocked_id"`
+	CreatedAt       sql.NullTime `json:"created_at"`
+	BlockerUsername string       `json:"blocker_username"`
+	BlockedUsername string       `json:"blocked_username"`
+}
+
+func (q *Queries) GetBlocksForUser(ctx context.Context, blockerID uuid.UUID) ([]GetBlocksForUserRow, error) {
+	rows, err := q.db.QueryContext(ctx, getBlocksForUser, blockerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []GetBlocksForUserRow
+	for rows.Next() {
+		var i GetBlocksForUserRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.BlockerID,
+			&i.BlockedID,
+			&i.CreatedAt,
+			&i.BlockerUsername,
+			&i.BlockedUsername,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const isUserBlocked = `-- name: IsUserBlocked :one
 SELECT EXISTS (
     SELECT 1 FROM blocked_users
@@ -97,6 +145,59 @@ func (q *Queries) IsUserBlocked(ctx context.Context, arg IsUserBlockedParams) (b
 	var exists bool
 	err := row.Scan(&exists)
 	return exists, err
+}
+
+const listAllBlocksAdmin = `-- name: ListAllBlocksAdmin :many
+SELECT b.id, b.blocker_id, b.blocked_id, b.created_at, u1.username as blocker_username, u2.username as blocked_username
+FROM blocked_users b
+JOIN users u1 ON b.blocker_id = u1.id
+JOIN users u2 ON b.blocked_id = u2.id
+ORDER BY b.created_at DESC
+LIMIT $2 OFFSET $1
+`
+
+type ListAllBlocksAdminParams struct {
+	Off int32 `json:"off"`
+	Lim int32 `json:"lim"`
+}
+
+type ListAllBlocksAdminRow struct {
+	ID              uuid.UUID    `json:"id"`
+	BlockerID       uuid.UUID    `json:"blocker_id"`
+	BlockedID       uuid.UUID    `json:"blocked_id"`
+	CreatedAt       sql.NullTime `json:"created_at"`
+	BlockerUsername string       `json:"blocker_username"`
+	BlockedUsername string       `json:"blocked_username"`
+}
+
+func (q *Queries) ListAllBlocksAdmin(ctx context.Context, arg ListAllBlocksAdminParams) ([]ListAllBlocksAdminRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAllBlocksAdmin, arg.Off, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAllBlocksAdminRow
+	for rows.Next() {
+		var i ListAllBlocksAdminRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.BlockerID,
+			&i.BlockedID,
+			&i.CreatedAt,
+			&i.BlockerUsername,
+			&i.BlockedUsername,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const unblockUser = `-- name: UnblockUser :exec

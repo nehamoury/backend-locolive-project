@@ -25,7 +25,7 @@ type CreateUserParams struct {
 }
 
 type LoginUserParams struct {
-	Email     string
+	Identity  string
 	Password  string
 	UserAgent string
 	ClientIP  string
@@ -121,12 +121,24 @@ func (s *ServiceImpl) CreateUser(ctx context.Context, req CreateUserParams) (db.
 }
 
 func (s *ServiceImpl) LoginUser(ctx context.Context, req LoginUserParams) (*LoginUserResult, error) {
-	user, err := s.store.GetUserByEmail(ctx, sql.NullString{String: req.Email, Valid: true})
+	var user db.User
+	var err error
+
+	// 1. Try Email
+	user, err = s.store.GetUserByEmail(ctx, sql.NullString{String: req.Identity, Valid: true})
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, errors.New("user not found")
+			// 2. Try Username
+			user, err = s.store.GetUserByUsername(ctx, req.Identity)
+			if err != nil {
+				if err == sql.ErrNoRows {
+					return nil, errors.New("user not found")
+				}
+				return nil, err
+			}
+		} else {
+			return nil, err
 		}
-		return nil, err
 	}
 
 	err = util.CheckPassword(req.Password, user.PasswordHash)

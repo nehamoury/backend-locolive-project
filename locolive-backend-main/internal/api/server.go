@@ -165,6 +165,11 @@ func NewServer(
 	return server, nil
 }
 
+// GetRouter returns the gin.Engine instance for external server management
+func (server *Server) GetRouter() *gin.Engine {
+	return server.router
+}
+
 
 // Start runs the HTTP/HTTPS server on a specific address
 func (server *Server) Start(address string) error {
@@ -182,4 +187,13 @@ func (server *Server) Start(address string) error {
 	}
 	fmt.Printf("Starting HTTP server on %s\n", address)
 	return server.router.Run(address)
+}
+
+// Close cleans up server resources (Redis, etc.)
+func (server *Server) Close() error {
+	log.Info().Msg("Closing server resources...")
+	if server.redis != nil {
+		return server.redis.Close()
+	}
+	return nil
 }

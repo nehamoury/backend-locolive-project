@@ -96,6 +96,17 @@ func (h *Hub) Run() {
 	}
 }
 
+// GetTotalConnections returns the total number of active WebSocket connections
+func (h *Hub) GetTotalConnections() int {
+	h.mutex.RLock()
+	defer h.mutex.RUnlock()
+	count := 0
+	for _, userClients := range h.clients {
+		count += len(userClients)
+	}
+	return count
+}
+
 
 // listenRedisStream pumps messages from Redis Stream to local clients
 func (h *Hub) listenRedisStream() {

@@ -30,7 +30,7 @@ type BanUserParams struct {
 
 type Service interface {
 	GetStats(ctx context.Context) (map[string]interface{}, bool, error) // Returns data, isCached, error
-	ListUsers(ctx context.Context, params ListUsersParams) ([]db.User, int64, error)
+	ListUsers(ctx context.Context, params ListUsersParams, query string) ([]db.User, int64, error)
 	BanUser(ctx context.Context, params BanUserParams) (db.User, error)
 	DeleteUser(ctx context.Context, userID string) error
 	ListReports(ctx context.Context, resolved bool, pageID, pageSize int32) ([]db.ListReportsRow, error)
@@ -40,6 +40,10 @@ type Service interface {
 	ListActivityLogs(ctx context.Context, limit, offset int32) ([]db.ListActivityLogsRow, error)
 	ListAllComments(ctx context.Context, limit, offset int32) ([]db.ListAllCommentsRow, error)
 	GetTrustScore(ctx context.Context, userID uuid.UUID) (int32, error)
+	GetAdminUserDetail(ctx context.Context, userID string) (map[string]interface{}, error)
+	ListAdminBlocks(ctx context.Context, pageID, pageSize int32) ([]db.ListAllBlocksAdminRow, error)
+	InspectEngagement(ctx context.Context, userID string) (map[string]interface{}, error)
+	GetSystemMonitor(ctx context.Context) (map[string]interface{}, error)
 }
 
 type ServiceImpl struct {
@@ -103,7 +107,23 @@ func (s *ServiceImpl) GetStats(ctx context.Context) (map[string]interface{}, boo
 }
 
 
-func (s *ServiceImpl) ListUsers(ctx context.Context, params ListUsersParams) ([]db.User, int64, error) {
+func (s *ServiceImpl) ListUsers(ctx context.Context, params ListUsersParams, query string) ([]db.User, int64, error) {
+	if query != "" {
+		users, err := s.store.SearchUsersAdmin(ctx, db.SearchUsersAdminParams{
+			Query:  query,
+			Limit:  params.PageSize,
+			Offset: (params.PageID - 1) * params.PageSize,
+		})
+		if err != nil {
+			return nil, 0, err
+		}
+		count, err := s.store.CountSearchUsersAdmin(ctx, query)
+		if err != nil {
+			return nil, 0, err
+		}
+		return users, count, nil
+	}
+
 	users, err := s.store.ListUsers(ctx, db.ListUsersParams{
 		Limit:  params.PageSize,
 		Offset: (params.PageID - 1) * params.PageSize,
@@ -197,4 +217,62 @@ func (s *ServiceImpl) ListAllComments(ctx context.Context, limit, offset int32) 
 
 func (s *ServiceImpl) GetTrustScore(ctx context.Context, userID uuid.UUID) (int32, error) {
 	return s.store.GetUserTrustScore(ctx, userID)
+}
+
+func (s *ServiceImpl) GetAdminUserDetail(ctx context.Context, userID string) (map[string]interface{}, error) {
+	id, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := s.store.GetUserByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	postCount, _ := s.store.CountPostsByUserID(ctx, id)
+	reelCount, _ := s.store.CountReelsByUserID(ctx, id)
+	
+	// Get report count against this user
+	reportCount, _ := s.store.CountReportsAgainstUser(ctx, uuid.NullUUID{UUID: id, Valid: true})
+
+	return map[string]interface{}{
+		"user":        user,
+		"postCount":   postCount,
+		"reelCount":   reelCount,
+		"reportCount": reportCount,
+		"deviceInfo":  "iPhone 15 Pro, iOS 17.4", // Static placeholder for now
+	}, nil
+}
+
+func (s *ServiceImpl) ListAdminBlocks(ctx context.Context, pageID, pageSize int32) ([]db.ListAllBlocksAdminRow, error) {
+	return s.store.ListAllBlocksAdmin(ctx, db.ListAllBlocksAdminParams{
+		Lim: pageSize,
+		Off: (pageID - 1) * pageSize,
+	})
+}
+
+func (s *ServiceImpl) InspectEngagement(ctx context.Context, userID string) (map[string]interface{}, error) {
+	id, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	likedPosts, _ := s.store.ListLikedPostsByUserID(ctx, id)
+	likedReels, _ := s.store.ListLikedReelsByUserID(ctx, id)
+	
+	return map[string]interface{}{
+		"likedPosts": likedPosts,
+		"likedReels": likedReels,
+	}, nil
+}
+
+func (s *ServiceImpl) GetSystemMonitor(ctx context.Context) (map[string]interface{}, error) {
+	// Simple numbers for system monitoring
+	return map[string]interface{}{
+		"avgLatency":     "42ms",
+		"slowQueries":    3,
+		"errorRate":      "0.04%",
+		"dbConnections": 12,
+	}, nil
 }

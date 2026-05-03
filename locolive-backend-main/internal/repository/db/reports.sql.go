@@ -13,6 +13,17 @@ import (
 	"github.com/google/uuid"
 )
 
+const countReportsAgainstUser = `-- name: CountReportsAgainstUser :one
+SELECT COUNT(*) FROM reports WHERE target_id = $1 AND target_type = 'user'
+`
+
+func (q *Queries) CountReportsAgainstUser(ctx context.Context, targetID uuid.NullUUID) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countReportsAgainstUser, targetID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createReport = `-- name: CreateReport :one
 INSERT INTO reports (
   reporter_id,

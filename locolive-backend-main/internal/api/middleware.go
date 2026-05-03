@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 
 	"privacy-social-backend/internal/token"
 )
@@ -98,7 +100,7 @@ func adminMiddleware() gin.HandlerFunc {
 		authPayload := payload.(*token.Payload)
 
 		// Check role directly from JWT payload
-		if authPayload.Role != "admin" && authPayload.Role != "moderator" {
+		if authPayload.Role != "admin" {
 			ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "access denied: administrative privileges required"})
 			return
 		}
@@ -130,7 +132,7 @@ func corsMiddleware(frontendURL string) gin.HandlerFunc {
 		}
 
 		c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, x-skip-logging")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, DELETE, PATCH")
 
 		if c.Request.Method == "OPTIONS" {
@@ -242,6 +244,67 @@ func (server *Server) rateLimitMiddleware(limit int, duration time.Duration) gin
 			return
 		}
 
+		ctx.Next()
+	}
+}
+// loggerMiddleware provides structured JSON logging for every request
+func loggerMiddleware() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		start := time.Now()
+		path := ctx.Request.URL.Path
+		raw := ctx.Request.URL.RawQuery
+
+		// Process request
+		ctx.Next()
+
+		// Fill log data
+		latency := time.Since(start)
+		status := ctx.Writer.Status()
+		clientIP := ctx.ClientIP()
+		method := ctx.Request.Method
+		
+		if raw != "" {
+			path = path + "?" + raw
+		}
+
+		// Get UserID from payload if available
+		var userID string
+		if payload, exists := ctx.Get(authorizationPayloadKey); exists {
+			userID = payload.(*token.Payload).UserID.String()
+		}
+
+		requestID := ctx.GetString("request_id")
+
+		logger := log.Info()
+		if status >= 400 && status < 500 {
+			logger = log.Warn()
+		} else if status >= 500 {
+			logger = log.Error()
+		}
+
+		logger.
+			Str("request_id", requestID).
+			Str("method", method).
+			Str("path", path).
+			Int("status", status).
+			Str("latency", latency.String()).
+			Str("client_ip", clientIP).
+			Str("user_id", userID).
+			Str("user_agent", ctx.Request.UserAgent()).
+			Msg("HTTP Request")
+	}
+}
+
+// requestIDMiddleware injects a unique UUID into every request
+func requestIDMiddleware() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		requestID := ctx.GetHeader("X-Request-ID")
+		if requestID == "" {
+			requestID = uuid.New().String()
+		}
+		ctx.Set("request_id", requestID)
+		ctx.Request = ctx.Request.WithContext(context.WithValue(ctx.Request.Context(), "request_id", requestID))
+		ctx.Header("X-Request-ID", requestID)
 		ctx.Next()
 	}
 }

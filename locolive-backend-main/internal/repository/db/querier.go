@@ -34,6 +34,9 @@ type Querier interface {
 	CountCrossingsToday(ctx context.Context, userID1 uuid.UUID) (int64, error)
 	// Admin: Count notifications
 	CountNotificationsAdmin(ctx context.Context) (int64, error)
+	CountPostsByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
+	CountReelsByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
+	CountReportsAgainstUser(ctx context.Context, targetID uuid.NullUUID) (int64, error)
 	CountReportsForUser(ctx context.Context, targetUserID uuid.NullUUID) (int64, error)
 	CountSearchUsersAdmin(ctx context.Context, query string) (int64, error)
 	CountStoryReactions(ctx context.Context, storyID uuid.UUID) (int64, error)
@@ -69,10 +72,7 @@ type Querier interface {
 	CreateUser(ctx context.Context, arg CreateUserParams) (User, error)
 	CreateUserAuditLog(ctx context.Context, arg CreateUserAuditLogParams) (UserActivityLog, error)
 	DecrementPostComments(ctx context.Context, id uuid.UUID) error
-	DecrementPostLikes(ctx context.Context, id uuid.UUID) error
 	DecrementReelComments(ctx context.Context, id uuid.UUID) error
-	DecrementReelLikes(ctx context.Context, id uuid.UUID) error
-	DecrementReelSaves(ctx context.Context, id uuid.UUID) error
 	DeleteActivityLog(ctx context.Context, id uuid.UUID) error
 	// Used for panic mode - deletes all user data
 	DeleteAllUserData(ctx context.Context, id uuid.UUID) error
@@ -113,6 +113,7 @@ type Querier interface {
 	GetAuditLogsByAction(ctx context.Context, arg GetAuditLogsByActionParams) ([]UserActivityLog, error)
 	GetBadge(ctx context.Context, id string) (Badge, error)
 	GetBlockedUsers(ctx context.Context, blockerID uuid.UUID) ([]GetBlockedUsersRow, error)
+	GetBlocksForUser(ctx context.Context, blockerID uuid.UUID) ([]GetBlocksForUserRow, error)
 	GetConnection(ctx context.Context, arg GetConnectionParams) (Connection, error)
 	// Get stories from connected users (not limited by radius)
 	GetConnectionStories(ctx context.Context, userID uuid.UUID) ([]GetConnectionStoriesRow, error)
@@ -126,7 +127,7 @@ type Querier interface {
 	GetGroupByID(ctx context.Context, id uuid.UUID) (Group, error)
 	GetGroupMembers(ctx context.Context, groupID uuid.UUID) ([]GetGroupMembersRow, error)
 	GetGroupMessages(ctx context.Context, groupID uuid.NullUUID) ([]GetGroupMessagesRow, error)
-	GetHeatmapData(ctx context.Context) ([]GetHeatmapDataRow, error)
+	GetHeatmapByBounds(ctx context.Context, arg GetHeatmapByBoundsParams) ([]GetHeatmapByBoundsRow, error)
 	// Returns all archived stories belonging to a highlight
 	GetHighlightDetails(ctx context.Context, highlightID uuid.UUID) ([]GetHighlightDetailsRow, error)
 	GetIncompleteGoogleUsers(ctx context.Context) ([]User, error)
@@ -196,24 +197,22 @@ type Querier interface {
 	HasValidStory(ctx context.Context, userID uuid.UUID) (bool, error)
 	IncrementDailyStats(ctx context.Context, arg IncrementDailyStatsParams) (DailyStat, error)
 	IncrementPostComments(ctx context.Context, id uuid.UUID) error
-	IncrementPostLikes(ctx context.Context, id uuid.UUID) error
 	IncrementPostShares(ctx context.Context, id uuid.UUID) error
 	IncrementReelComments(ctx context.Context, id uuid.UUID) error
-	IncrementReelLikes(ctx context.Context, id uuid.UUID) error
-	IncrementReelSaves(ctx context.Context, id uuid.UUID) error
 	IncrementReelShares(ctx context.Context, id uuid.UUID) error
 	IncrementReportPriority(ctx context.Context, targetID uuid.NullUUID) error
 	IsUserBlocked(ctx context.Context, arg IsUserBlockedParams) (bool, error)
 	// Check if a username is reserved
 	IsUsernameReserved(ctx context.Context, lower string) (bool, error)
-	LikePost(ctx context.Context, arg LikePostParams) (PostLike, error)
-	LikeReel(ctx context.Context, arg LikeReelParams) (ReelLike, error)
+	LikePostAtomic(ctx context.Context, arg LikePostAtomicParams) (int32, error)
+	LikeReelAtomic(ctx context.Context, arg LikeReelAtomicParams) (int32, error)
 	ListActiveUsersWithLocation(ctx context.Context) ([]ListActiveUsersWithLocationRow, error)
 	ListActivityLogs(ctx context.Context, arg ListActivityLogsParams) ([]ListActivityLogsRow, error)
 	ListAdminCrossings(ctx context.Context, arg ListAdminCrossingsParams) ([]ListAdminCrossingsRow, error)
 	// Admin: List all admin/moderator users
 	ListAdminUsers(ctx context.Context) ([]User, error)
 	ListAllBadges(ctx context.Context) ([]Badge, error)
+	ListAllBlocksAdmin(ctx context.Context, arg ListAllBlocksAdminParams) ([]ListAllBlocksAdminRow, error)
 	ListAllComments(ctx context.Context, arg ListAllCommentsParams) ([]ListAllCommentsRow, error)
 	// Admin: List all stories
 	ListAllStories(ctx context.Context, arg ListAllStoriesParams) ([]ListAllStoriesRow, error)
@@ -221,6 +220,8 @@ type Querier interface {
 	// Get posts from connections AND own posts
 	ListConnectionsPosts(ctx context.Context, arg ListConnectionsPostsParams) ([]ListConnectionsPostsRow, error)
 	ListHighlightsByUserID(ctx context.Context, userID uuid.UUID) ([]ListHighlightsByUserIDRow, error)
+	ListLikedPostsByUserID(ctx context.Context, userID uuid.UUID) ([]Post, error)
+	ListLikedReelsByUserID(ctx context.Context, userID uuid.UUID) ([]Reel, error)
 	ListMessages(ctx context.Context, arg ListMessagesParams) ([]ListMessagesRow, error)
 	ListNearbyReels(ctx context.Context, arg ListNearbyReelsParams) ([]ListNearbyReelsRow, error)
 	ListNotifications(ctx context.Context, arg ListNotificationsParams) ([]ListNotificationsRow, error)
@@ -256,7 +257,7 @@ type Querier interface {
 	ResolveReport(ctx context.Context, id uuid.UUID) (Report, error)
 	RestoreUser(ctx context.Context, id uuid.UUID) error
 	SaveMessage(ctx context.Context, id uuid.UUID) (Message, error)
-	SaveReel(ctx context.Context, arg SaveReelParams) (ReelSafe, error)
+	SaveReelAtomic(ctx context.Context, arg SaveReelAtomicParams) (int32, error)
 	SearchUsers(ctx context.Context, query string) ([]SearchUsersRow, error)
 	SearchUsersAdmin(ctx context.Context, arg SearchUsersAdminParams) ([]User, error)
 	SoftDeleteUser(ctx context.Context, id uuid.UUID) error
@@ -266,9 +267,9 @@ type Querier interface {
 	TogglePanicMode(ctx context.Context, arg TogglePanicModeParams) (User, error)
 	TrackProfileView(ctx context.Context, arg TrackProfileViewParams) (ProfileView, error)
 	UnblockUser(ctx context.Context, arg UnblockUserParams) error
-	UnlikePost(ctx context.Context, arg UnlikePostParams) error
-	UnlikeReel(ctx context.Context, arg UnlikeReelParams) error
-	UnsaveReel(ctx context.Context, arg UnsaveReelParams) error
+	UnlikePostAtomic(ctx context.Context, arg UnlikePostAtomicParams) (int32, error)
+	UnlikeReelAtomic(ctx context.Context, arg UnlikeReelAtomicParams) (int32, error)
+	UnsaveReelAtomic(ctx context.Context, arg UnsaveReelAtomicParams) (int32, error)
 	UpdateAccountPrivacy(ctx context.Context, arg UpdateAccountPrivacyParams) (User, error)
 	UpdateConnectionStatus(ctx context.Context, arg UpdateConnectionStatusParams) (Connection, error)
 	UpdateDataExportJob(ctx context.Context, arg UpdateDataExportJobParams) (DataExportJob, error)

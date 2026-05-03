@@ -118,8 +118,10 @@ func (server *Server) getUserProfile(ctx *gin.Context) {
 
 	// Track profile view if user is authenticated
 	authPayload, exists := ctx.Get(authorizationPayloadKey)
+	var viewerID uuid.UUID
 	if exists && authPayload != nil {
 		payload := authPayload.(*token.Payload)
+		viewerID = payload.UserID
 		// Don't track self-views
 		if payload.UserID != userID {
 			// Track asynchronously to not block response
@@ -132,14 +134,26 @@ func (server *Server) getUserProfile(ctx *gin.Context) {
 		}
 	}
 
+	// DEBUG: Log viewer and target
+	log.Info().
+		Str("viewer_id", viewerID.String()).
+		Str("target_id", userID.String()).
+		Str("endpoint", "/users/:id").
+		Msg("[PRIVACY DEBUG] Fetching user profile")
+
 	// 1. Enforce Privacy Settings FIRST using Central Rule Engine
 	// This prevents cache leakage for blocked/panic users.
 	authPayload, authExists := ctx.Get(authorizationPayloadKey)
 	if authExists && authPayload != nil {
 		payload := authPayload.(*token.Payload)
 		result := server.privacy.CanViewProfile(ctx, payload.UserID, userID)
-		
+
 		if !result.Allowed {
+			log.Warn().
+				Str("viewer_id", payload.UserID.String()).
+				Str("target_id", userID.String()).
+				Str("reason", string(result.Reason)).
+				Msg("[PRIVACY BLOCKED] Profile access denied")
 			// As per production spec: Blocked, Panic, or Ghost = Invisible (404)
 			ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
 			return
@@ -180,8 +194,10 @@ func (server *Server) getUserProfile(ctx *gin.Context) {
 
 		// FORCE Correct Counts (Unidirectional)
 		var followersCount, followingCount int64
+		// Followers = only those who were accepted
 		server.store.GetDB().QueryRowContext(ctx, "SELECT COUNT(*) FROM connections WHERE target_id = $1 AND status = 'accepted'", userID).Scan(&followersCount)
-		server.store.GetDB().QueryRowContext(ctx, "SELECT COUNT(*) FROM connections WHERE requester_id = $1 AND status = 'accepted'", userID).Scan(&followingCount)
+		// Following = accepted friends + pending requests sent by the user
+		server.store.GetDB().QueryRowContext(ctx, "SELECT COUNT(*) FROM connections WHERE requester_id = $1 AND status IN ('accepted', 'pending')", userID).Scan(&followingCount)
 		
 		rsp.FollowersCount = followersCount
 		rsp.FollowingCount = followingCount
@@ -292,6 +308,15 @@ func (server *Server) getMyProfile(ctx *gin.Context) {
 	rsp.ViewsCount = profile.TotalViews
 	rsp.CrossingsCount = profile.CrossingsCount
 	rsp.ConnectionStatus = "self"
+
+	// FORCE Correct Counts for self (include pending following)
+	var followersCount, followingCount int64
+	server.store.GetDB().QueryRowContext(ctx, "SELECT COUNT(*) FROM connections WHERE target_id = $1 AND status = 'accepted'", authPayload.UserID).Scan(&followersCount)
+	server.store.GetDB().QueryRowContext(ctx, "SELECT COUNT(*) FROM connections WHERE requester_id = $1 AND status IN ('accepted', 'pending')", authPayload.UserID).Scan(&followingCount)
+	
+	rsp.FollowersCount = followersCount
+	rsp.FollowingCount = followingCount
+	rsp.ConnectionCount = followersCount + followingCount
 
 	// Cache the result
 	responseJSON, _ := json.Marshal(rsp)

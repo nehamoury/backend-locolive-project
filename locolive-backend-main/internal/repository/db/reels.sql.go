@@ -25,6 +25,17 @@ func (q *Queries) AdminDeleteReelComment(ctx context.Context, id uuid.UUID) (uui
 	return reel_id, err
 }
 
+const countReelsByUserID = `-- name: CountReelsByUserID :one
+SELECT COUNT(*) FROM reels WHERE user_id = $1
+`
+
+func (q *Queries) CountReelsByUserID(ctx context.Context, userID uuid.UUID) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countReelsByUserID, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const createReel = `-- name: CreateReel :one
 INSERT INTO reels (
     user_id, video_url, caption, is_ai_generated, location_name, geohash, geom
@@ -132,24 +143,6 @@ UPDATE reels SET comments_count = GREATEST(0, comments_count - 1) WHERE id = $1
 
 func (q *Queries) DecrementReelComments(ctx context.Context, id uuid.UUID) error {
 	_, err := q.db.ExecContext(ctx, decrementReelComments, id)
-	return err
-}
-
-const decrementReelLikes = `-- name: DecrementReelLikes :exec
-UPDATE reels SET likes_count = likes_count - 1 WHERE id = $1
-`
-
-func (q *Queries) DecrementReelLikes(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.ExecContext(ctx, decrementReelLikes, id)
-	return err
-}
-
-const decrementReelSaves = `-- name: DecrementReelSaves :exec
-UPDATE reels SET saves_count = saves_count - 1 WHERE id = $1
-`
-
-func (q *Queries) DecrementReelSaves(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.ExecContext(ctx, decrementReelSaves, id)
 	return err
 }
 
@@ -270,24 +263,6 @@ func (q *Queries) IncrementReelComments(ctx context.Context, id uuid.UUID) error
 	return err
 }
 
-const incrementReelLikes = `-- name: IncrementReelLikes :exec
-UPDATE reels SET likes_count = likes_count + 1 WHERE id = $1
-`
-
-func (q *Queries) IncrementReelLikes(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.ExecContext(ctx, incrementReelLikes, id)
-	return err
-}
-
-const incrementReelSaves = `-- name: IncrementReelSaves :exec
-UPDATE reels SET saves_count = saves_count + 1 WHERE id = $1
-`
-
-func (q *Queries) IncrementReelSaves(ctx context.Context, id uuid.UUID) error {
-	_, err := q.db.ExecContext(ctx, incrementReelSaves, id)
-	return err
-}
-
 const incrementReelShares = `-- name: IncrementReelShares :exec
 UPDATE reels SET shares_count = shares_count + 1 WHERE id = $1
 `
@@ -297,28 +272,75 @@ func (q *Queries) IncrementReelShares(ctx context.Context, id uuid.UUID) error {
 	return err
 }
 
-const likeReel = `-- name: LikeReel :one
-INSERT INTO reel_likes (reel_id, user_id)
-VALUES ($1, $2)
-ON CONFLICT (reel_id, user_id) DO NOTHING
-RETURNING id, reel_id, user_id, created_at
+const likeReelAtomic = `-- name: LikeReelAtomic :one
+WITH inserted AS (
+    INSERT INTO reel_likes (reel_id, user_id)
+    VALUES ($1, $2)
+    ON CONFLICT (reel_id, user_id) DO NOTHING
+    RETURNING reel_id
+)
+UPDATE reels r
+SET likes_count = r.likes_count + 1
+FROM inserted i
+WHERE r.id = i.reel_id
+RETURNING r.likes_count
 `
 
-type LikeReelParams struct {
-	ReelID uuid.UUID `json:"reel_id"`
-	UserID uuid.UUID `json:"user_id"`
+type LikeReelAtomicParams struct {
+	ReelID  uuid.UUID `json:"reel_id"`
+	LikerID uuid.UUID `json:"liker_id"`
 }
 
-func (q *Queries) LikeReel(ctx context.Context, arg LikeReelParams) (ReelLike, error) {
-	row := q.db.QueryRowContext(ctx, likeReel, arg.ReelID, arg.UserID)
-	var i ReelLike
-	err := row.Scan(
-		&i.ID,
-		&i.ReelID,
-		&i.UserID,
-		&i.CreatedAt,
-	)
-	return i, err
+func (q *Queries) LikeReelAtomic(ctx context.Context, arg LikeReelAtomicParams) (int32, error) {
+	row := q.db.QueryRowContext(ctx, likeReelAtomic, arg.ReelID, arg.LikerID)
+	var likes_count int32
+	err := row.Scan(&likes_count)
+	return likes_count, err
+}
+
+const listLikedReelsByUserID = `-- name: ListLikedReelsByUserID :many
+SELECT r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.geom, r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at FROM reels r
+JOIN reel_likes rl ON r.id = rl.reel_id
+WHERE rl.user_id = $1
+ORDER BY rl.created_at DESC
+`
+
+func (q *Queries) ListLikedReelsByUserID(ctx context.Context, userID uuid.UUID) ([]Reel, error) {
+	rows, err := q.db.QueryContext(ctx, listLikedReelsByUserID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Reel
+	for rows.Next() {
+		var i Reel
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.VideoUrl,
+			&i.Caption,
+			&i.IsAiGenerated,
+			&i.LocationName,
+			&i.Geohash,
+			&i.Geom,
+			&i.LikesCount,
+			&i.CommentsCount,
+			&i.SharesCount,
+			&i.SavesCount,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listNearbyReels = `-- name: ListNearbyReels :many
@@ -754,54 +776,78 @@ func (q *Queries) ListUserReels(ctx context.Context, arg ListUserReelsParams) ([
 	return items, nil
 }
 
-const saveReel = `-- name: SaveReel :one
-INSERT INTO reel_saves (reel_id, user_id)
-VALUES ($1, $2)
-ON CONFLICT (reel_id, user_id) DO NOTHING
-RETURNING id, reel_id, user_id, created_at
+const saveReelAtomic = `-- name: SaveReelAtomic :one
+WITH inserted AS (
+    INSERT INTO reel_saves (reel_id, user_id)
+    VALUES ($1, $2)
+    ON CONFLICT (reel_id, user_id) DO NOTHING
+    RETURNING reel_id
+)
+UPDATE reels r
+SET saves_count = r.saves_count + 1
+FROM inserted i
+WHERE r.id = i.reel_id
+RETURNING r.saves_count
 `
 
-type SaveReelParams struct {
-	ReelID uuid.UUID `json:"reel_id"`
-	UserID uuid.UUID `json:"user_id"`
+type SaveReelAtomicParams struct {
+	ReelID  uuid.UUID `json:"reel_id"`
+	SaverID uuid.UUID `json:"saver_id"`
 }
 
-func (q *Queries) SaveReel(ctx context.Context, arg SaveReelParams) (ReelSafe, error) {
-	row := q.db.QueryRowContext(ctx, saveReel, arg.ReelID, arg.UserID)
-	var i ReelSafe
-	err := row.Scan(
-		&i.ID,
-		&i.ReelID,
-		&i.UserID,
-		&i.CreatedAt,
-	)
-	return i, err
+func (q *Queries) SaveReelAtomic(ctx context.Context, arg SaveReelAtomicParams) (int32, error) {
+	row := q.db.QueryRowContext(ctx, saveReelAtomic, arg.ReelID, arg.SaverID)
+	var saves_count int32
+	err := row.Scan(&saves_count)
+	return saves_count, err
 }
 
-const unlikeReel = `-- name: UnlikeReel :exec
-DELETE FROM reel_likes WHERE reel_id = $1 AND user_id = $2
+const unlikeReelAtomic = `-- name: UnlikeReelAtomic :one
+WITH deleted AS (
+    DELETE FROM reel_likes 
+    WHERE reel_likes.reel_id = $1 AND reel_likes.user_id = $2
+    RETURNING reel_id
+)
+UPDATE reels r
+SET likes_count = GREATEST(0, r.likes_count - 1)
+FROM deleted d
+WHERE r.id = d.reel_id
+RETURNING r.likes_count
 `
 
-type UnlikeReelParams struct {
-	ReelID uuid.UUID `json:"reel_id"`
-	UserID uuid.UUID `json:"user_id"`
+type UnlikeReelAtomicParams struct {
+	ReelID  uuid.UUID `json:"reel_id"`
+	LikerID uuid.UUID `json:"liker_id"`
 }
 
-func (q *Queries) UnlikeReel(ctx context.Context, arg UnlikeReelParams) error {
-	_, err := q.db.ExecContext(ctx, unlikeReel, arg.ReelID, arg.UserID)
-	return err
+func (q *Queries) UnlikeReelAtomic(ctx context.Context, arg UnlikeReelAtomicParams) (int32, error) {
+	row := q.db.QueryRowContext(ctx, unlikeReelAtomic, arg.ReelID, arg.LikerID)
+	var likes_count int32
+	err := row.Scan(&likes_count)
+	return likes_count, err
 }
 
-const unsaveReel = `-- name: UnsaveReel :exec
-DELETE FROM reel_saves WHERE reel_id = $1 AND user_id = $2
+const unsaveReelAtomic = `-- name: UnsaveReelAtomic :one
+WITH deleted AS (
+    DELETE FROM reel_saves
+    WHERE reel_saves.reel_id = $1 AND reel_saves.user_id = $2
+    RETURNING reel_id
+)
+UPDATE reels r
+SET saves_count = GREATEST(0, r.saves_count - 1)
+FROM deleted d
+WHERE r.id = d.reel_id
+RETURNING r.saves_count
 `
 
-type UnsaveReelParams struct {
-	ReelID uuid.UUID `json:"reel_id"`
-	UserID uuid.UUID `json:"user_id"`
+type UnsaveReelAtomicParams struct {
+	ReelID  uuid.UUID `json:"reel_id"`
+	SaverID uuid.UUID `json:"saver_id"`
 }
 
-func (q *Queries) UnsaveReel(ctx context.Context, arg UnsaveReelParams) error {
-	_, err := q.db.ExecContext(ctx, unsaveReel, arg.ReelID, arg.UserID)
-	return err
+func (q *Queries) UnsaveReelAtomic(ctx context.Context, arg UnsaveReelAtomicParams) (int32, error) {
+	row := q.db.QueryRowContext(ctx, unsaveReelAtomic, arg.ReelID, arg.SaverID)
+	var saves_count int32
+	err := row.Scan(&saves_count)
+	return saves_count, err
 }

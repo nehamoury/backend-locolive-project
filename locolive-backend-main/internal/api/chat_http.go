@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"privacy-social-backend/internal/realtime"
@@ -153,7 +154,7 @@ func (server *Server) getChatHistory(ctx *gin.Context) {
 	server.redis.Set(context.Background(), cacheKey, responseJSON, chatCacheTTL)
 
 	ctx.Header("X-Cache", "MISS")
-	ctx.Data(http.StatusOK, "application/json", responseJSON)
+	ctx.JSON(http.StatusOK, successResponse(responseMsgs))
 }
 
 // REST API helper to send a message
@@ -179,7 +180,7 @@ func (server *Server) sendMessage(ctx *gin.Context) {
 
 	// Validation: Must have either ReceiverID OR GroupID, not both (for now)
 	if req.ReceiverID == nil && req.GroupID == nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "recipient (user or group) is required"})
+		ctx.JSON(http.StatusBadRequest, errorResponse(fmt.Errorf("recipient (user or group) is required")))
 		return
 	}
 
@@ -201,7 +202,7 @@ func (server *Server) sendMessage(ctx *gin.Context) {
 			case "private":
 				reason = "You must be connected to this user to send messages."
 			}
-			ctx.JSON(http.StatusForbidden, gin.H{"error": reason})
+			ctx.JSON(http.StatusForbidden, errorResponse(errors.New(reason)))
 			return
 		}
 	}
@@ -331,7 +332,7 @@ func (server *Server) sendMessage(ctx *gin.Context) {
 	wsMsgBytes, _ := json.Marshal(wsMsg)
 	server.hub.SendToUser(authPayload.UserID, wsMsgBytes) // Always echo back?
 
-	ctx.JSON(http.StatusCreated, msg)
+	ctx.JSON(http.StatusCreated, successResponse(msg))
 }
 
 // deleteMessage allows a user to unsend/delete their own message
@@ -378,7 +379,7 @@ func (server *Server) deleteMessage(ctx *gin.Context) {
 	}
 	// TODO: Handle Group deletion notification
 
-	ctx.JSON(http.StatusOK, gin.H{"message": "Message deleted"})
+	ctx.JSON(http.StatusOK, successResponse(gin.H{"message": "Message deleted"}))
 }
 
 // editMessageRequest defines the request body for editing a message
@@ -439,7 +440,7 @@ func (server *Server) editMessage(ctx *gin.Context) {
 	}
 	// TODO: Handle Group edit notification
 
-	ctx.JSON(http.StatusOK, updatedMsg)
+	ctx.JSON(http.StatusOK, successResponse(updatedMsg))
 }
 
 // saveMessage prevents a message from expiring (sets expires_at to NULL)
@@ -500,7 +501,7 @@ func (server *Server) saveMessage(ctx *gin.Context) {
 	// }
 	// server.sendWSNotification(otherUserID, "message_saved", gin.H{"message_id": messageID, "saved_by": authPayload.UserID})
 
-	ctx.JSON(http.StatusOK, gin.H{"message": "Message saved successfully", "data": savedMsg})
+	ctx.JSON(http.StatusOK, successResponse(savedMsg))
 }
 
 // markConversationRead marks all messages from a user as read
@@ -542,7 +543,7 @@ func (server *Server) markConversationRead(ctx *gin.Context) {
 	// Notify Self (Reader) to update badges on other devices
 	server.hub.SendToUser(authPayload.UserID, wsMsgBytes)
 
-	ctx.JSON(http.StatusOK, gin.H{"message": "Conversation marked as read"})
+	ctx.JSON(http.StatusOK, successResponse(gin.H{"message": "Conversation marked as read"}))
 }
 
 // Reaction request body
@@ -623,7 +624,7 @@ func (server *Server) addReaction(ctx *gin.Context) {
 		server.hub.SendToUser(otherUserID, wsMsgBytes)
 	}
 
-	ctx.JSON(http.StatusCreated, reaction)
+	ctx.JSON(http.StatusCreated, successResponse(reaction))
 }
 
 // removeReaction removes a reaction from a message
@@ -709,7 +710,7 @@ func (server *Server) getMessageReactions(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, reactions)
+	ctx.JSON(http.StatusOK, successResponse(reactions))
 }
 
 // getUnreadMessageCount returns the total number of unread messages for the user
@@ -735,7 +736,7 @@ func (server *Server) getUnreadMessageCount(ctx *gin.Context) {
 	server.redis.Set(context.Background(), cacheKey, count, 30*time.Minute)
 
 	ctx.Header("X-Cache", "MISS")
-	ctx.JSON(http.StatusOK, gin.H{"unread_count": count})
+	ctx.JSON(http.StatusOK, successResponse(gin.H{"unread_count": count}))
 }
 
 // getConversationList returns list of conversations sorted by most recent message
@@ -788,7 +789,7 @@ func (server *Server) getConversationList(ctx *gin.Context) {
 		}
 	}
 
-	ctx.JSON(http.StatusOK, response)
+	ctx.JSON(http.StatusOK, successResponse(response))
 }
 
 // deleteConversation deletes all messages between the authenticated user and another user

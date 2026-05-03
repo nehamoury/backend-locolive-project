@@ -13,13 +13,14 @@ INSERT INTO locations (
 DELETE FROM locations
 WHERE expires_at < now();
 
--- name: GetHeatmapData :many
+-- name: GetHeatmapByBounds :many
 SELECT 
   ST_X(ST_SnapToGrid(geom, 0.001)) as longitude,
   ST_Y(ST_SnapToGrid(geom, 0.001)) as latitude,
   COUNT(*) as weight
 FROM locations
 WHERE time_bucket > NOW() - INTERVAL '1 hour'
+  AND geom && ST_MakeEnvelope(sqlc.arg(west)::float8, sqlc.arg(south)::float8, sqlc.arg(east)::float8, sqlc.arg(north)::float8, 4326)
 GROUP BY ST_SnapToGrid(geom, 0.001);
 
 -- name: GetNearbyUsersFromDB :many

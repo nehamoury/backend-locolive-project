@@ -19,3 +19,19 @@ SELECT EXISTS (
     SELECT 1 FROM blocked_users
     WHERE blocker_id = $1 AND blocked_id = $2
 );
+
+-- name: ListAllBlocksAdmin :many
+SELECT b.*, u1.username as blocker_username, u2.username as blocked_username
+FROM blocked_users b
+JOIN users u1 ON b.blocker_id = u1.id
+JOIN users u2 ON b.blocked_id = u2.id
+ORDER BY b.created_at DESC
+LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
+
+-- name: GetBlocksForUser :many
+SELECT b.*, u1.username as blocker_username, u2.username as blocked_username
+FROM blocked_users b
+JOIN users u1 ON b.blocker_id = u1.id
+JOIN users u2 ON b.blocked_id = u2.id
+WHERE b.blocker_id = $1 OR b.blocked_id = $1
+ORDER BY b.created_at DESC;

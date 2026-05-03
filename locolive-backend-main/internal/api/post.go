@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 	"github.com/sqlc-dev/pqtype"
 
 	"privacy-social-backend/internal/repository/db"
@@ -171,10 +172,23 @@ func (server *Server) getUserPosts(ctx *gin.Context) {
 	}
 
 	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+	viewerID := authPayload.UserID
+
+	// DEBUG: Log viewer and target
+	log.Info().
+		Str("viewer_id", viewerID.String()).
+		Str("target_id", targetUserID.String()).
+		Str("endpoint", "/users/:id/posts").
+		Msg("[PRIVACY DEBUG] Fetching user posts")
 
 	// Use CENTRAL RULE ENGINE for content access (Posts)
-	result := server.privacy.CanUserAccess(ctx, authPayload.UserID, targetUserID)
+	result := server.privacy.CanUserAccess(ctx, viewerID, targetUserID)
 	if !result.Allowed {
+		log.Warn().
+			Str("viewer_id", viewerID.String()).
+			Str("target_id", targetUserID.String()).
+			Str("reason", string(result.Reason)).
+			Msg("[PRIVACY BLOCKED] Posts access denied")
 		if result.Reason == "private" {
 			ctx.JSON(http.StatusForbidden, gin.H{"error": "This account is private"})
 			return
@@ -209,7 +223,7 @@ func (server *Server) getUserPosts(ctx *gin.Context) {
 		rsp[i] = toPostResponseFromList(p)
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"posts": rsp, "page": page, "page_size": pageSize})
+	ctx.JSON(http.StatusOK, successResponse(gin.H{"posts": rsp, "page": page, "page_size": pageSize}))
 }
 
 // getMyPosts returns the authenticated user's own posts.
@@ -241,7 +255,7 @@ func (server *Server) getMyPosts(ctx *gin.Context) {
 		rsp[i] = toPostResponseFromList(p)
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"posts": rsp, "page": page, "page_size": pageSize})
+	ctx.JSON(http.StatusOK, successResponse(gin.H{"posts": rsp, "page": page, "page_size": pageSize}))
 }
 
 // getConnectionsFeed returns posts from connections (following feed).
@@ -272,7 +286,7 @@ func (server *Server) getConnectionsFeed(ctx *gin.Context) {
 		rsp[i] = toPostResponseFromConnections(p)
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"posts": rsp, "page": page, "page_size": pageSize})
+	ctx.JSON(http.StatusOK, successResponse(gin.H{"posts": rsp, "page": page, "page_size": pageSize}))
 }
 
 // deletePost lets a user delete their own post.
@@ -293,68 +307,72 @@ func (server *Server) deletePost(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"message": "post deleted"})
+	ctx.JSON(http.StatusOK, successResponse(gin.H{"message": "post deleted"}))
 }
 
-// likePost likes a post and increments the counter.
+// likePost likes a post and increments the counter atomically.
 func (server *Server) likePost(ctx *gin.Context) {
-	postID, err := uuid.Parse(ctx.Param("id"))
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errorResponse(err))
+	postID, ok := parseUUIDParam(ctx, ctx.Param("id"), "post_id")
+	if !ok {
 		return
 	}
 
-	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+	authPayload := getAuthPayload(ctx)
 
-	_, err = server.store.LikePost(ctx, db.LikePostParams{
-		PostID: postID,
-		UserID: authPayload.UserID,
+	likesCount, err := server.store.LikePostAtomic(ctx, db.LikePostAtomicParams{
+		PostID:  postID,
+		LikerID: authPayload.UserID,
 	})
-	if err != nil {
-		// Conflict (already liked) is treated as success
-		ctx.JSON(http.StatusOK, gin.H{"message": "liked"})
-		return
-	}
-
-	_ = server.store.IncrementPostLikes(ctx, postID)
-
-	// Log activity & Broadcast to Admin
-	details, _ := json.Marshal(map[string]interface{}{"post_id": postID})
-	_, _ = server.store.CreateActivityLog(ctx, db.CreateActivityLogParams{
-		UserID:     authPayload.UserID,
-		ActionType: "post_liked",
-		TargetID:   uuid.NullUUID{UUID: postID, Valid: true},
-		TargetType: sql.NullString{String: "post", Valid: true},
-		Details:    pqtype.NullRawMessage{RawMessage: details, Valid: true},
-	})
-	server.hub.BroadcastActivity("post_liked", map[string]interface{}{
-		"user_id": authPayload.UserID,
-		"post_id": postID,
-	})
-
-	ctx.JSON(http.StatusOK, gin.H{"message": "liked"})
-}
-
-// unlikePost removes a like from a post.
-func (server *Server) unlikePost(ctx *gin.Context) {
-	postID, err := uuid.Parse(ctx.Param("id"))
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, errorResponse(err))
-		return
-	}
-
-	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
-
-	if err := server.store.UnlikePost(ctx, db.UnlikePostParams{
-		PostID: postID,
-		UserID: authPayload.UserID,
-	}); err != nil {
+	if err != nil && err != sql.ErrNoRows {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
 	}
 
-	_ = server.store.DecrementPostLikes(ctx, postID)
-	ctx.JSON(http.StatusOK, gin.H{"message": "unliked"})
+	// Broadcase if it was a new like
+	if err == nil {
+		// Log activity & Broadcast to Admin
+		details, _ := json.Marshal(map[string]interface{}{"post_id": postID})
+		_, _ = server.store.CreateActivityLog(ctx, db.CreateActivityLogParams{
+			UserID:     authPayload.UserID,
+			ActionType: "post_liked",
+			TargetID:   uuid.NullUUID{UUID: postID, Valid: true},
+			TargetType: sql.NullString{String: "post", Valid: true},
+			Details:    pqtype.NullRawMessage{RawMessage: details, Valid: true},
+		})
+		server.hub.BroadcastActivity("post_liked", map[string]interface{}{
+			"user_id": authPayload.UserID,
+			"post_id": postID,
+		})
+	}
+
+	ctx.JSON(http.StatusOK, successResponse(gin.H{
+		"message":     "liked",
+		"likes_count": likesCount,
+	}))
+}
+
+// unlikePost removes a like from a post atomically.
+func (server *Server) unlikePost(ctx *gin.Context) {
+	postID, ok := parseUUIDParam(ctx, ctx.Param("id"), "post_id")
+	if !ok {
+		return
+	}
+
+	authPayload := getAuthPayload(ctx)
+
+	likesCount, err := server.store.UnlikePostAtomic(ctx, db.UnlikePostAtomicParams{
+		PostID:  postID,
+		LikerID: authPayload.UserID,
+	})
+	if err != nil && err != sql.ErrNoRows {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, successResponse(gin.H{
+		"message":     "unliked",
+		"likes_count": likesCount,
+	}))
 }
 
 // sharePost increments the share counter and broadcasts activity.
@@ -387,7 +405,7 @@ func (server *Server) sharePost(ctx *gin.Context) {
 		"post_id": postID,
 	})
 
-	ctx.JSON(http.StatusOK, gin.H{"success": true})
+	ctx.JSON(http.StatusOK, successResponse(gin.H{"message": "shared"}))
 }
 
 // addPostComment adds a comment to a post.

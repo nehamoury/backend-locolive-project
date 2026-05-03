@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
+	"github.com/rs/zerolog/log"
 	"privacy-social-backend/internal/repository/db"
 )
 
@@ -32,6 +34,7 @@ func NewStore(dbConn *sql.DB) Store {
 
 // ExecTx executes a function within a database transaction
 func (store *SQLStore) ExecTx(ctx context.Context, fn func(*db.Queries) error) error {
+	start := time.Now()
 	tx, err := store.db.BeginTx(ctx, nil)
 	if err != nil {
 		return err
@@ -46,7 +49,18 @@ func (store *SQLStore) ExecTx(ctx context.Context, fn func(*db.Queries) error) e
 		return err
 	}
 
-	return tx.Commit()
+	err = tx.Commit()
+	
+	duration := time.Since(start)
+	if duration > 200*time.Millisecond {
+		requestID, _ := ctx.Value("request_id").(string)
+		log.Warn().
+			Str("request_id", requestID).
+			Dur("duration_ms", duration).
+			Msg("Slow database transaction detected")
+	}
+
+	return err
 }
 func (store *SQLStore) GetDB() *sql.DB {
 	return store.db

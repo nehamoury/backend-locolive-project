@@ -48,10 +48,10 @@ type userResponse struct {
 }
 
 type searchUserResponse struct {
-	ID         uuid.UUID `json:"id"`
-	Username   string    `json:"username"`
-	FullName   string    `json:"full_name"`
-	AvatarUrl  string    `json:"avatar_url"`
+	ID               uuid.UUID `json:"id"`
+	Username         string    `json:"username"`
+	FullName         string    `json:"full_name"`
+	AvatarUrl        string    `json:"avatar_url"`
 	IsVerified       bool      `json:"is_verified"`
 	IsPrivate        bool      `json:"is_private"`
 	ConnectionStatus string    `json:"connection_status"`
@@ -170,7 +170,7 @@ func (server *Server) createUser(ctx *gin.Context) {
 		User:                  newUserResponse(user),
 	}
 
-	ctx.JSON(http.StatusCreated, rsp)
+	ctx.JSON(http.StatusCreated, successResponse(rsp))
 
 	// Broadcast activity to admins
 	server.hub.BroadcastActivity("user_created", gin.H{
@@ -181,7 +181,7 @@ func (server *Server) createUser(ctx *gin.Context) {
 }
 
 type loginUserRequest struct {
-	Email    string `json:"email" binding:"required,email"`
+	Identity string `json:"identity" binding:"required"`
 	Password string `json:"password" binding:"required,min=6"`
 }
 
@@ -194,6 +194,15 @@ type loginUserResponse struct {
 	User                  userResponse `json:"user"`
 }
 
+type renewAccessTokenRequest struct {
+	RefreshToken string `json:"refresh_token"`
+}
+
+type renewAccessTokenResponse struct {
+	AccessToken          string    `json:"access_token"`
+	AccessTokenExpiresAt time.Time `json:"access_token_expires_at"`
+}
+
 func (server *Server) loginUser(ctx *gin.Context) {
 	var req loginUserRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
@@ -202,7 +211,7 @@ func (server *Server) loginUser(ctx *gin.Context) {
 	}
 
 	result, err := server.user.LoginUser(ctx, user.LoginUserParams{
-		Email:     req.Email,
+		Identity:  req.Identity,
 		Password:  req.Password,
 		UserAgent: ctx.Request.UserAgent(),
 		ClientIP:  ctx.ClientIP(),
@@ -251,7 +260,88 @@ func (server *Server) loginUser(ctx *gin.Context) {
 		RefreshTokenExpiresAt: result.RefreshTokenExpiresAt,
 		User:                  newUserResponse(result.User),
 	}
-	ctx.JSON(http.StatusOK, rsp)
+	ctx.JSON(http.StatusOK, successResponse(rsp))
+}
+
+func (server *Server) renewAccessToken(ctx *gin.Context) {
+	var req renewAccessTokenRequest
+	_ = ctx.ShouldBindJSON(&req)
+
+	refreshToken := strings.TrimSpace(req.RefreshToken)
+	if refreshToken == "" {
+		cookieToken, err := ctx.Cookie("refresh_token")
+		if err == nil {
+			refreshToken = cookieToken
+		}
+	}
+
+	if refreshToken == "" {
+		ctx.JSON(http.StatusUnauthorized, errorResponse(fmt.Errorf("refresh token is required")))
+		return
+	}
+
+	refreshPayload, err := server.tokenMaker.VerifyToken(refreshToken)
+	if err != nil {
+		ctx.JSON(http.StatusUnauthorized, errorResponse(err))
+		return
+	}
+
+	session, err := server.store.GetSession(ctx, refreshPayload.ID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			ctx.JSON(http.StatusUnauthorized, errorResponse(fmt.Errorf("session not found")))
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	if session.IsBlocked {
+		ctx.JSON(http.StatusUnauthorized, errorResponse(fmt.Errorf("blocked session")))
+		return
+	}
+
+	if session.UserID != refreshPayload.UserID {
+		ctx.JSON(http.StatusUnauthorized, errorResponse(fmt.Errorf("incorrect session user")))
+		return
+	}
+
+	if session.RefreshToken != refreshToken {
+		ctx.JSON(http.StatusUnauthorized, errorResponse(fmt.Errorf("mismatched session token")))
+		return
+	}
+
+	if time.Now().After(session.ExpiresAt) {
+		ctx.JSON(http.StatusUnauthorized, errorResponse(fmt.Errorf("expired session")))
+		return
+	}
+
+	accessToken, accessPayload, err := server.tokenMaker.CreateToken(
+		refreshPayload.Username,
+		refreshPayload.UserID,
+		refreshPayload.Role,
+		server.config.AccessTokenDuration,
+	)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	isProduction := server.config.Environment == "production"
+	ctx.SetCookie(
+		"access_token",
+		accessToken,
+		int(server.config.AccessTokenDuration.Seconds()),
+		"/",
+		"",
+		isProduction,
+		true,
+	)
+
+	ctx.JSON(http.StatusOK, successResponse(renewAccessTokenResponse{
+		AccessToken:          accessToken,
+		AccessTokenExpiresAt: accessPayload.ExpiredAt,
+	}))
 }
 
 // logoutUser is now handled in security.go
@@ -344,7 +434,7 @@ func (server *Server) searchUsers(ctx *gin.Context) {
 		})
 	}
 
-	ctx.JSON(http.StatusOK, rsp)
+	ctx.JSON(http.StatusOK, successResponse(rsp))
 }
 
 // completeProfileRequest handles profile completion for Google OAuth users
@@ -459,7 +549,7 @@ func (server *Server) completeProfile(ctx *gin.Context) {
 		RefreshTokenExpiresAt: refreshPayload.ExpiredAt,
 		User:                  newUserResponse(user),
 	}
-	ctx.JSON(http.StatusOK, rsp)
+	ctx.JSON(http.StatusOK, successResponse(rsp))
 }
 
 type updateEmailRequest struct {

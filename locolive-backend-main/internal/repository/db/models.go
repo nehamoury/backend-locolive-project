@@ -460,6 +460,7 @@ type Post struct {
 	BodyText      sql.NullString        `json:"body_text"`
 	SharesCount   int32                 `json:"shares_count"`
 	CropSettings  pqtype.NullRawMessage `json:"crop_settings"`
+	SavesCount    int32                 `json:"saves_count"`
 }
 
 type PostComment struct {
@@ -472,6 +473,13 @@ type PostComment struct {
 }
 
 type PostLike struct {
+	ID        uuid.UUID `json:"id"`
+	PostID    uuid.UUID `json:"post_id"`
+	UserID    uuid.UUID `json:"user_id"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+type PostSafe struct {
 	ID        uuid.UUID `json:"id"`
 	PostID    uuid.UUID `json:"post_id"`
 	UserID    uuid.UUID `json:"user_id"`

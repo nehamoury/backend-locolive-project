@@ -47,6 +47,7 @@ type postResponse struct {
 	FullName      string    `json:"full_name,omitempty"`
 	AvatarUrl     string          `json:"avatar_url,omitempty"`
 	LikedByViewer bool            `json:"liked_by_viewer"`
+	IsSaved       bool            `json:"is_saved"`
 	CropSettings  json.RawMessage `json:"crop_settings,omitempty"`
 }
 
@@ -95,6 +96,7 @@ func toPostResponseFromList(p db.ListPostsByUserIDRow) postResponse {
 		FullName:      p.FullName,
 		AvatarUrl:     p.AvatarUrl.String,
 		LikedByViewer: p.LikedByViewer,
+		IsSaved:       p.IsSaved,
 		CropSettings:  p.CropSettings.RawMessage,
 	}
 }
@@ -116,6 +118,29 @@ func toPostResponseFromConnections(p db.ListConnectionsPostsRow) postResponse {
 		FullName:      p.FullName,
 		AvatarUrl:     p.AvatarUrl.String,
 		LikedByViewer: p.LikedByViewer,
+		IsSaved:       p.IsSaved,
+		CropSettings:  p.CropSettings.RawMessage,
+	}
+}
+
+func toPostResponseFromSaved(p db.ListSavedPostsRow) postResponse {
+	return postResponse{
+		ID:            p.ID,
+		UserID:        p.UserID,
+		MediaUrl:      p.MediaUrl,
+		MediaType:     p.MediaType,
+		Caption:       p.Caption.String,
+		BodyText:      p.BodyText.String,
+		LocationName:  p.LocationName.String,
+		LikesCount:    p.LikesCount,
+		CommentsCount: p.CommentsCount,
+		SharesCount:   p.SharesCount,
+		CreatedAt:     p.CreatedAt,
+		Username:      p.Username,
+		FullName:      p.FullName,
+		AvatarUrl:     p.AvatarUrl.String,
+		LikedByViewer: p.LikedByViewer,
+		IsSaved:       p.IsSaved,
 		CropSettings:  p.CropSettings.RawMessage,
 	}
 }
@@ -536,5 +561,84 @@ func (server *Server) deletePostComment(ctx *gin.Context) {
 
 	_ = server.store.DecrementPostComments(ctx, postID)
 	ctx.JSON(http.StatusOK, gin.H{"message": "comment deleted"})
+}
+
+// savePost saves a post for the user.
+func (server *Server) savePost(ctx *gin.Context) {
+	postID, ok := parseUUIDParam(ctx, ctx.Param("id"), "post_id")
+	if !ok {
+		return
+	}
+
+	authPayload := getAuthPayload(ctx)
+
+	savesCount, err := server.store.SavePostAtomic(ctx, db.SavePostAtomicParams{
+		PostID: postID,
+		UserID: authPayload.UserID,
+	})
+	if err != nil && err != sql.ErrNoRows {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, successResponse(gin.H{
+		"message":     "saved",
+		"saves_count": savesCount,
+	}))
+}
+
+// unsavePost removes a saved post for the user.
+func (server *Server) unsavePost(ctx *gin.Context) {
+	postID, ok := parseUUIDParam(ctx, ctx.Param("id"), "post_id")
+	if !ok {
+		return
+	}
+
+	authPayload := getAuthPayload(ctx)
+
+	savesCount, err := server.store.UnsavePostAtomic(ctx, db.UnsavePostAtomicParams{
+		PostID: postID,
+		UserID: authPayload.UserID,
+	})
+	if err != nil && err != sql.ErrNoRows {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, successResponse(gin.H{
+		"message":     "unsaved",
+		"saves_count": savesCount,
+	}))
+}
+
+// getSavedPosts returns the authenticated user's saved posts.
+func (server *Server) getSavedPosts(ctx *gin.Context) {
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+
+	page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(ctx.DefaultQuery("page_size", "12"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 50 {
+		pageSize = 12
+	}
+
+	posts, err := server.store.ListSavedPosts(ctx, db.ListSavedPostsParams{
+		ViewerID: authPayload.UserID,
+		Lim:      int32(pageSize),
+		Off:      int32((page - 1) * pageSize),
+	})
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	rsp := make([]postResponse, len(posts))
+	for i, p := range posts {
+		rsp[i] = toPostResponseFromSaved(p)
+	}
+
+	ctx.JSON(http.StatusOK, successResponse(gin.H{"posts": rsp, "page": page, "page_size": pageSize}))
 }
 

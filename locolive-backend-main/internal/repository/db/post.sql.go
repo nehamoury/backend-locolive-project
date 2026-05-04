@@ -14,6 +14,15 @@ import (
 	"github.com/sqlc-dev/pqtype"
 )
 
+const adminDeletePost = `-- name: AdminDeletePost :exec
+DELETE FROM posts WHERE id = $1
+`
+
+func (q *Queries) AdminDeletePost(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, adminDeletePost, id)
+	return err
+}
+
 const adminDeletePostComment = `-- name: AdminDeletePostComment :one
 DELETE FROM post_comments WHERE id = $1
 RETURNING post_id
@@ -26,12 +35,34 @@ func (q *Queries) AdminDeletePostComment(ctx context.Context, id uuid.UUID) (uui
 	return post_id, err
 }
 
+const countAllPostsAdmin = `-- name: CountAllPostsAdmin :one
+SELECT COUNT(*) FROM posts
+`
+
+func (q *Queries) CountAllPostsAdmin(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countAllPostsAdmin)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countPostsByUserID = `-- name: CountPostsByUserID :one
 SELECT COUNT(*) FROM posts WHERE user_id = $1
 `
 
 func (q *Queries) CountPostsByUserID(ctx context.Context, userID uuid.UUID) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countPostsByUserID, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSavedPosts = `-- name: CountSavedPosts :one
+SELECT COUNT(*) FROM post_saves WHERE user_id = $1
+`
+
+func (q *Queries) CountSavedPosts(ctx context.Context, userID uuid.UUID) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSavedPosts, userID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -48,7 +79,7 @@ VALUES (
          ELSE NULL END,
     $11
 )
-RETURNING id, user_id, media_url, media_type, caption, location_name, geohash, geom, likes_count, comments_count, created_at, updated_at, body_text, shares_count, crop_settings,
+RETURNING id, user_id, media_url, media_type, caption, location_name, geohash, geom, likes_count, comments_count, created_at, updated_at, body_text, shares_count, crop_settings, saves_count,
     CASE WHEN geom IS NOT NULL THEN ST_Y(geom::geometry) ELSE NULL END as lat_out,
     CASE WHEN geom IS NOT NULL THEN ST_X(geom::geometry) ELSE NULL END as lng_out
 `
@@ -83,6 +114,7 @@ type CreatePostRow struct {
 	BodyText      sql.NullString        `json:"body_text"`
 	SharesCount   int32                 `json:"shares_count"`
 	CropSettings  pqtype.NullRawMessage `json:"crop_settings"`
+	SavesCount    int32                 `json:"saves_count"`
 	LatOut        interface{}           `json:"lat_out"`
 	LngOut        interface{}           `json:"lng_out"`
 }
@@ -118,6 +150,7 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (CreateP
 		&i.BodyText,
 		&i.SharesCount,
 		&i.CropSettings,
+		&i.SavesCount,
 		&i.LatOut,
 		&i.LngOut,
 	)
@@ -197,7 +230,7 @@ func (q *Queries) DeletePostComment(ctx context.Context, arg DeletePostCommentPa
 }
 
 const getPost = `-- name: GetPost :one
-SELECT id, user_id, media_url, media_type, caption, location_name, geohash, geom, likes_count, comments_count, created_at, updated_at, body_text, shares_count, crop_settings FROM posts WHERE id = $1 LIMIT 1
+SELECT id, user_id, media_url, media_type, caption, location_name, geohash, geom, likes_count, comments_count, created_at, updated_at, body_text, shares_count, crop_settings, saves_count FROM posts WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) GetPost(ctx context.Context, id uuid.UUID) (Post, error) {
@@ -219,6 +252,7 @@ func (q *Queries) GetPost(ctx context.Context, id uuid.UUID) (Post, error) {
 		&i.BodyText,
 		&i.SharesCount,
 		&i.CropSettings,
+		&i.SavesCount,
 	)
 	return i, err
 }
@@ -285,6 +319,77 @@ func (q *Queries) LikePostAtomic(ctx context.Context, arg LikePostAtomicParams) 
 	return likes_count, err
 }
 
+const listAllPostsAdmin = `-- name: ListAllPostsAdmin :many
+SELECT 
+    p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name,
+    p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
+    u.username, u.avatar_url
+FROM posts p
+JOIN users u ON p.user_id = u.id
+ORDER BY p.created_at DESC
+LIMIT $1 OFFSET $2
+`
+
+type ListAllPostsAdminParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+type ListAllPostsAdminRow struct {
+	ID            uuid.UUID      `json:"id"`
+	UserID        uuid.UUID      `json:"user_id"`
+	MediaUrl      string         `json:"media_url"`
+	MediaType     string         `json:"media_type"`
+	Caption       sql.NullString `json:"caption"`
+	BodyText      sql.NullString `json:"body_text"`
+	LocationName  sql.NullString `json:"location_name"`
+	LikesCount    int32          `json:"likes_count"`
+	CommentsCount int32          `json:"comments_count"`
+	SharesCount   int32          `json:"shares_count"`
+	CreatedAt     time.Time      `json:"created_at"`
+	UpdatedAt     time.Time      `json:"updated_at"`
+	Username      string         `json:"username"`
+	AvatarUrl     sql.NullString `json:"avatar_url"`
+}
+
+func (q *Queries) ListAllPostsAdmin(ctx context.Context, arg ListAllPostsAdminParams) ([]ListAllPostsAdminRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAllPostsAdmin, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAllPostsAdminRow
+	for rows.Next() {
+		var i ListAllPostsAdminRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.MediaUrl,
+			&i.MediaType,
+			&i.Caption,
+			&i.BodyText,
+			&i.LocationName,
+			&i.LikesCount,
+			&i.CommentsCount,
+			&i.SharesCount,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Username,
+			&i.AvatarUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listConnectionsPosts = `-- name: ListConnectionsPosts :many
 SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings,
        p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
@@ -292,7 +397,8 @@ SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.loc
        u.username, u.full_name, u.avatar_url,
        CASE WHEN p.geom IS NOT NULL THEN ST_Y(p.geom::geometry) ELSE NULL END as lat_out,
        CASE WHEN p.geom IS NOT NULL THEN ST_X(p.geom::geometry) ELSE NULL END as lng_out,
-       EXISTS(SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = $1) as liked_by_viewer
+       EXISTS(SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = $1) as liked_by_viewer,
+       EXISTS(SELECT 1 FROM post_saves ps WHERE ps.post_id = p.id AND ps.user_id = $1) as is_saved
 FROM posts p
 JOIN users u ON p.user_id = u.id
 LEFT JOIN connections c ON
@@ -334,6 +440,7 @@ type ListConnectionsPostsRow struct {
 	LatOut        interface{}           `json:"lat_out"`
 	LngOut        interface{}           `json:"lng_out"`
 	LikedByViewer bool                  `json:"liked_by_viewer"`
+	IsSaved       bool                  `json:"is_saved"`
 }
 
 // Get posts from connections AND own posts
@@ -366,6 +473,7 @@ func (q *Queries) ListConnectionsPosts(ctx context.Context, arg ListConnectionsP
 			&i.LatOut,
 			&i.LngOut,
 			&i.LikedByViewer,
+			&i.IsSaved,
 		); err != nil {
 			return nil, err
 		}
@@ -381,7 +489,7 @@ func (q *Queries) ListConnectionsPosts(ctx context.Context, arg ListConnectionsP
 }
 
 const listLikedPostsByUserID = `-- name: ListLikedPostsByUserID :many
-SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.location_name, p.geohash, p.geom, p.likes_count, p.comments_count, p.created_at, p.updated_at, p.body_text, p.shares_count, p.crop_settings FROM posts p
+SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.location_name, p.geohash, p.geom, p.likes_count, p.comments_count, p.created_at, p.updated_at, p.body_text, p.shares_count, p.crop_settings, p.saves_count FROM posts p
 JOIN post_likes pl ON p.id = pl.post_id
 WHERE pl.user_id = $1
 ORDER BY pl.created_at DESC
@@ -412,6 +520,7 @@ func (q *Queries) ListLikedPostsByUserID(ctx context.Context, userID uuid.UUID) 
 			&i.BodyText,
 			&i.SharesCount,
 			&i.CropSettings,
+			&i.SavesCount,
 		); err != nil {
 			return nil, err
 		}
@@ -486,7 +595,8 @@ SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.loc
        u.username, u.full_name, u.avatar_url,
        CASE WHEN p.geom IS NOT NULL THEN ST_Y(p.geom::geometry) ELSE NULL END as lat_out,
        CASE WHEN p.geom IS NOT NULL THEN ST_X(p.geom::geometry) ELSE NULL END as lng_out,
-       EXISTS(SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = $1) as liked_by_viewer
+       EXISTS(SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = $1) as liked_by_viewer,
+       EXISTS(SELECT 1 FROM post_saves ps WHERE ps.post_id = p.id AND ps.user_id = $1) as is_saved
 FROM posts p
 JOIN users u ON p.user_id = u.id
 WHERE p.user_id = $2
@@ -521,6 +631,7 @@ type ListPostsByUserIDRow struct {
 	LatOut        interface{}           `json:"lat_out"`
 	LngOut        interface{}           `json:"lng_out"`
 	LikedByViewer bool                  `json:"liked_by_viewer"`
+	IsSaved       bool                  `json:"is_saved"`
 }
 
 func (q *Queries) ListPostsByUserID(ctx context.Context, arg ListPostsByUserIDParams) ([]ListPostsByUserIDRow, error) {
@@ -557,6 +668,7 @@ func (q *Queries) ListPostsByUserID(ctx context.Context, arg ListPostsByUserIDPa
 			&i.LatOut,
 			&i.LngOut,
 			&i.LikedByViewer,
+			&i.IsSaved,
 		); err != nil {
 			return nil, err
 		}
@@ -569,6 +681,115 @@ func (q *Queries) ListPostsByUserID(ctx context.Context, arg ListPostsByUserIDPa
 		return nil, err
 	}
 	return items, nil
+}
+
+const listSavedPosts = `-- name: ListSavedPosts :many
+SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings,
+       p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
+       u.username, u.full_name, u.avatar_url,
+       TRUE as is_saved,
+       EXISTS(SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = $1) as liked_by_viewer
+FROM posts p
+JOIN users u ON p.user_id = u.id
+JOIN post_saves ps ON p.id = ps.post_id
+WHERE ps.user_id = $1
+ORDER BY ps.created_at DESC
+LIMIT $3 OFFSET $2
+`
+
+type ListSavedPostsParams struct {
+	ViewerID uuid.UUID `json:"viewer_id"`
+	Off      int32     `json:"off"`
+	Lim      int32     `json:"lim"`
+}
+
+type ListSavedPostsRow struct {
+	ID            uuid.UUID             `json:"id"`
+	UserID        uuid.UUID             `json:"user_id"`
+	MediaUrl      string                `json:"media_url"`
+	MediaType     string                `json:"media_type"`
+	Caption       sql.NullString        `json:"caption"`
+	BodyText      sql.NullString        `json:"body_text"`
+	LocationName  sql.NullString        `json:"location_name"`
+	CropSettings  pqtype.NullRawMessage `json:"crop_settings"`
+	LikesCount    int32                 `json:"likes_count"`
+	CommentsCount int32                 `json:"comments_count"`
+	SharesCount   int32                 `json:"shares_count"`
+	CreatedAt     time.Time             `json:"created_at"`
+	UpdatedAt     time.Time             `json:"updated_at"`
+	Username      string                `json:"username"`
+	FullName      string                `json:"full_name"`
+	AvatarUrl     sql.NullString        `json:"avatar_url"`
+	IsSaved       bool                  `json:"is_saved"`
+	LikedByViewer bool                  `json:"liked_by_viewer"`
+}
+
+func (q *Queries) ListSavedPosts(ctx context.Context, arg ListSavedPostsParams) ([]ListSavedPostsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listSavedPosts, arg.ViewerID, arg.Off, arg.Lim)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListSavedPostsRow
+	for rows.Next() {
+		var i ListSavedPostsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.MediaUrl,
+			&i.MediaType,
+			&i.Caption,
+			&i.BodyText,
+			&i.LocationName,
+			&i.CropSettings,
+			&i.LikesCount,
+			&i.CommentsCount,
+			&i.SharesCount,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Username,
+			&i.FullName,
+			&i.AvatarUrl,
+			&i.IsSaved,
+			&i.LikedByViewer,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const savePostAtomic = `-- name: SavePostAtomic :one
+WITH inserted AS (
+    INSERT INTO post_saves (post_id, user_id)
+    VALUES ($1, $2)
+    ON CONFLICT (post_id, user_id) DO NOTHING
+    RETURNING post_id
+)
+UPDATE posts p
+SET saves_count = p.saves_count + 1
+FROM inserted i
+WHERE p.id = i.post_id
+RETURNING p.saves_count
+`
+
+type SavePostAtomicParams struct {
+	PostID uuid.UUID `json:"post_id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) SavePostAtomic(ctx context.Context, arg SavePostAtomicParams) (int32, error) {
+	row := q.db.QueryRowContext(ctx, savePostAtomic, arg.PostID, arg.UserID)
+	var saves_count int32
+	err := row.Scan(&saves_count)
+	return saves_count, err
 }
 
 const unlikePostAtomic = `-- name: UnlikePostAtomic :one
@@ -594,4 +815,29 @@ func (q *Queries) UnlikePostAtomic(ctx context.Context, arg UnlikePostAtomicPara
 	var likes_count int32
 	err := row.Scan(&likes_count)
 	return likes_count, err
+}
+
+const unsavePostAtomic = `-- name: UnsavePostAtomic :one
+WITH deleted AS (
+    DELETE FROM post_saves
+    WHERE post_saves.post_id = $1 AND post_saves.user_id = $2
+    RETURNING post_id
+)
+UPDATE posts p
+SET saves_count = GREATEST(0, p.saves_count - 1)
+FROM deleted d
+WHERE p.id = d.post_id
+RETURNING p.saves_count
+`
+
+type UnsavePostAtomicParams struct {
+	PostID uuid.UUID `json:"post_id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) UnsavePostAtomic(ctx context.Context, arg UnsavePostAtomicParams) (int32, error) {
+	row := q.db.QueryRowContext(ctx, unsavePostAtomic, arg.PostID, arg.UserID)
+	var saves_count int32
+	err := row.Scan(&saves_count)
+	return saves_count, err
 }

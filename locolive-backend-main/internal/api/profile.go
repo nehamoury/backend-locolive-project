@@ -50,6 +50,7 @@ type ProfileResponse struct {
 	FollowersCount    int64      `json:"followers_count"`
 	ViewsCount        int64      `json:"views_count"`
 	CrossingsCount    int64      `json:"crossings_count"`
+	SavedCount        int64      `json:"saved_count"`
 	LastActiveAt      time.Time  `json:"last_active_at"`
 	CreatedAt         time.Time  `json:"created_at"`
 	VisibilityStatus  string     `json:"visibility_status"`
@@ -92,6 +93,7 @@ func mapProfileResponse(p db.GetUserProfileRow) ProfileResponse {
 		FollowersCount:    p.FollowersCount,
 		ViewsCount:        0, // Will be populated in handlers
 		CrossingsCount:    0, // Will be populated in handlers
+		SavedCount:        0, // Will be populated in handlers
 		LastActiveAt:      p.LastActiveAt.Time,
 		CreatedAt:         p.CreatedAt,
 		VisibilityStatus:  p.VisibilityStatus,
@@ -202,6 +204,11 @@ func (server *Server) getUserProfile(ctx *gin.Context) {
 		rsp.FollowersCount = followersCount
 		rsp.FollowingCount = followingCount
 		rsp.ConnectionCount = followersCount + followingCount
+
+		// Saved Count (Posts + Reels)
+		savedPostsCount, _ := server.store.CountSavedPosts(ctx, userID)
+		savedReelsCount, _ := server.store.CountSavedReels(ctx, userID)
+		rsp.SavedCount = savedPostsCount + savedReelsCount
 
 		// Cache for future requests
 		if rspJSON, err := json.Marshal(rsp); err == nil {
@@ -317,6 +324,11 @@ func (server *Server) getMyProfile(ctx *gin.Context) {
 	rsp.FollowersCount = followersCount
 	rsp.FollowingCount = followingCount
 	rsp.ConnectionCount = followersCount + followingCount
+
+	// Saved Count (Posts + Reels)
+	savedPostsCount, _ := server.store.CountSavedPosts(ctx, authPayload.UserID)
+	savedReelsCount, _ := server.store.CountSavedReels(ctx, authPayload.UserID)
+	rsp.SavedCount = savedPostsCount + savedReelsCount
 
 	// Cache the result
 	responseJSON, _ := json.Marshal(rsp)

@@ -162,7 +162,7 @@ func securityHeadersMiddleware() gin.HandlerFunc {
 			"script-src 'self' 'unsafe-inline' https://api.mapbox.com",
 			"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://api.mapbox.com",
 			"font-src 'self' https://fonts.gstatic.com",
-			"connect-src 'self' https://api.mapbox.com https://*.tiles.mapbox.com ws: wss: localhost:* 127.0.0.1:* 192.168.*",
+			"connect-src 'self' https://api.mapbox.com https://*.tiles.mapbox.com ws: wss: https://locolive.appnity.co.in",
 			"worker-src 'self' blob:",
 		}, "; ")
 		c.Writer.Header().Set("Content-Security-Policy", csp)
@@ -228,7 +228,7 @@ func (server *Server) respondToPrivacyDenial(ctx *gin.Context, reason interface{
 func (server *Server) rateLimitMiddleware(limit int, duration time.Duration) gin.HandlerFunc {
 	return func(ctx *gin.Context) {
 		key := fmt.Sprintf("rl:%s:%s", ctx.FullPath(), ctx.ClientIP())
-		
+
 		count, err := server.redis.Incr(ctx, key).Result()
 		if err != nil {
 			ctx.Next()
@@ -247,6 +247,7 @@ func (server *Server) rateLimitMiddleware(limit int, duration time.Duration) gin
 		ctx.Next()
 	}
 }
+
 // loggerMiddleware provides structured JSON logging for every request
 func loggerMiddleware() gin.HandlerFunc {
 	return func(ctx *gin.Context) {
@@ -262,7 +263,7 @@ func loggerMiddleware() gin.HandlerFunc {
 		status := ctx.Writer.Status()
 		clientIP := ctx.ClientIP()
 		method := ctx.Request.Method
-		
+
 		if raw != "" {
 			path = path + "?" + raw
 		}

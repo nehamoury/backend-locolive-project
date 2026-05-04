@@ -13,6 +13,15 @@ import (
 	"github.com/google/uuid"
 )
 
+const adminDeleteReel = `-- name: AdminDeleteReel :exec
+DELETE FROM reels WHERE id = $1
+`
+
+func (q *Queries) AdminDeleteReel(ctx context.Context, id uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, adminDeleteReel, id)
+	return err
+}
+
 const adminDeleteReelComment = `-- name: AdminDeleteReelComment :one
 DELETE FROM reel_comments WHERE id = $1
 RETURNING reel_id
@@ -25,12 +34,34 @@ func (q *Queries) AdminDeleteReelComment(ctx context.Context, id uuid.UUID) (uui
 	return reel_id, err
 }
 
+const countAllReelsAdmin = `-- name: CountAllReelsAdmin :one
+SELECT COUNT(*) FROM reels
+`
+
+func (q *Queries) CountAllReelsAdmin(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countAllReelsAdmin)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countReelsByUserID = `-- name: CountReelsByUserID :one
 SELECT COUNT(*) FROM reels WHERE user_id = $1
 `
 
 func (q *Queries) CountReelsByUserID(ctx context.Context, userID uuid.UUID) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countReelsByUserID, userID)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countSavedReels = `-- name: CountSavedReels :one
+SELECT COUNT(*) FROM reel_saves WHERE user_id = $1
+`
+
+func (q *Queries) CountSavedReels(ctx context.Context, userID uuid.UUID) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countSavedReels, userID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -296,6 +327,79 @@ func (q *Queries) LikeReelAtomic(ctx context.Context, arg LikeReelAtomicParams) 
 	var likes_count int32
 	err := row.Scan(&likes_count)
 	return likes_count, err
+}
+
+const listAllReelsAdmin = `-- name: ListAllReelsAdmin :many
+SELECT 
+    r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash,
+    r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
+    u.username, u.avatar_url
+FROM reels r
+JOIN users u ON r.user_id = u.id
+ORDER BY r.created_at DESC
+LIMIT $1 OFFSET $2
+`
+
+type ListAllReelsAdminParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+type ListAllReelsAdminRow struct {
+	ID            uuid.UUID      `json:"id"`
+	UserID        uuid.UUID      `json:"user_id"`
+	VideoUrl      string         `json:"video_url"`
+	Caption       sql.NullString `json:"caption"`
+	IsAiGenerated bool           `json:"is_ai_generated"`
+	LocationName  sql.NullString `json:"location_name"`
+	Geohash       sql.NullString `json:"geohash"`
+	LikesCount    int32          `json:"likes_count"`
+	CommentsCount int32          `json:"comments_count"`
+	SharesCount   int32          `json:"shares_count"`
+	SavesCount    int32          `json:"saves_count"`
+	CreatedAt     time.Time      `json:"created_at"`
+	UpdatedAt     time.Time      `json:"updated_at"`
+	Username      string         `json:"username"`
+	AvatarUrl     sql.NullString `json:"avatar_url"`
+}
+
+func (q *Queries) ListAllReelsAdmin(ctx context.Context, arg ListAllReelsAdminParams) ([]ListAllReelsAdminRow, error) {
+	rows, err := q.db.QueryContext(ctx, listAllReelsAdmin, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListAllReelsAdminRow
+	for rows.Next() {
+		var i ListAllReelsAdminRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.VideoUrl,
+			&i.Caption,
+			&i.IsAiGenerated,
+			&i.LocationName,
+			&i.Geohash,
+			&i.LikesCount,
+			&i.CommentsCount,
+			&i.SharesCount,
+			&i.SavesCount,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Username,
+			&i.AvatarUrl,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listLikedReelsByUserID = `-- name: ListLikedReelsByUserID :many

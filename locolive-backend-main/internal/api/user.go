@@ -140,26 +140,32 @@ func (server *Server) createUser(ctx *gin.Context) {
 
 	// Set Access Token in Cookie
 	isProduction := server.config.Environment == "production"
-	ctx.SetCookie(
-		"access_token",
-		accessToken,
-		int(server.config.AccessTokenDuration.Seconds()),
-		"/",
-		"",           // domain (empty means current host)
-		isProduction, // secure (only HTTPS in production)
-		true,         // httpOnly
-	)
+	sameSite := http.SameSiteLaxMode
+	if isProduction {
+		sameSite = http.SameSiteStrictMode
+	}
+	http.SetCookie(ctx.Writer, &http.Cookie{
+		Name:     "access_token",
+		Value:    accessToken,
+		MaxAge:   int(server.config.AccessTokenDuration.Seconds()),
+		Path:     "/",
+		Domain:   "",
+		Secure:   isProduction,
+		HttpOnly: true,
+		SameSite: sameSite,
+	})
 
 	// Set Refresh Token in Cookie
-	ctx.SetCookie(
-		"refresh_token",
-		refreshToken,
-		int(server.config.RefreshTokenDuration.Seconds()),
-		"/api/users/renew_access", // only send to renewal endpoint
-		"",
-		isProduction,
-		true,
-	)
+	http.SetCookie(ctx.Writer, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    refreshToken,
+		MaxAge:   int(server.config.RefreshTokenDuration.Seconds()),
+		Path:     "/api/users/renew_access",
+		Domain:   "",
+		Secure:   isProduction,
+		HttpOnly: true,
+		SameSite: sameSite,
+	})
 
 	rsp := loginUserResponse{
 		SessionID:             session.ID,
@@ -231,26 +237,32 @@ func (server *Server) loginUser(ctx *gin.Context) {
 
 	// Set Access Token in Cookie
 	isProduction := server.config.Environment == "production"
-	ctx.SetCookie(
-		"access_token",
-		result.AccessToken,
-		int(server.config.AccessTokenDuration.Seconds()),
-		"/",
-		"",
-		isProduction,
-		true,
-	)
+	sameSite := http.SameSiteLaxMode
+	if isProduction {
+		sameSite = http.SameSiteStrictMode
+	}
+	http.SetCookie(ctx.Writer, &http.Cookie{
+		Name:     "access_token",
+		Value:    result.AccessToken,
+		MaxAge:   int(server.config.AccessTokenDuration.Seconds()),
+		Path:     "/",
+		Domain:   "",
+		Secure:   isProduction,
+		HttpOnly: true,
+		SameSite: sameSite,
+	})
 
 	// Set Refresh Token in Cookie
-	ctx.SetCookie(
-		"refresh_token",
-		result.RefreshToken,
-		int(server.config.RefreshTokenDuration.Seconds()),
-		"/api/users/renew_access",
-		"",
-		isProduction,
-		true,
-	)
+	http.SetCookie(ctx.Writer, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    result.RefreshToken,
+		MaxAge:   int(server.config.RefreshTokenDuration.Seconds()),
+		Path:     "/api/users/renew_access",
+		Domain:   "",
+		Secure:   isProduction,
+		HttpOnly: true,
+		SameSite: sameSite,
+	})
 
 	rsp := loginUserResponse{
 		SessionID:             result.SessionID,

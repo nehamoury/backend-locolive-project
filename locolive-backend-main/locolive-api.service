@@ -1,0 +1,28 @@
+[Unit]
+Description=LocoLive API Server
+After=network.target postgresql.service redis-server.service
+Wants=postgresql.service redis-server.service
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/locolive-backend
+EnvironmentFile=/var/www/locolive-backend/app.env
+ExecStart=/var/www/locolive-backend/locolive-api
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/var/www/uploads /var/www/locolive-backend
+
+# Logging
+SyslogIdentifier=locolive-api
+
+[Install]
+WantedBy=multi-user.target

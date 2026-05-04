@@ -1,4 +1,6 @@
-DB_URL=postgresql://postgres:neha1234@localhost:5432/privacy_social?sslmode=disable
+# Database URL from environment variable (never hardcode credentials)
+# Usage: export DB_URL=postgresql://user:pass@host:5432/dbname || make migrateup
+DB_URL ?= $(ENV_DB_URL)
 
 migrateup:
 	migrate -path db/migrations -database "$(DB_URL)" -verbose up

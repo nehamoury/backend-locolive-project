@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS post_saves;
+ALTER TABLE posts DROP COLUMN IF EXISTS saves_count;

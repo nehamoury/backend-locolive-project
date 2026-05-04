@@ -312,7 +312,7 @@ func (server *Server) getReelsFeed(ctx *gin.Context) {
 		rsp[i] = toReelResponseFromFeed(r)
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"reels": rsp, "page": page, "page_size": pageSize})
+	ctx.JSON(http.StatusOK, successResponse(gin.H{"reels": rsp, "page": page, "page_size": pageSize}))
 }
 
 // getNearbyReels returns reels within a certain radius.
@@ -352,7 +352,7 @@ func (server *Server) getNearbyReels(ctx *gin.Context) {
 		rsp[i] = toReelResponseFromNearby(r)
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"reels": rsp, "page": page, "page_size": pageSize})
+	ctx.JSON(http.StatusOK, successResponse(gin.H{"reels": rsp, "page": page, "page_size": pageSize}))
 }
 
 // getUserReels returns paginated reels for a specific user with privacy checks
@@ -402,7 +402,7 @@ func (server *Server) getUserReels(ctx *gin.Context) {
 		rsp[i] = toReelResponseFromUserReels(r)
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"reels": rsp, "page": page, "page_size": pageSize})
+	ctx.JSON(http.StatusOK, successResponse(gin.H{"reels": rsp, "page": page, "page_size": pageSize}))
 }
 
 // likeReel likes a reel atomically.
@@ -704,5 +704,5 @@ func (server *Server) getSavedReels(ctx *gin.Context) {
 		}
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"reels": rsp, "page": page, "page_size": pageSize})
+	ctx.JSON(http.StatusOK, successResponse(gin.H{"reels": rsp, "page": page, "page_size": pageSize}))
 }

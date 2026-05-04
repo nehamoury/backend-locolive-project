@@ -152,6 +152,9 @@ UPDATE reels SET comments_count = GREATEST(0, comments_count - 1) WHERE id = $1;
 -- name: DeleteReel :exec
 DELETE FROM reels WHERE id = $1 AND user_id = $2;
 
+-- name: AdminDeleteReel :exec
+DELETE FROM reels WHERE id = $1;
+
 -- name: ListSavedReels :many
 SELECT 
     r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash,
@@ -177,3 +180,19 @@ SELECT r.* FROM reels r
 JOIN reel_likes rl ON r.id = rl.reel_id
 WHERE rl.user_id = sqlc.arg(user_id)
 ORDER BY rl.created_at DESC;
+
+-- name: CountSavedReels :one
+SELECT COUNT(*) FROM reel_saves WHERE user_id = sqlc.arg(user_id);
+
+-- name: ListAllReelsAdmin :many
+SELECT 
+    r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash,
+    r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
+    u.username, u.avatar_url
+FROM reels r
+JOIN users u ON r.user_id = u.id
+ORDER BY r.created_at DESC
+LIMIT $1 OFFSET $2;
+
+-- name: CountAllReelsAdmin :one
+SELECT COUNT(*) FROM reels;

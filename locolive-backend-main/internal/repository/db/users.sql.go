@@ -405,22 +405,34 @@ func (q *Queries) GetIncompleteGoogleUsers(ctx context.Context) ([]User, error) 
 
 const getSystemStats = `-- name: GetSystemStats :one
 SELECT 
-  COUNT(*) as total_users,
-  COUNT(*) FILTER (WHERE created_at > NOW() - INTERVAL '24 hours') as new_users_24h,
-  COUNT(*) FILTER (WHERE last_active_at > NOW() - INTERVAL '1 hour') as active_users_1h
-FROM users
+  (SELECT COUNT(*) FROM users) as total_users,
+  (SELECT COUNT(*) FROM users WHERE created_at > NOW() - INTERVAL '24 hours') as new_users_24h,
+  (SELECT COUNT(*) FROM users WHERE last_active_at > NOW() - INTERVAL '1 hour') as active_users_1h,
+  (SELECT COUNT(*) FROM stories) as total_stories,
+  (SELECT COUNT(*) FROM posts) as total_posts,
+  (SELECT COUNT(*) FROM reels) as total_reels
 `
 
 type GetSystemStatsRow struct {
 	TotalUsers    int64 `json:"total_users"`
 	NewUsers24h   int64 `json:"new_users_24h"`
 	ActiveUsers1h int64 `json:"active_users_1h"`
+	TotalStories  int64 `json:"total_stories"`
+	TotalPosts    int64 `json:"total_posts"`
+	TotalReels    int64 `json:"total_reels"`
 }
 
 func (q *Queries) GetSystemStats(ctx context.Context) (GetSystemStatsRow, error) {
 	row := q.db.QueryRowContext(ctx, getSystemStats)
 	var i GetSystemStatsRow
-	err := row.Scan(&i.TotalUsers, &i.NewUsers24h, &i.ActiveUsers1h)
+	err := row.Scan(
+		&i.TotalUsers,
+		&i.NewUsers24h,
+		&i.ActiveUsers1h,
+		&i.TotalStories,
+		&i.TotalPosts,
+		&i.TotalReels,
+	)
 	return i, err
 }
 

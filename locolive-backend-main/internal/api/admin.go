@@ -258,6 +258,38 @@ func (server *Server) deleteStory(ctx *gin.Context) {
 	})
 }
 
+// Admin: Delete Post
+func (server *Server) adminDeletePost(ctx *gin.Context) {
+	id, ok := parseUUIDParam(ctx, ctx.Param("id"), "id")
+	if !ok {
+		return
+	}
+
+	err := server.store.AdminDeletePost(ctx, id)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"success": true, "message": "post deleted"})
+}
+
+// Admin: Delete Reel
+func (server *Server) adminDeleteReel(ctx *gin.Context) {
+	id, ok := parseUUIDParam(ctx, ctx.Param("id"), "id")
+	if !ok {
+		return
+	}
+
+	err := server.store.AdminDeleteReel(ctx, id)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"success": true, "message": "reel deleted"})
+}
+
 // Admin: List All Stories
 type listAllStoriesRequest struct {
 	PageID   int32 `form:"page" binding:"required,min=1"`
@@ -270,17 +302,18 @@ func (server *Server) listAllStories(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, errorResponse(err))
 		return
 	}
-
-	stories, err := server.admin.ListAllStories(ctx, req.PageID, req.PageSize)
+	
+	stories, total, err := server.admin.ListAllStories(ctx, req.PageID, req.PageSize)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
 	}
-
+	
 	ctx.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
 			"items":     stories,
+			"total":     total,
 			"page":      req.PageID,
 			"page_size": req.PageSize,
 		},
@@ -1097,24 +1130,38 @@ func (server *Server) handleAdminUserAction(ctx *gin.Context) {
 	})
 }
 
-// Admin: List Content (Posts + Reels)
+// Admin: List Content (Posts + Reels + Stories)
 func (server *Server) listAdminContent(ctx *gin.Context) {
 	page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(ctx.DefaultQuery("page_size", "20"))
-	contentType := ctx.DefaultQuery("type", "all") // all, post, reel
+	contentType := ctx.DefaultQuery("type", "all")
 
-	// This is a simplified version. In production, you'd have a specialized query.
-	// For MVP, we combine or just list stories if that's what was there.
-	
-	stories, _ := server.store.ListAllStories(ctx, db.ListAllStoriesParams{
-		Limit:  int32(pageSize),
-		Offset: int32((page - 1) * pageSize),
-	})
+	var items interface{}
+	var total int64
+	var err error
+
+	switch contentType {
+	case "post":
+		items, total, err = server.admin.ListAllPosts(ctx, int32(page), int32(pageSize))
+	case "reel":
+		items, total, err = server.admin.ListAllReels(ctx, int32(page), int32(pageSize))
+	case "story":
+		items, total, err = server.admin.ListAllStories(ctx, int32(page), int32(pageSize))
+	default:
+		// Default to stories for now or combine?
+		items, total, err = server.admin.ListAllStories(ctx, int32(page), int32(pageSize))
+	}
+
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
-			"items":     stories,
+			"items":     items,
+			"total":     total,
 			"page":      page,
 			"page_size": pageSize,
 			"type":      contentType,

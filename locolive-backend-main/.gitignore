@@ -19,8 +19,13 @@ localtunnel.log
 # Environment
 .env
 app.env
-# Keep app.env.example if it exists
+# Keep example files
 !app.env.example
+!app.env.production.example
+
+# Deploy scripts (keep locally, exclude from VCS if secrets)
+!deploy.sh
+!vps-setup.sh
 
 # OS Specific
 .DS_Store
@@ -32,7 +37,7 @@ ehthumbs.db
 Thumbs.db
 
 # Editor
-.vscode/
+.vscode/ 
 .idea/
 *.swp
 *.swo

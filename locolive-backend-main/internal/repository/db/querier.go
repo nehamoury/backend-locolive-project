@@ -16,7 +16,9 @@ type Querier interface {
 	// Add a new reserved username (admin only)
 	AddReservedUsername(ctx context.Context, arg AddReservedUsernameParams) error
 	AddStoryToHighlight(ctx context.Context, arg AddStoryToHighlightParams) (HighlightStory, error)
+	AdminDeletePost(ctx context.Context, id uuid.UUID) error
 	AdminDeletePostComment(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
+	AdminDeleteReel(ctx context.Context, id uuid.UUID) error
 	AdminDeleteReelComment(ctx context.Context, id uuid.UUID) (uuid.UUID, error)
 	ArchiveStory(ctx context.Context, arg ArchiveStoryParams) (ArchivedStory, error)
 	AwardBadge(ctx context.Context, arg AwardBadgeParams) (UserBadge, error)
@@ -29,6 +31,8 @@ type Querier interface {
 	CheckUsernameExists(ctx context.Context, lower string) (bool, error)
 	CompleteUserProfile(ctx context.Context, arg CompleteUserProfileParams) (User, error)
 	CountAdminCrossings(ctx context.Context) (int64, error)
+	CountAllPostsAdmin(ctx context.Context) (int64, error)
+	CountAllReelsAdmin(ctx context.Context) (int64, error)
 	CountArchivedStories(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountConnectionRequestsToday(ctx context.Context, requesterID uuid.UUID) (int64, error)
 	CountCrossingsToday(ctx context.Context, userID1 uuid.UUID) (int64, error)
@@ -38,6 +42,8 @@ type Querier interface {
 	CountReelsByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountReportsAgainstUser(ctx context.Context, targetID uuid.NullUUID) (int64, error)
 	CountReportsForUser(ctx context.Context, targetUserID uuid.NullUUID) (int64, error)
+	CountSavedPosts(ctx context.Context, userID uuid.UUID) (int64, error)
+	CountSavedReels(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountSearchUsersAdmin(ctx context.Context, query string) (int64, error)
 	CountStoryReactions(ctx context.Context, storyID uuid.UUID) (int64, error)
 	CountStoryViews(ctx context.Context, storyID uuid.UUID) (int64, error)
@@ -214,6 +220,8 @@ type Querier interface {
 	ListAllBadges(ctx context.Context) ([]Badge, error)
 	ListAllBlocksAdmin(ctx context.Context, arg ListAllBlocksAdminParams) ([]ListAllBlocksAdminRow, error)
 	ListAllComments(ctx context.Context, arg ListAllCommentsParams) ([]ListAllCommentsRow, error)
+	ListAllPostsAdmin(ctx context.Context, arg ListAllPostsAdminParams) ([]ListAllPostsAdminRow, error)
+	ListAllReelsAdmin(ctx context.Context, arg ListAllReelsAdminParams) ([]ListAllReelsAdminRow, error)
 	// Admin: List all stories
 	ListAllStories(ctx context.Context, arg ListAllStoriesParams) ([]ListAllStoriesRow, error)
 	ListConnections(ctx context.Context, requesterID uuid.UUID) ([]ListConnectionsRow, error)
@@ -234,6 +242,7 @@ type Querier interface {
 	ListReelsFeed(ctx context.Context, arg ListReelsFeedParams) ([]ListReelsFeedRow, error)
 	// Admin: List all reports
 	ListReports(ctx context.Context, arg ListReportsParams) ([]ListReportsRow, error)
+	ListSavedPosts(ctx context.Context, arg ListSavedPostsParams) ([]ListSavedPostsRow, error)
 	ListSavedReels(ctx context.Context, arg ListSavedReelsParams) ([]ListSavedReelsRow, error)
 	ListSentConnectionRequests(ctx context.Context, requesterID uuid.UUID) ([]ListSentConnectionRequestsRow, error)
 	ListUserReels(ctx context.Context, arg ListUserReelsParams) ([]ListUserReelsRow, error)
@@ -257,6 +266,7 @@ type Querier interface {
 	ResolveReport(ctx context.Context, id uuid.UUID) (Report, error)
 	RestoreUser(ctx context.Context, id uuid.UUID) error
 	SaveMessage(ctx context.Context, id uuid.UUID) (Message, error)
+	SavePostAtomic(ctx context.Context, arg SavePostAtomicParams) (int32, error)
 	SaveReelAtomic(ctx context.Context, arg SaveReelAtomicParams) (int32, error)
 	SearchUsers(ctx context.Context, query string) ([]SearchUsersRow, error)
 	SearchUsersAdmin(ctx context.Context, arg SearchUsersAdminParams) ([]User, error)
@@ -269,6 +279,7 @@ type Querier interface {
 	UnblockUser(ctx context.Context, arg UnblockUserParams) error
 	UnlikePostAtomic(ctx context.Context, arg UnlikePostAtomicParams) (int32, error)
 	UnlikeReelAtomic(ctx context.Context, arg UnlikeReelAtomicParams) (int32, error)
+	UnsavePostAtomic(ctx context.Context, arg UnsavePostAtomicParams) (int32, error)
 	UnsaveReelAtomic(ctx context.Context, arg UnsaveReelAtomicParams) (int32, error)
 	UpdateAccountPrivacy(ctx context.Context, arg UpdateAccountPrivacyParams) (User, error)
 	UpdateConnectionStatus(ctx context.Context, arg UpdateConnectionStatusParams) (Connection, error)

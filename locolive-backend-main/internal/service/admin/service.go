@@ -36,7 +36,9 @@ type Service interface {
 	ListReports(ctx context.Context, resolved bool, pageID, pageSize int32) ([]db.ListReportsRow, error)
 	ResolveReport(ctx context.Context, reportID string) (db.Report, error)
 	DeleteStory(ctx context.Context, storyID string) error
-	ListAllStories(ctx context.Context, pageID, pageSize int32) ([]db.ListAllStoriesRow, error)
+	ListAllStories(ctx context.Context, pageID, pageSize int32) ([]db.ListAllStoriesRow, int64, error)
+	ListAllReels(ctx context.Context, pageID, pageSize int32) ([]db.ListAllReelsAdminRow, int64, error)
+	ListAllPosts(ctx context.Context, pageID, pageSize int32) ([]db.ListAllPostsAdminRow, int64, error)
 	ListActivityLogs(ctx context.Context, limit, offset int32) ([]db.ListActivityLogsRow, error)
 	ListAllComments(ctx context.Context, limit, offset int32) ([]db.ListAllCommentsRow, error)
 	GetTrustScore(ctx context.Context, userID uuid.UUID) (int32, error)
@@ -96,7 +98,11 @@ func (s *ServiceImpl) GetStats(ctx context.Context) (map[string]interface{}, boo
 		"totalConnections": totalConnections,
 		"reelsToday":       reelsToday,
 		"crossingsToday":   crossingsToday,
-		"totalUsersGrowth": 12.5, // Placeholder for now, could be calculated
+		"totalStories":     userStats.TotalStories,
+		"totalPosts":       userStats.TotalPosts,
+		"totalReels":       userStats.TotalReels,
+		"totalContent":     userStats.TotalStories + userStats.TotalPosts + userStats.TotalReels,
+		"totalUsersGrowth": 12.5,
 	}
 
 	// Cache for 1 minute
@@ -194,11 +200,55 @@ func (s *ServiceImpl) DeleteStory(ctx context.Context, storyID string) error {
 	return nil
 }
 
-func (s *ServiceImpl) ListAllStories(ctx context.Context, pageID, pageSize int32) ([]db.ListAllStoriesRow, error) {
-	return s.store.ListAllStories(ctx, db.ListAllStoriesParams{
+func (s *ServiceImpl) ListAllStories(ctx context.Context, pageID, pageSize int32) ([]db.ListAllStoriesRow, int64, error) {
+	stories, err := s.store.ListAllStories(ctx, db.ListAllStoriesParams{
 		Limit:  pageSize,
 		Offset: (pageID - 1) * pageSize,
 	})
+	if err != nil {
+		return nil, 0, err
+	}
+	
+	stats, err := s.store.GetStoryStats(ctx)
+	if err != nil {
+		return stories, 0, nil // Return stories anyway
+	}
+	
+	return stories, stats.TotalStories, nil
+}
+
+func (s *ServiceImpl) ListAllReels(ctx context.Context, pageID, pageSize int32) ([]db.ListAllReelsAdminRow, int64, error) {
+	reels, err := s.store.ListAllReelsAdmin(ctx, db.ListAllReelsAdminParams{
+		Limit:  pageSize,
+		Offset: (pageID - 1) * pageSize,
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	
+	count, err := s.store.CountAllReelsAdmin(ctx)
+	if err != nil {
+		return reels, 0, nil
+	}
+	
+	return reels, count, nil
+}
+
+func (s *ServiceImpl) ListAllPosts(ctx context.Context, pageID, pageSize int32) ([]db.ListAllPostsAdminRow, int64, error) {
+	posts, err := s.store.ListAllPostsAdmin(ctx, db.ListAllPostsAdminParams{
+		Limit:  pageSize,
+		Offset: (pageID - 1) * pageSize,
+	})
+	if err != nil {
+		return nil, 0, err
+	}
+	
+	count, err := s.store.CountAllPostsAdmin(ctx)
+	if err != nil {
+		return posts, 0, nil
+	}
+	
+	return posts, count, nil
 }
 
 func (s *ServiceImpl) ListActivityLogs(ctx context.Context, limit, offset int32) ([]db.ListActivityLogsRow, error) {

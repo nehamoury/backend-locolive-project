@@ -205,6 +205,7 @@ func (server *Server) setupRouter() {
 	authRoutes.POST("/posts", server.createPost)
 	authRoutes.GET("/posts/feed", server.getConnectionsFeed)
 	authRoutes.GET("/posts/me", server.getMyPosts)
+	authRoutes.GET("/posts/saved", server.getSavedPosts)
 	authRoutes.GET("/users/:id/posts", server.privacyCheckMiddleware(), server.getUserPosts)
 	authRoutes.DELETE("/posts/:id", server.deletePost)
 	authRoutes.POST("/posts/:id/like", server.engagementRateLimiter(), server.likePost)
@@ -212,6 +213,8 @@ func (server *Server) setupRouter() {
 	authRoutes.GET("/posts/:id/comments", server.listPostComments)
 	authRoutes.POST("/posts/:id/comments", server.addPostComment)
 	authRoutes.POST("/posts/:id/share", server.engagementRateLimiter(), server.sharePost)
+	authRoutes.POST("/posts/:id/save", server.engagementRateLimiter(), server.savePost)
+	authRoutes.DELETE("/posts/:id/save", server.engagementRateLimiter(), server.unsavePost)
 	authRoutes.DELETE("/posts/:id/comments/:commentId", server.deletePostComment)
 
 	// Reels

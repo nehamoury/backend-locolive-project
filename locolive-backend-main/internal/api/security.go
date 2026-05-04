@@ -93,8 +93,17 @@ func (server *Server) logoutUser(ctx *gin.Context) {
 		return
 	}
 
-	// Clear cookie if exists
-	ctx.SetCookie("access_token", "", -1, "/", "", false, true)
+	// Clear cookie
+	http.SetCookie(ctx.Writer, &http.Cookie{
+		Name:     "access_token",
+		Value:    "",
+		MaxAge:   -1,
+		Path:     "/",
+		Domain:   "",
+		Secure:   false,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
 
 	ctx.JSON(http.StatusOK, successResponse("Logged out successfully"))
 }
@@ -103,11 +112,11 @@ func (server *Server) logoutUser(ctx *gin.Context) {
 func (server *Server) logoutAllDevices(ctx *gin.Context) {
 	authPayload := getAuthPayload(ctx)
 
-	// Since we don't store a list of all active tokens, 
+	// Since we don't store a list of all active tokens,
 	// we'll implement a "revocation_version" or just log the event.
 	// For this production-ready demo, we'll use a user-specific "revocation_timestamp" in Redis.
 	// All tokens issued before this timestamp will be considered invalid.
-	
+
 	now := time.Now()
 	err := server.redis.Set(ctx, fmt.Sprintf("revoke_all:%s", authPayload.UserID.String()), now.Unix(), 24*time.Hour).Err()
 	if err != nil {

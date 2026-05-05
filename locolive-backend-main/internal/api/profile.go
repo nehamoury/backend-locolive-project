@@ -196,10 +196,10 @@ func (server *Server) getUserProfile(ctx *gin.Context) {
 
 		// FORCE Correct Counts (Unidirectional)
 		var followersCount, followingCount int64
-		// Followers = only those who were accepted
+		// Followers = only those who were accepted (target_id is me)
 		server.store.GetDB().QueryRowContext(ctx, "SELECT COUNT(*) FROM connections WHERE target_id = $1 AND status = 'accepted'", userID).Scan(&followersCount)
-		// Following = accepted friends + pending requests sent by the user
-		server.store.GetDB().QueryRowContext(ctx, "SELECT COUNT(*) FROM connections WHERE requester_id = $1 AND status IN ('accepted', 'pending')", userID).Scan(&followingCount)
+		// Following = only those I have requested and they accepted (requester_id is me)
+		server.store.GetDB().QueryRowContext(ctx, "SELECT COUNT(*) FROM connections WHERE requester_id = $1 AND status = 'accepted'", userID).Scan(&followingCount)
 		
 		rsp.FollowersCount = followersCount
 		rsp.FollowingCount = followingCount
@@ -316,10 +316,10 @@ func (server *Server) getMyProfile(ctx *gin.Context) {
 	rsp.CrossingsCount = profile.CrossingsCount
 	rsp.ConnectionStatus = "self"
 
-	// FORCE Correct Counts for self (include pending following)
+	// FORCE Correct Counts for self (only accepted)
 	var followersCount, followingCount int64
 	server.store.GetDB().QueryRowContext(ctx, "SELECT COUNT(*) FROM connections WHERE target_id = $1 AND status = 'accepted'", authPayload.UserID).Scan(&followersCount)
-	server.store.GetDB().QueryRowContext(ctx, "SELECT COUNT(*) FROM connections WHERE requester_id = $1 AND status IN ('accepted', 'pending')", authPayload.UserID).Scan(&followingCount)
+	server.store.GetDB().QueryRowContext(ctx, "SELECT COUNT(*) FROM connections WHERE requester_id = $1 AND status = 'accepted'", authPayload.UserID).Scan(&followingCount)
 	
 	rsp.FollowersCount = followersCount
 	rsp.FollowingCount = followingCount

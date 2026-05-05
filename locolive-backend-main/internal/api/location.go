@@ -230,10 +230,15 @@ func (server *Server) getNearbyUsers(ctx *gin.Context) {
 			bio = user.Bio.String
 		}
 
-		// Calculate online status (active in last 5 mins)
+		// Calculate online status (active in last 15 mins)
 		online := false
-		if user.LastActiveAt.Valid && time.Since(user.LastActiveAt.Time) < 5*time.Minute {
+		if user.LastActiveAt.Valid && time.Since(user.LastActiveAt.Time) < 15*time.Minute {
 			online = true
+		}
+
+		// Only show online users on map/nearby as requested
+		if !online {
+			continue
 		}
 
 		rsp = append(rsp, nearbyUserResponse{

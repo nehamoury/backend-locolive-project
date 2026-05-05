@@ -39,6 +39,9 @@ func (server *Server) registerFCMToken(ctx *gin.Context) {
 		return
 	}
 
+	// Update user's last_active_at whenever they register/refresh a token
+	go server.store.UpdateUserActivity(context.Background(), authPayload.UserID)
+
 	ctx.JSON(http.StatusOK, gin.H{"status": "success"})
 }
 

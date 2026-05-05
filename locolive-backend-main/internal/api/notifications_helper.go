@@ -84,7 +84,7 @@ func (server *Server) createNotificationWithSound(
 // sendPushNotificationToUser fetches all FCM tokens for a user and sends a push notification
 func (server *Server) sendPushNotificationToUser(ctx context.Context, userID uuid.UUID, title, body string, data map[string]string) {
 	if server.notification == nil {
-		log.Debug().Msg("FCM notification service not initialized, skipping push")
+		log.Warn().Msg("[FCM] Notification service NOT initialized. Check FIREBASE_CREDENTIALS_PATH in app.env")
 		return
 	}
 

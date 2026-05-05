@@ -45,7 +45,7 @@ func main() {
 	// Initialize Storage Service (using R2/S3 if credentials provided, else Local)
 	var storageService storage.Service
 	if config.R2AccessKey != "" && config.R2AccessKey != "your_r2_access_key" && config.R2SecretKey != "" && config.R2AccountID != "" {
-		storageService, err = storage.NewS3Service(context.Background(), config.R2AccountID, config.R2AccessKey, config.R2SecretKey, config.R2BucketName)
+		storageService, err = storage.NewS3Service(context.Background(), config.R2AccountID, config.R2AccessKey, config.R2SecretKey, config.R2BucketName, config.R2PublicURL)
 		if err != nil {
 			log.Fatal().Err(err).Msg("cannot initialize S3 storage service")
 		}

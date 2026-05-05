@@ -3,7 +3,7 @@ package storage
 import (
 	"context"
 	"fmt"
-	"mime/multipart"
+	"io"
 	"path/filepath"
 
 	"github.com/google/uuid"
@@ -16,15 +16,11 @@ func NewNoOpService() Service {
 }
 
 // UploadFile returns a placeholder URL without uploading
-func (n *NoOpService) UploadFile(ctx context.Context, file multipart.File, fileHeader *multipart.FileHeader) (string, error) {
-	if file == nil || fileHeader == nil {
-		return "", fmt.Errorf("file or fileHeader is nil")
-	}
-
+func (n *NoOpService) UploadFile(ctx context.Context, file io.Reader, filename string, contentType string) (string, error) {
 	// Generate a pseudo URL without actual upload
-	ext := filepath.Ext(fileHeader.Filename)
-	filename := uuid.New().String() + ext
+	ext := filepath.Ext(filename)
+	uniqueFilename := uuid.New().String() + ext
 
 	// Return a local path or placeholder URL
-	return fmt.Sprintf("/uploads/%s", filename), nil
+	return fmt.Sprintf("/uploads/%s", uniqueFilename), nil
 }

@@ -20,6 +20,7 @@ type Config struct {
 	R2AccessKey          string        `mapstructure:"R2_ACCESS_KEY"`
 	R2SecretKey          string        `mapstructure:"R2_SECRET_KEY"`
 	R2BucketName         string        `mapstructure:"R2_BUCKET_NAME"`
+	R2PublicURL          string        `mapstructure:"R2_PUBLIC_URL"`
 	ExpoRedirectURL      string        `mapstructure:"EXPO_REDIRECT_URL"`
 	FrontendURL          string        `mapstructure:"FRONTEND_URL"`
 	Environment          string        `mapstructure:"ENVIRONMENT"`

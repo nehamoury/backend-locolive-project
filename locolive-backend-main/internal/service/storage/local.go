@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"mime/multipart"
 	"os"
 	"path/filepath"
 
@@ -30,15 +29,15 @@ func NewLocalStorageService(uploadDir string, baseURL string) (Service, error) {
 	}, nil
 }
 
-func (s *LocalStorageService) UploadFile(ctx context.Context, file multipart.File, fileHeader *multipart.FileHeader) (string, error) {
-	if file == nil || fileHeader == nil {
-		return "", fmt.Errorf("file or fileHeader is nil")
+func (s *LocalStorageService) UploadFile(ctx context.Context, file io.Reader, filename string, contentType string) (string, error) {
+	if file == nil {
+		return "", fmt.Errorf("file is nil")
 	}
 
 	// Generate unique filename
-	ext := filepath.Ext(fileHeader.Filename)
-	filename := uuid.New().String() + ext
-	dst := filepath.Join(s.uploadDir, filename)
+	ext := filepath.Ext(filename)
+	uniqueFilename := uuid.New().String() + ext
+	dst := filepath.Join(s.uploadDir, uniqueFilename)
 
 	// Create destination file
 	out, err := os.Create(dst)
@@ -54,5 +53,5 @@ func (s *LocalStorageService) UploadFile(ctx context.Context, file multipart.Fil
 	}
 
 	// Return public URL (Nginx or Go will serve this)
-	return fmt.Sprintf("/uploads/%s", filename), nil
+	return fmt.Sprintf("/uploads/%s", uniqueFilename), nil
 }

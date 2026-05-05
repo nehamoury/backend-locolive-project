@@ -220,6 +220,7 @@ func (server *Server) setupRouter() {
 	// Reels
 	authRoutes.POST("/reels", server.createReel)
 	authRoutes.GET("/reels/feed", server.getReelsFeed)
+	authRoutes.GET("/reels/me", server.getMyReels)
 	authRoutes.GET("/reels/nearby", server.getNearbyReels)
 	authRoutes.GET("/reels/saved", server.getSavedReels)
 	authRoutes.GET("/users/:id/reels", server.privacyCheckMiddleware(), server.getUserReels)

@@ -304,7 +304,9 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 			ctx.JSON(http.StatusUnauthorized, errorResponse(fmt.Errorf("session not found")))
 			return
 		}
-		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		// Log internal error but return 401 to trigger clean logout on frontend
+		log.Error().Err(err).Msg("Database error during session retrieval")
+		ctx.JSON(http.StatusUnauthorized, errorResponse(fmt.Errorf("session verification failed")))
 		return
 	}
 
@@ -628,16 +630,19 @@ func (server *Server) deleteAccount(ctx *gin.Context) {
 
 // checkEmail handles GET /api/users/check-email
 func (server *Server) checkEmail(ctx *gin.Context) {
-	email := ctx.Query("email")
+	email := strings.ToLower(strings.TrimSpace(ctx.Query("email")))
 	if email == "" {
 		ctx.JSON(http.StatusBadRequest, gin.H{"error": "email is required"})
 		return
 	}
 
-	_, err := server.store.GetUserByEmail(ctx, sql.NullString{String: email, Valid: true})
+	u, err := server.store.GetUserByEmail(ctx, sql.NullString{String: email, Valid: true})
 	if err == nil {
-		ctx.JSON(http.StatusOK, gin.H{"available": false, "message": "Email is already registered"})
-		return
+		// Only consider it 'taken' if the account is not soft-deleted
+		if !u.DeletedAt.Valid {
+			ctx.JSON(http.StatusOK, gin.H{"available": false, "message": "Email is unavailable"})
+			return
+		}
 	}
 
 	ctx.JSON(http.StatusOK, gin.H{"available": true})

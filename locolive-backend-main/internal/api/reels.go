@@ -706,3 +706,35 @@ func (server *Server) getSavedReels(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, successResponse(gin.H{"reels": rsp, "page": page, "page_size": pageSize}))
 }
+
+// getMyReels returns the authenticated user's own reels.
+func (server *Server) getMyReels(ctx *gin.Context) {
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+
+	page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(ctx.DefaultQuery("page_size", "12"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 50 {
+		pageSize = 12
+	}
+
+	reels, err := server.store.ListUserReels(ctx, db.ListUserReelsParams{
+		UserID:   authPayload.UserID,
+		ViewerID: authPayload.UserID,
+		Limit:    int32(pageSize),
+		Offset:   int32((page - 1) * pageSize),
+	})
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	rsp := make([]reelResponse, len(reels))
+	for i, r := range reels {
+		rsp[i] = toReelResponseFromUserReels(r)
+	}
+
+	ctx.JSON(http.StatusOK, successResponse(gin.H{"reels": rsp, "page": page, "page_size": pageSize}))
+}

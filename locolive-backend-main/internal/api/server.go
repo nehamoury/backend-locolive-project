@@ -13,14 +13,14 @@ import (
 	"privacy-social-backend/internal/repository"
 	"privacy-social-backend/internal/service/admin"
 	"privacy-social-backend/internal/service/location"
+	"privacy-social-backend/internal/service/moderation"
+	"privacy-social-backend/internal/service/notification"
 	"privacy-social-backend/internal/service/privacy"
 	"privacy-social-backend/internal/service/safety"
 	"privacy-social-backend/internal/service/storage"
-	"privacy-social-backend/internal/service/moderation"
-	"privacy-social-backend/internal/service/notification"
 	"privacy-social-backend/internal/service/story"
-	usernameservice "privacy-social-backend/internal/service/username"
 	"privacy-social-backend/internal/service/user"
+	usernameservice "privacy-social-backend/internal/service/username"
 	"privacy-social-backend/internal/token"
 	"privacy-social-backend/internal/util"
 	"privacy-social-backend/internal/worker"
@@ -30,23 +30,24 @@ import (
 
 // Server serves HTTP requests for our privacy social service
 type Server struct {
-	config     config.Config
-	store      repository.Store
-	tokenMaker token.Maker
-	redis      *redis.Client
-	router     *gin.Engine
-	hub        *realtime.Hub
-	safety     *safety.Monitor
-	location   *location.RedisLocationService
-	story      story.Service
-	user       user.Service
+	config          config.Config
+	store           repository.Store
+	tokenMaker      token.Maker
+	redis           *redis.Client
+	router          *gin.Engine
+	hub             *realtime.Hub
+	safety          *safety.Monitor
+	location        *location.RedisLocationService
+	story           story.Service
+	user            user.Service
 	usernameService *usernameservice.Service
-	admin      admin.Service
-	storage    storage.Service
-	moderation *moderation.Service
-	mailer     util.Mailer
-	notification *notification.NotificationService
-	privacy    *privacy.Service
+	admin           admin.Service
+	storage         storage.Service
+	moderation      *moderation.Service
+	mailer          util.Mailer
+	notification    *notification.NotificationService
+	privacy         *privacy.Service
+	smsProvider     util.SMSProvider
 }
 
 // NewServer creates a new HTTP server and setup routing
@@ -94,12 +95,11 @@ func NewServer(
 	userService := user.NewService(store, tokenMaker, user.TokenConfig{
 		AccessTokenDuration:  config.AccessTokenDuration,
 		RefreshTokenDuration: config.RefreshTokenDuration,
-	})
+	}, rdb)
 	usernameService := usernameservice.NewService(store, rdb)
 	adminService := admin.NewService(store, rdb)
 	modService := moderation.NewService(store)
 	privacyService := privacy.NewService(store, rdb)
-
 
 	// Initialize SMTP Mailer (recommended for Gmail App Passwords)
 	host := config.SMTPHost
@@ -120,6 +120,14 @@ func NewServer(
 	)
 	log.Info().Str("host", host).Msg("Email Service Initialized (SMTP)")
 
+	// Initialize SMS Provider
+	smsProvider := util.NewTwilioProvider(
+		config.TwilioAccountSID,
+		config.TwilioAuthToken,
+		config.TwilioFromNumber,
+	)
+	log.Info().Msg("SMS Provider Initialized")
+
 	// Initialize Notification Service (FCM)
 	var notificationService *notification.NotificationService
 	if config.FirebaseCredentialsPath != "" {
@@ -132,33 +140,42 @@ func NewServer(
 		}
 	}
 
+	// Initialize Firebase Auth for Phone Verification
+	if config.FirebaseCredentialsPath != "" {
+		if err := util.InitFirebaseAuth(config.FirebaseCredentialsPath); err != nil {
+			log.Error().Err(err).Msg("Failed to initialize Firebase Auth")
+		} else {
+			log.Info().Msg("Firebase Auth initialized for phone verification")
+		}
+	}
+
 	// Initialize and Start Background Workers
 	bgWorker := worker.NewCleanupWorker(store, notificationService)
 	bgWorker.Start()
 	bgWorker.StartCrossingDetector()
-
 
 	// Data Export Worker
 	exportWorker := worker.NewDataExportWorker(store, rdb)
 	go exportWorker.Start(context.Background())
 
 	server := &Server{
-		config:     config,
-		store:      store,
-		tokenMaker: tokenMaker,
-		redis:      rdb,
-		safety:     safetyMonitor,
-		hub:        hub,
-		location:   locationService,
-		story:      storyService,
-		user:       userService,
+		config:          config,
+		store:           store,
+		tokenMaker:      tokenMaker,
+		redis:           rdb,
+		safety:          safetyMonitor,
+		hub:             hub,
+		location:        locationService,
+		story:           storyService,
+		user:            userService,
 		usernameService: usernameService,
-		admin:      adminService,
-		storage:    storageService,
-		moderation: modService,
-		mailer:     mailer,
-		privacy:    privacyService,
-		notification: notificationService,
+		admin:           adminService,
+		storage:         storageService,
+		moderation:      modService,
+		mailer:          mailer,
+		privacy:         privacyService,
+		notification:    notificationService,
+		smsProvider:     smsProvider,
 	}
 
 	server.setupRouter()
@@ -169,7 +186,6 @@ func NewServer(
 func (server *Server) GetRouter() *gin.Engine {
 	return server.router
 }
-
 
 // Start runs the HTTP/HTTPS server on a specific address
 func (server *Server) Start(address string) error {

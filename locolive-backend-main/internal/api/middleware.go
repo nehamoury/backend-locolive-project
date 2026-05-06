@@ -109,6 +109,55 @@ func adminMiddleware() gin.HandlerFunc {
 	}
 }
 
+// activationMiddleware ensures that the user's account is fully verified and active
+func (server *Server) activationMiddleware() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		payload, exists := ctx.Get(authorizationPayloadKey)
+		if !exists {
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "authentication required"})
+			return
+		}
+		authPayload := payload.(*token.Payload)
+
+		// Check cache first (Redis)
+		cacheKey := fmt.Sprintf("user_active:%s", authPayload.UserID.String())
+		status, err := server.redis.Get(ctx, cacheKey).Result()
+		if err == nil {
+			switch status {
+			case "true":
+				ctx.Next()
+				return
+			case "false":
+				ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+					"error":   "account_not_verified",
+					"message": "please verify your email and phone to continue",
+				})
+				return
+			}
+		}
+
+		// Cache miss: Check DB
+		user, err := server.store.GetUserByID(ctx, authPayload.UserID)
+		if err != nil {
+			ctx.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "user not found"})
+			return
+		}
+
+		// Update cache (expire in 1 hour)
+		server.redis.Set(ctx, cacheKey, fmt.Sprintf("%v", user.IsActive), time.Hour)
+
+		if !user.IsActive {
+			ctx.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"error": "account_not_verified",
+				"message": "please verify your email and phone to continue",
+			})
+			return
+		}
+
+		ctx.Next()
+	}
+}
+
 // corsMiddleware handles the CORS middleware with production-safe logic
 func corsMiddleware(frontendURL string) gin.HandlerFunc {
 	return func(c *gin.Context) {

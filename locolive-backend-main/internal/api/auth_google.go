@@ -81,7 +81,7 @@ func (server *Server) googleLogin(ctx *gin.Context) {
 			existingUser, err = server.store.GetUserByEmail(ctx, sql.NullString{String: gUser.Email, Valid: true})
 			if err != nil {
 				if err == sql.ErrNoRows {
-					// 4. Create new Google user (requires profile completion)
+					// 4. Create new Google user (email verified by Google, phone still needed)
 					hashedPassword, _ := util.HashPassword(util.RandomString(12))
 					user, err = server.store.CreateUser(ctx, db.CreateUserParams{
 						Phone:             "google_" + gUser.Sub,
@@ -92,6 +92,9 @@ func (server *Server) googleLogin(ctx *gin.Context) {
 						IsGhostMode:       false,
 						Provider:          "google",
 						IsProfileComplete: false,
+						IsEmailVerified:   true,
+						IsPhoneVerified:   false,
+						IsActive:          false,
 					})
 					if err != nil {
 						ctx.JSON(http.StatusInternalServerError, errorResponse(err))
@@ -183,24 +186,27 @@ func (server *Server) googleLogin(ctx *gin.Context) {
 
 	// Set cookies
 	isProduction := server.config.Environment == "production"
-	ctx.SetCookie(
-		"access_token",
-		accessToken,
-		int(server.config.AccessTokenDuration.Seconds()),
-		"/",
-		"",
-		isProduction,
-		true,
-	)
-	ctx.SetCookie(
-		"refresh_token",
-		refreshToken,
-		int(server.config.RefreshTokenDuration.Seconds()),
-		"/api/users/renew_access",
-		"",
-		isProduction,
-		true,
-	)
+	sameSite := http.SameSiteLaxMode
+	http.SetCookie(ctx.Writer, &http.Cookie{
+		Name:     "access_token",
+		Value:    accessToken,
+		MaxAge:   int(server.config.AccessTokenDuration.Seconds()),
+		Path:     "/",
+		Domain:   "",
+		Secure:   isProduction,
+		HttpOnly: true,
+		SameSite: sameSite,
+	})
+	http.SetCookie(ctx.Writer, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    refreshToken,
+		MaxAge:   int(server.config.RefreshTokenDuration.Seconds()),
+		Path:     "/api/users/renew_access",
+		Domain:   "",
+		Secure:   isProduction,
+		HttpOnly: true,
+		SameSite: sameSite,
+	})
 
 	rsp := googleLoginResponse{
 		SessionID:                 session.ID.String(),

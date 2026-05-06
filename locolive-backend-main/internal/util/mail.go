@@ -7,6 +7,7 @@ import (
 
 type Mailer interface {
 	SendResetEmail(toEmail string, token string) error
+	SendVerificationEmail(toEmail string, token string) error
 }
 
 // Gmail/SMTP Implementation
@@ -65,6 +66,46 @@ func (m *GmailMailer) SendResetEmail(toEmail string, token string) error {
 	err := smtp.SendMail(addr, auth, m.senderEmail, []string{toEmail}, msg)
 	if err != nil {
 		return fmt.Errorf("failed to send email via SMTP: %w", err)
+	}
+
+	return nil
+}
+
+func (m *GmailMailer) SendVerificationEmail(toEmail string, token string) error {
+	if m.senderPassword == "" || m.senderPassword == "your_app_password" {
+		fmt.Printf("------------\n[DEVELOPMENT MODE - EMAIL LOG]\nTo: %s\nSubject: Verify Your Email\nLink: %s/verify-email?token=%s\n------------\n", toEmail, m.frontendURL, token)
+		return nil
+	}
+
+	verificationLink := fmt.Sprintf("%s/verify-email?token=%s", m.frontendURL, token)
+	subject := "Subject: Verify Your Locolive Email\n"
+	mime := "MIME-version: 1.0;\nContent-Type: text/html; charset=\"UTF-8\";\n\n"
+	
+	body := fmt.Sprintf(`
+		<div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+			<div style="text-align: center; margin-bottom: 20px;">
+				<h1 style="color: #FF3B8E; margin: 0; font-size: 28px;">Locolive</h1>
+			</div>
+			<div style="background: #f8fafc; padding: 30px; border-radius: 20px;">
+				<h2 style="color: #1e293b; margin-top: 0;">Verify Your Email Address</h2>
+				<p style="color: #475569; font-size: 16px; line-height: 1.6;">Welcome to Locolive! Please verify your email address to activate your account.</p>
+				<p style="color: #475569; font-size: 16px; line-height: 1.6;">Click the button below to verify. This link expires in 24 hours.</p>
+				<div style="text-align: center; margin: 35px 0;">
+					<a href="%s" style="background: linear-gradient(to right, #FF3B8E, #A855F7); color: white; padding: 14px 32px; text-decoration: none; border-radius: 14px; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 10px 15px -3px rgba(255, 59, 142, 0.3);">Verify Email</a>
+				</div>
+				<p style="color: #94a3b8; font-size: 13px; text-align: center;">If you didn't create an account, you can safely ignore this email.</p>
+			</div>
+			<p style="color: #cbd5e1; font-size: 11px; text-align: center; margin-top: 20px;">&copy; 2026 Locolive. All rights reserved.</p>
+		</div>
+	`, verificationLink)
+
+	msg := []byte(subject + mime + body)
+	auth := smtp.PlainAuth("", m.senderEmail, m.senderPassword, m.host)
+
+	addr := fmt.Sprintf("%s:%s", m.host, m.port)
+	err := smtp.SendMail(addr, auth, m.senderEmail, []string{toEmail}, msg)
+	if err != nil {
+		return fmt.Errorf("failed to send verification email via SMTP: %w", err)
 	}
 
 	return nil

@@ -54,6 +54,7 @@ type Querier interface {
 	CreateConnectionRequest(ctx context.Context, arg CreateConnectionRequestParams) (Connection, error)
 	CreateCrossing(ctx context.Context, arg CreateCrossingParams) (Crossing, error)
 	CreateDataExportJob(ctx context.Context, userID uuid.UUID) (DataExportJob, error)
+	CreateEmailVerification(ctx context.Context, arg CreateEmailVerificationParams) (EmailVerification, error)
 	CreateEngagementEvent(ctx context.Context, arg CreateEngagementEventParams) (EngagementEvent, error)
 	CreateGroup(ctx context.Context, arg CreateGroupParams) (Group, error)
 	CreateHighlight(ctx context.Context, arg CreateHighlightParams) (HighlightGroup, error)
@@ -62,6 +63,7 @@ type Querier interface {
 	CreateMessageReaction(ctx context.Context, arg CreateMessageReactionParams) (MessageReaction, error)
 	CreateNotification(ctx context.Context, arg CreateNotificationParams) (Notification, error)
 	CreatePasswordReset(ctx context.Context, arg CreatePasswordResetParams) (PasswordReset, error)
+	CreatePhoneVerification(ctx context.Context, arg CreatePhoneVerificationParams) (PhoneVerification, error)
 	CreatePost(ctx context.Context, arg CreatePostParams) (CreatePostRow, error)
 	CreatePostComment(ctx context.Context, arg CreatePostCommentParams) (PostComment, error)
 	CreateReel(ctx context.Context, arg CreateReelParams) (CreateReelRow, error)
@@ -86,6 +88,7 @@ type Querier interface {
 	DeleteConnection(ctx context.Context, arg DeleteConnectionParams) error
 	DeleteConnectionRequestNotifications(ctx context.Context, arg DeleteConnectionRequestNotificationsParams) error
 	DeleteConversation(ctx context.Context, arg DeleteConversationParams) error
+	DeleteEmailVerification(ctx context.Context, userID uuid.UUID) error
 	DeleteExpiredLocations(ctx context.Context) error
 	DeleteExpiredMessages(ctx context.Context) error
 	DeleteExpiredPasswordResets(ctx context.Context) error
@@ -98,6 +101,7 @@ type Querier interface {
 	// Delete notifications older than 30 days
 	DeleteOldNotifications(ctx context.Context) error
 	DeletePasswordResetByToken(ctx context.Context, token string) error
+	DeletePhoneVerification(ctx context.Context, userID uuid.UUID) error
 	DeletePost(ctx context.Context, arg DeletePostParams) error
 	DeletePostComment(ctx context.Context, arg DeletePostCommentParams) (uuid.UUID, error)
 	DeleteReel(ctx context.Context, arg DeleteReelParams) error
@@ -129,6 +133,7 @@ type Querier interface {
 	GetCrossingsForUser(ctx context.Context, userID1 uuid.UUID) ([]Crossing, error)
 	GetDailyStats(ctx context.Context, arg GetDailyStatsParams) ([]DailyStat, error)
 	GetDataExportJob(ctx context.Context, id uuid.UUID) (DataExportJob, error)
+	GetEmailVerification(ctx context.Context, token string) (EmailVerification, error)
 	GetEngagementStats(ctx context.Context) (GetEngagementStatsRow, error)
 	GetGroupByID(ctx context.Context, id uuid.UUID) (Group, error)
 	GetGroupMembers(ctx context.Context, groupID uuid.UUID) ([]GetGroupMembersRow, error)
@@ -139,6 +144,7 @@ type Querier interface {
 	GetIncompleteGoogleUsers(ctx context.Context) ([]User, error)
 	GetLatestCrossingBetweenUsers(ctx context.Context, arg GetLatestCrossingBetweenUsersParams) (Crossing, error)
 	GetLatestDataExportJob(ctx context.Context, userID uuid.UUID) (DataExportJob, error)
+	GetLatestPhoneVerification(ctx context.Context, userID uuid.UUID) (PhoneVerification, error)
 	GetMessage(ctx context.Context, id uuid.UUID) (Message, error)
 	GetMessageReactions(ctx context.Context, messageID uuid.UUID) ([]GetMessageReactionsRow, error)
 	GetMyProfileViews(ctx context.Context, viewerID uuid.UUID) ([]GetMyProfileViewsRow, error)
@@ -287,6 +293,7 @@ type Querier interface {
 	UpdateHighlightCover(ctx context.Context, arg UpdateHighlightCoverParams) (HighlightGroup, error)
 	UpdateMessage(ctx context.Context, arg UpdateMessageParams) (Message, error)
 	UpdateNotificationPreferences(ctx context.Context, arg UpdateNotificationPreferencesParams) (NotificationPreference, error)
+	UpdatePhoneVerificationAttempts(ctx context.Context, id uuid.UUID) (PhoneVerification, error)
 	UpdatePostCommentFlag(ctx context.Context, arg UpdatePostCommentFlagParams) error
 	UpdateReelCommentFlag(ctx context.Context, arg UpdateReelCommentFlagParams) error
 	UpdateStory(ctx context.Context, arg UpdateStoryParams) (UpdateStoryRow, error)
@@ -308,6 +315,8 @@ type Querier interface {
 	UpsertNotificationSettings(ctx context.Context, arg UpsertNotificationSettingsParams) (NotificationSetting, error)
 	UpsertPrivacySettings(ctx context.Context, arg UpsertPrivacySettingsParams) (PrivacySetting, error)
 	UpsertUserPreferences(ctx context.Context, arg UpsertUserPreferencesParams) (UserPreference, error)
+	VerifyEmail(ctx context.Context, id uuid.UUID) (User, error)
+	VerifyPhone(ctx context.Context, id uuid.UUID) (User, error)
 }
 
 var _ Querier = (*Queries)(nil)

@@ -44,6 +44,9 @@ type userResponse struct {
 	Role              string    `json:"role"`
 	Provider          string    `json:"provider"`
 	IsProfileComplete bool      `json:"is_profile_complete"`
+	IsEmailVerified   bool      `json:"is_email_verified"`
+	IsPhoneVerified   bool      `json:"is_phone_verified"`
+	IsActive          bool      `json:"is_active"`
 	CreatedAt         time.Time `json:"created_at"`
 }
 
@@ -74,6 +77,9 @@ func newUserResponse(user db.User) userResponse {
 		Role:              string(user.Role),
 		Provider:          user.Provider,
 		IsProfileComplete: user.IsProfileComplete,
+		IsEmailVerified:   user.IsEmailVerified,
+		IsPhoneVerified:   user.IsPhoneVerified,
+		IsActive:          user.IsActive,
 		CreatedAt:         user.CreatedAt,
 	}
 }
@@ -84,6 +90,53 @@ func (server *Server) createUser(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, errorResponse(err))
 		return
 	}
+
+	// Block disposable email domains
+	if util.IsDisposableEmail(req.Email) {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Please use a permanent email address. Temporary email providers are not allowed."})
+		return
+	}
+
+	// Validate and normalize phone number to E.164 format
+	phone := req.Phone
+	if !strings.HasPrefix(phone, "+") {
+		var err error
+		phone, err = util.NormalizeToE164(phone, "91") // Default country code: India
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid phone number: %v", err)})
+			return
+		}
+	} else {
+		if err := util.ValidateE164(phone); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
+	// Twilio Lookup: detect VoIP/virtual numbers and verify carrier
+	if server.config.Environment == "production" {
+		lookup := util.NewPhoneLookupProvider(server.config.TwilioAccountSID, server.config.TwilioAuthToken, true)
+		if lookup == nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Phone verification service is not configured. Please contact support."})
+			return
+		}
+		lookupResult, err := lookup.ValidateAndCheck(phone)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		_ = lookupResult // carrier info available for logging/audit
+	} else {
+		// Development: still validate E.164 format but skip Twilio Lookup
+		if err := util.ValidateE164(phone); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
+	// Update request phone to normalized E.164 format
+	req.Phone = phone
+
 	// Normalize and validate username
 	req.Username = usernameutil.NormalizeUsername(req.Username)
 	if !usernameutil.IsValidUsername(req.Username) {
@@ -109,6 +162,30 @@ func (server *Server) createUser(ctx *gin.Context) {
 		}
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
+	}
+
+	// 1. Generate & Send Email Verification
+	emailToken := util.RandomString(32)
+	_, err = server.store.CreateEmailVerification(ctx, db.CreateEmailVerificationParams{
+		UserID:    user.ID,
+		Email:     user.Email.String,
+		Token:     emailToken,
+		ExpiresAt: time.Now().Add(24 * time.Hour),
+	})
+	if err == nil {
+		_ = server.mailer.SendVerificationEmail(user.Email.String, emailToken)
+	}
+
+	// 2. Generate & Send Phone OTP
+	otpCode := util.RandomDigitString(6)
+	_, err = server.store.CreatePhoneVerification(ctx, db.CreatePhoneVerificationParams{
+		UserID:    user.ID,
+		Phone:     user.Phone,
+		Code:      otpCode,
+		ExpiresAt: time.Now().Add(10 * time.Minute),
+	})
+	if err == nil {
+		_ = server.smsProvider.SendOTP(user.Phone, otpCode)
 	}
 
 	// Generate Tokens for Auto-Login
@@ -141,9 +218,6 @@ func (server *Server) createUser(ctx *gin.Context) {
 	// Set Access Token in Cookie
 	isProduction := server.config.Environment == "production"
 	sameSite := http.SameSiteLaxMode
-	if isProduction {
-		sameSite = http.SameSiteStrictMode
-	}
 	http.SetCookie(ctx.Writer, &http.Cookie{
 		Name:     "access_token",
 		Value:    accessToken,
@@ -205,8 +279,10 @@ type renewAccessTokenRequest struct {
 }
 
 type renewAccessTokenResponse struct {
-	AccessToken          string    `json:"access_token"`
-	AccessTokenExpiresAt time.Time `json:"access_token_expires_at"`
+	AccessToken           string    `json:"access_token"`
+	AccessTokenExpiresAt  time.Time `json:"access_token_expires_at"`
+	RefreshToken          string    `json:"refresh_token"`
+	RefreshTokenExpiresAt time.Time `json:"refresh_token_expires_at"`
 }
 
 func (server *Server) loginUser(ctx *gin.Context) {
@@ -238,9 +314,6 @@ func (server *Server) loginUser(ctx *gin.Context) {
 	// Set Access Token in Cookie
 	isProduction := server.config.Environment == "production"
 	sameSite := http.SameSiteLaxMode
-	if isProduction {
-		sameSite = http.SameSiteStrictMode
-	}
 	http.SetCookie(ctx.Writer, &http.Cookie{
 		Name:     "access_token",
 		Value:    result.AccessToken,
@@ -304,7 +377,6 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 			ctx.JSON(http.StatusUnauthorized, errorResponse(fmt.Errorf("session not found")))
 			return
 		}
-		// Log internal error but return 401 to trigger clean logout on frontend
 		log.Error().Err(err).Msg("Database error during session retrieval")
 		ctx.JSON(http.StatusUnauthorized, errorResponse(fmt.Errorf("session verification failed")))
 		return
@@ -321,7 +393,9 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 	}
 
 	if session.RefreshToken != refreshToken {
-		ctx.JSON(http.StatusUnauthorized, errorResponse(fmt.Errorf("mismatched session token")))
+		// TOKEN REUSE DETECTED: Possible theft, revoke entire user's sessions
+		server.redis.Set(ctx, fmt.Sprintf("revoke_all:%s", session.UserID.String()), time.Now().Unix(), 24*time.Hour)
+		ctx.JSON(http.StatusUnauthorized, errorResponse(fmt.Errorf("refresh token reuse detected, all sessions revoked")))
 		return
 	}
 
@@ -330,6 +404,41 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 		return
 	}
 
+	// ─── REFRESH TOKEN ROTATION ───────────────────────────────────────────────
+	// 1. Blacklist the OLD refresh token immediately
+	if err := server.revokeToken(ctx, refreshPayload.ID, refreshPayload.ExpiredAt); err != nil {
+		log.Error().Err(err).Msg("Failed to blacklist old refresh token")
+	}
+
+	// 2. Create NEW refresh token with a new JTI
+	newRefreshToken, newRefreshPayload, err := server.tokenMaker.CreateToken(
+		refreshPayload.Username,
+		refreshPayload.UserID,
+		refreshPayload.Role,
+		server.config.RefreshTokenDuration,
+	)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	// 3. Create new session record with the new refresh token
+	_, err = server.store.CreateSession(ctx, db.CreateSessionParams{
+		ID:           newRefreshPayload.ID,
+		UserID:       refreshPayload.UserID,
+		RefreshToken: newRefreshToken,
+		UserAgent:    session.UserAgent,
+		ClientIp:     session.ClientIp,
+		IsBlocked:    false,
+		ExpiresAt:    newRefreshPayload.ExpiredAt,
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to create rotated session")
+		ctx.JSON(http.StatusInternalServerError, errorResponse(fmt.Errorf("failed to rotate session")))
+		return
+	}
+
+	// 4. Create new access token
 	accessToken, accessPayload, err := server.tokenMaker.CreateToken(
 		refreshPayload.Username,
 		refreshPayload.UserID,
@@ -341,20 +450,35 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 		return
 	}
 
+	// 5. Set both cookies with rotated tokens
 	isProduction := server.config.Environment == "production"
-	ctx.SetCookie(
-		"access_token",
-		accessToken,
-		int(server.config.AccessTokenDuration.Seconds()),
-		"/",
-		"",
-		isProduction,
-		true,
-	)
+	sameSite := http.SameSiteLaxMode
+	http.SetCookie(ctx.Writer, &http.Cookie{
+		Name:     "access_token",
+		Value:    accessToken,
+		MaxAge:   int(server.config.AccessTokenDuration.Seconds()),
+		Path:     "/",
+		Domain:   "",
+		Secure:   isProduction,
+		HttpOnly: true,
+		SameSite: sameSite,
+	})
+	http.SetCookie(ctx.Writer, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    newRefreshToken,
+		MaxAge:   int(server.config.RefreshTokenDuration.Seconds()),
+		Path:     "/api/users/renew_access",
+		Domain:   "",
+		Secure:   isProduction,
+		HttpOnly: true,
+		SameSite: sameSite,
+	})
 
 	ctx.JSON(http.StatusOK, successResponse(renewAccessTokenResponse{
-		AccessToken:          accessToken,
-		AccessTokenExpiresAt: accessPayload.ExpiredAt,
+		AccessToken:           accessToken,
+		AccessTokenExpiresAt:  accessPayload.ExpiredAt,
+		RefreshToken:          newRefreshToken,
+		RefreshTokenExpiresAt: newRefreshPayload.ExpiredAt,
 	}))
 }
 
@@ -471,6 +595,45 @@ func (server *Server) completeProfile(ctx *gin.Context) {
 		return
 	}
 
+	// Validate and normalize phone number to E.164 format
+	phone := req.Phone
+	if !strings.HasPrefix(phone, "+") {
+		var err error
+		phone, err = util.NormalizeToE164(phone, "91")
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid phone number: %v", err)})
+			return
+		}
+	} else {
+		if err := util.ValidateE164(phone); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
+	// Twilio Lookup: detect VoIP/virtual numbers
+	if server.config.Environment == "production" {
+		lookup := util.NewPhoneLookupProvider(server.config.TwilioAccountSID, server.config.TwilioAuthToken, true)
+		if lookup == nil {
+			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Phone verification service is not configured. Please contact support."})
+			return
+		}
+		lookupResult, err := lookup.ValidateAndCheck(phone)
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		_ = lookupResult
+	} else {
+		if err := util.ValidateE164(phone); err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+	}
+
+	// Update request phone to normalized E.164 format
+	req.Phone = phone
+
 	// Get authenticated user from context
 	payload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
 
@@ -507,6 +670,18 @@ func (server *Server) completeProfile(ctx *gin.Context) {
 		return
 	}
 
+	// ─── AUTO-GENERATE PHONE OTP ──────────────────────────────────────────────
+	otpCode := util.RandomDigitString(6)
+	_, err = server.store.CreatePhoneVerification(ctx, db.CreatePhoneVerificationParams{
+		UserID:    user.ID,
+		Phone:     user.Phone,
+		Code:      otpCode,
+		ExpiresAt: time.Now().Add(10 * time.Minute),
+	})
+	if err == nil {
+		_ = server.smsProvider.SendOTP(user.Phone, otpCode)
+	}
+
 	// Generate new tokens for the updated user
 	accessToken, accessPayload, err := server.tokenMaker.CreateToken(user.Username, user.ID, string(user.Role), server.config.AccessTokenDuration)
 	if err != nil {
@@ -536,34 +711,48 @@ func (server *Server) completeProfile(ctx *gin.Context) {
 
 	// Set cookies
 	isProduction := server.config.Environment == "production"
-	ctx.SetCookie(
-		"access_token",
-		accessToken,
-		int(server.config.AccessTokenDuration.Seconds()),
-		"/",
-		"",
-		isProduction,
-		true,
-	)
-	ctx.SetCookie(
-		"refresh_token",
-		refreshToken,
-		int(server.config.RefreshTokenDuration.Seconds()),
-		"/api/users/renew_access",
-		"",
-		isProduction,
-		true,
-	)
+	sameSite := http.SameSiteLaxMode
+	http.SetCookie(ctx.Writer, &http.Cookie{
+		Name:     "access_token",
+		Value:    accessToken,
+		MaxAge:   int(server.config.AccessTokenDuration.Seconds()),
+		Path:     "/",
+		Domain:   "",
+		Secure:   isProduction,
+		HttpOnly: true,
+		SameSite: sameSite,
+	})
+	http.SetCookie(ctx.Writer, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    refreshToken,
+		MaxAge:   int(server.config.RefreshTokenDuration.Seconds()),
+		Path:     "/api/users/renew_access",
+		Domain:   "",
+		Secure:   isProduction,
+		HttpOnly: true,
+		SameSite: sameSite,
+	})
 
-	rsp := loginUserResponse{
+	rsp := completeProfileResponse{
 		SessionID:             session.ID,
 		AccessToken:           accessToken,
 		AccessTokenExpiresAt:  accessPayload.ExpiredAt,
 		RefreshToken:          refreshToken,
 		RefreshTokenExpiresAt: refreshPayload.ExpiredAt,
 		User:                  newUserResponse(user),
+		RequiresPhoneVerify:   true,
 	}
 	ctx.JSON(http.StatusOK, successResponse(rsp))
+}
+
+type completeProfileResponse struct {
+	SessionID             uuid.UUID    `json:"session_id"`
+	AccessToken           string       `json:"access_token"`
+	AccessTokenExpiresAt  time.Time    `json:"access_token_expires_at"`
+	RefreshToken          string       `json:"refresh_token"`
+	RefreshTokenExpiresAt time.Time    `json:"refresh_token_expires_at"`
+	User                  userResponse `json:"user"`
+	RequiresPhoneVerify   bool         `json:"requires_phone_verify"`
 }
 
 type updateEmailRequest struct {

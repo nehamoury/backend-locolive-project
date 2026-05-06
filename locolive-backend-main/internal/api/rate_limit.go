@@ -60,6 +60,18 @@ var (
 		Period: 1 * time.Minute,
 		Limit:  10,
 	}
+
+	// OTP verification: 5 attempts per 5 minutes (brute-force protection)
+	otpVerifyRate = limiter.Rate{
+		Period: 5 * time.Minute,
+		Limit:  5,
+	}
+
+	// OTP resend: 3 per 15 minutes per IP
+	otpResendRate = limiter.Rate{
+		Period: 15 * time.Minute,
+		Limit:  3,
+	}
 )
 
 // createRateLimiter creates a rate limiter with Redis store
@@ -75,7 +87,7 @@ func (server *Server) createRateLimiter(rate limiter.Rate) gin.HandlerFunc {
 	// Check if Redis is actually reachable
 	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
 	defer cancel()
-	
+
 	if err := server.redis.Ping(ctx).Err(); err != nil {
 		// Fallback immediately if Redis fails
 		store = memory.NewStore()
@@ -142,4 +154,14 @@ func (server *Server) usernameCheckRateLimiter() gin.HandlerFunc {
 // engagementRateLimiter applies rate limiting for likes and follows
 func (server *Server) engagementRateLimiter() gin.HandlerFunc {
 	return server.createRateLimiter(engagementRate)
+}
+
+// otpVerifyRateLimiter applies strict rate limiting for OTP verification (brute-force protection)
+func (server *Server) otpVerifyRateLimiter() gin.HandlerFunc {
+	return server.createRateLimiter(otpVerifyRate)
+}
+
+// otpResendRateLimiter applies rate limiting for OTP resend requests
+func (server *Server) otpResendRateLimiter() gin.HandlerFunc {
+	return server.createRateLimiter(otpResendRate)
 }

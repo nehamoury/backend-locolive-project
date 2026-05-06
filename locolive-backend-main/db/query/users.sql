@@ -7,9 +7,12 @@ INSERT INTO users (
   full_name,
   is_ghost_mode,
   provider,
-  is_profile_complete
+  is_profile_complete,
+  is_email_verified,
+  is_phone_verified,
+  is_active
 ) VALUES (
-  $1, $2, $3, $4, $5, $6, $7, $8
+  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 ) RETURNING *;
 
 -- name: GetUserByPhone :one

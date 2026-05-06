@@ -34,6 +34,9 @@ type Config struct {
 	TLSKeyFile           string        `mapstructure:"TLS_KEY_FILE"`
 	ForceHTTPS           bool          `mapstructure:"FORCE_HTTPS"`
 	FirebaseCredentialsPath string     `mapstructure:"FIREBASE_CREDENTIALS_PATH"`
+	TwilioAccountSID        string     `mapstructure:"TWILIO_ACCOUNT_SID"`
+	TwilioAuthToken         string     `mapstructure:"TWILIO_AUTH_TOKEN"`
+	TwilioFromNumber        string     `mapstructure:"TWILIO_FROM_NUMBER"`
 }
 
 func LoadConfig(path string) (config Config, err error) {

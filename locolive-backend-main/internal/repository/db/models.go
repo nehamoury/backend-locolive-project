@@ -330,6 +330,15 @@ type DataExportJob struct {
 	UpdatedAt    time.Time      `json:"updated_at"`
 }
 
+type EmailVerification struct {
+	ID        uuid.UUID `json:"id"`
+	UserID    uuid.UUID `json:"user_id"`
+	Email     string    `json:"email"`
+	Token     string    `json:"token"`
+	ExpiresAt time.Time `json:"expires_at"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
 type EngagementEvent struct {
 	ID        uuid.UUID             `json:"id"`
 	UserID    uuid.UUID             `json:"user_id"`
@@ -442,6 +451,16 @@ type PasswordReset struct {
 	Token     string    `json:"token"`
 	ExpiresAt time.Time `json:"expires_at"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+type PhoneVerification struct {
+	ID        uuid.UUID `json:"id"`
+	UserID    uuid.UUID `json:"user_id"`
+	Phone     string    `json:"phone"`
+	Code      string    `json:"code"`
+	ExpiresAt time.Time `json:"expires_at"`
+	CreatedAt time.Time `json:"created_at"`
+	Attempts  int32     `json:"attempts"`
 }
 
 type Post struct {
@@ -673,6 +692,9 @@ type User struct {
 	TwoFaEnabled           bool            `json:"two_fa_enabled"`
 	TwoFaSecret            sql.NullString  `json:"two_fa_secret"`
 	LastPasswordChange     sql.NullTime    `json:"last_password_change"`
+	IsEmailVerified        bool            `json:"is_email_verified"`
+	IsPhoneVerified        bool            `json:"is_phone_verified"`
+	IsActive               bool            `json:"is_active"`
 }
 
 type UserActivityLog struct {

@@ -4,9 +4,11 @@ import (
 	"context"
 	"database/sql"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 
 	"privacy-social-backend/internal/repository"
 	"privacy-social-backend/internal/repository/db"
@@ -53,12 +55,19 @@ type Service interface {
 	UpdatePassword(ctx context.Context, userID uuid.UUID, currentPassword, newPassword string) error
 	SearchUsers(ctx context.Context, query string) ([]db.SearchUsersRow, error)
 	UpdateTrustScore(ctx context.Context, userID uuid.UUID) (int32, error)
+	
+	// Verification
+	VerifyEmail(ctx context.Context, token string) (db.User, error)
+	VerifyPhone(ctx context.Context, userID uuid.UUID, code string) (db.User, error)
+	ResendEmailVerification(ctx context.Context, userID uuid.UUID) error
+	ResendPhoneVerification(ctx context.Context, userID uuid.UUID) error
 }
 
 type ServiceImpl struct {
 	store      repository.Store
 	tokenMaker token.Maker
 	config     TokenConfig
+	redis      *redis.Client
 }
 
 type TokenConfig struct {
@@ -66,11 +75,12 @@ type TokenConfig struct {
 	RefreshTokenDuration time.Duration
 }
 
-func NewService(store repository.Store, tokenMaker token.Maker, config TokenConfig) Service {
+func NewService(store repository.Store, tokenMaker token.Maker, config TokenConfig, redis *redis.Client) Service {
 	return &ServiceImpl{
 		store:      store,
 		tokenMaker: tokenMaker,
 		config:     config,
+		redis:      redis,
 	}
 }
 
@@ -110,6 +120,9 @@ func (s *ServiceImpl) CreateUser(ctx context.Context, req CreateUserParams) (db.
 		IsGhostMode:       req.IsGhostMode,
 		Provider:          "local",
 		IsProfileComplete: true,
+		IsEmailVerified:   false,
+		IsPhoneVerified:   false,
+		IsActive:          false,
 	}
 
 	user, err := s.store.CreateUser(ctx, arg)
@@ -303,4 +316,73 @@ func (s *ServiceImpl) UpdateTrustScore(ctx context.Context, userID uuid.UUID) (i
 	})
 
 	return score, err
+}
+
+func (s *ServiceImpl) VerifyEmail(ctx context.Context, token string) (db.User, error) {
+	verification, err := s.store.GetEmailVerification(ctx, token)
+	if err != nil {
+		return db.User{}, errors.New("invalid or expired verification token")
+	}
+
+	if time.Now().After(verification.ExpiresAt) {
+		return db.User{}, errors.New("verification token has expired")
+	}
+
+	user, err := s.store.VerifyEmail(ctx, verification.UserID)
+	if err != nil {
+		return db.User{}, err
+	}
+
+	// Invalidate cache
+	cacheKey := fmt.Sprintf("user_active:%s", verification.UserID.String())
+	s.redis.Del(ctx, cacheKey)
+
+	_ = s.store.DeleteEmailVerification(ctx, verification.UserID)
+	return user, nil
+}
+
+func (s *ServiceImpl) VerifyPhone(ctx context.Context, userID uuid.UUID, code string) (db.User, error) {
+	fmt.Printf("[DEBUG] Verifying phone for user: %s with code: %s\n", userID, code)
+	
+	verification, err := s.store.GetLatestPhoneVerification(ctx, userID)
+	if err != nil {
+		fmt.Printf("[DEBUG] GetLatestPhoneVerification error: %v\n", err)
+		return db.User{}, errors.New("no pending phone verification found")
+	}
+
+	if time.Now().After(verification.ExpiresAt) {
+		fmt.Printf("[DEBUG] OTP expired: %v\n", verification.ExpiresAt)
+		return db.User{}, errors.New("OTP has expired")
+	}
+
+	if verification.Code != code {
+		fmt.Printf("[DEBUG] Code mismatch. Got: %s, Expected: %s\n", code, verification.Code)
+		_, _ = s.store.UpdatePhoneVerificationAttempts(ctx, verification.ID)
+		return db.User{}, errors.New("incorrect verification code")
+	}
+
+	fmt.Printf("[DEBUG] Code matched! Updating user status...\n")
+	user, err := s.store.VerifyPhone(ctx, userID)
+	if err != nil {
+		fmt.Printf("[DEBUG] store.VerifyPhone error: %v\n", err)
+		return db.User{}, err
+	}
+
+	// Invalidate cache
+	cacheKey := fmt.Sprintf("user_active:%s", userID.String())
+	s.redis.Del(ctx, cacheKey)
+
+	_ = s.store.DeletePhoneVerification(ctx, userID)
+	fmt.Printf("[DEBUG] Verification complete for user: %s\n", userID)
+	return user, nil
+}
+
+func (s *ServiceImpl) ResendEmailVerification(ctx context.Context, userID uuid.UUID) error {
+	// Implementation logic will be called from API layer to handle token generation
+	return nil
+}
+
+func (s *ServiceImpl) ResendPhoneVerification(ctx context.Context, userID uuid.UUID) error {
+	// Implementation logic will be called from API layer to handle code generation
+	return nil
 }

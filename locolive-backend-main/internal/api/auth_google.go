@@ -201,7 +201,7 @@ func (server *Server) googleLogin(ctx *gin.Context) {
 		Name:     "refresh_token",
 		Value:    refreshToken,
 		MaxAge:   int(server.config.RefreshTokenDuration.Seconds()),
-		Path:     "/api/users/renew_access",
+		Path:     "/api/users/renew-access",
 		Domain:   "",
 		Secure:   isProduction,
 		HttpOnly: true,

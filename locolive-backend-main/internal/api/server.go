@@ -47,7 +47,6 @@ type Server struct {
 	mailer          util.Mailer
 	notification    *notification.NotificationService
 	privacy         *privacy.Service
-	smsProvider     util.SMSProvider
 }
 
 // NewServer creates a new HTTP server and setup routing
@@ -120,13 +119,6 @@ func NewServer(
 	)
 	log.Info().Str("host", host).Msg("Email Service Initialized (SMTP)")
 
-	// Initialize SMS Provider
-	smsProvider := util.NewTwilioProvider(
-		config.TwilioAccountSID,
-		config.TwilioAuthToken,
-		config.TwilioFromNumber,
-	)
-	log.Info().Msg("SMS Provider Initialized")
 
 	// Initialize Notification Service (FCM)
 	var notificationService *notification.NotificationService
@@ -175,7 +167,6 @@ func NewServer(
 		mailer:          mailer,
 		privacy:         privacyService,
 		notification:    notificationService,
-		smsProvider:     smsProvider,
 	}
 
 	server.setupRouter()

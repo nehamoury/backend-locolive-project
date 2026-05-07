@@ -525,8 +525,9 @@ func (server *Server) sendConnectionRequest(ctx *gin.Context) {
 		
 		if err == nil {
 			// Notify about the accepted connection
+			sender, _ := server.store.GetUserByID(ctx, authPayload.UserID)
 			server.createNotificationWithSound(ctx, targetID, "connection_accepted", "connection",
-				"New Connection", fmt.Sprintf("%s started following you!", targetUser.Username),
+				"New Connection", fmt.Sprintf("%s started following you!", sender.Username),
 				map[string]uuid.UUID{"user": authPayload.UserID})
 			
 			// Invalidate profile caches

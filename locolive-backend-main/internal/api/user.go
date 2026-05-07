@@ -176,18 +176,6 @@ func (server *Server) createUser(ctx *gin.Context) {
 		_ = server.mailer.SendVerificationEmail(user.Email.String, emailToken)
 	}
 
-	// 2. Generate & Send Phone OTP
-	otpCode := util.RandomDigitString(6)
-	_, err = server.store.CreatePhoneVerification(ctx, db.CreatePhoneVerificationParams{
-		UserID:    user.ID,
-		Phone:     user.Phone,
-		Code:      otpCode,
-		ExpiresAt: time.Now().Add(10 * time.Minute),
-	})
-	if err == nil {
-		_ = server.smsProvider.SendOTP(user.Phone, otpCode)
-	}
-
 	// Generate Tokens for Auto-Login
 	accessToken, accessPayload, err := server.tokenMaker.CreateToken(user.Username, user.ID, string(user.Role), server.config.AccessTokenDuration)
 	if err != nil {
@@ -234,7 +222,7 @@ func (server *Server) createUser(ctx *gin.Context) {
 		Name:     "refresh_token",
 		Value:    refreshToken,
 		MaxAge:   int(server.config.RefreshTokenDuration.Seconds()),
-		Path:     "/api/users/renew_access",
+		Path:     "/api/users/renew-access",
 		Domain:   "",
 		Secure:   isProduction,
 		HttpOnly: true,
@@ -261,8 +249,9 @@ func (server *Server) createUser(ctx *gin.Context) {
 }
 
 type loginUserRequest struct {
-	Identity string `json:"identity" binding:"required"`
-	Password string `json:"password" binding:"required,min=6"`
+	Identity      string `json:"identity" binding:"required"`
+	Password      string `json:"password" binding:"required,min=6"`
+	IsAdminPortal bool   `json:"is_admin_portal"`
 }
 
 type loginUserResponse struct {
@@ -292,11 +281,14 @@ func (server *Server) loginUser(ctx *gin.Context) {
 		return
 	}
 
+	req.Identity = strings.TrimSpace(req.Identity)
+
 	result, err := server.user.LoginUser(ctx, user.LoginUserParams{
-		Identity:  req.Identity,
-		Password:  req.Password,
-		UserAgent: ctx.Request.UserAgent(),
-		ClientIP:  ctx.ClientIP(),
+		Identity:     req.Identity,
+		Password:     req.Password,
+		UserAgent:    ctx.Request.UserAgent(),
+		ClientIP:     ctx.ClientIP(),
+		RequireAdmin: req.IsAdminPortal,
 	})
 	if err != nil {
 		if err.Error() == "user not found" {
@@ -305,6 +297,10 @@ func (server *Server) loginUser(ctx *gin.Context) {
 		}
 		if err.Error() == "incorrect password" {
 			ctx.JSON(http.StatusUnauthorized, errorResponse(err))
+			return
+		}
+		if err.Error() == "access denied: administrators only" {
+			ctx.JSON(http.StatusForbidden, gin.H{"success": false, "error": "Access denied. This portal is for administrators only."})
 			return
 		}
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
@@ -330,7 +326,7 @@ func (server *Server) loginUser(ctx *gin.Context) {
 		Name:     "refresh_token",
 		Value:    result.RefreshToken,
 		MaxAge:   int(server.config.RefreshTokenDuration.Seconds()),
-		Path:     "/api/users/renew_access",
+		Path:     "/api/users/renew-access",
 		Domain:   "",
 		Secure:   isProduction,
 		HttpOnly: true,
@@ -467,7 +463,7 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 		Name:     "refresh_token",
 		Value:    newRefreshToken,
 		MaxAge:   int(server.config.RefreshTokenDuration.Seconds()),
-		Path:     "/api/users/renew_access",
+		Path:     "/api/users/renew-access",
 		Domain:   "",
 		Secure:   isProduction,
 		HttpOnly: true,
@@ -670,18 +666,6 @@ func (server *Server) completeProfile(ctx *gin.Context) {
 		return
 	}
 
-	// ─── AUTO-GENERATE PHONE OTP ──────────────────────────────────────────────
-	otpCode := util.RandomDigitString(6)
-	_, err = server.store.CreatePhoneVerification(ctx, db.CreatePhoneVerificationParams{
-		UserID:    user.ID,
-		Phone:     user.Phone,
-		Code:      otpCode,
-		ExpiresAt: time.Now().Add(10 * time.Minute),
-	})
-	if err == nil {
-		_ = server.smsProvider.SendOTP(user.Phone, otpCode)
-	}
-
 	// Generate new tokens for the updated user
 	accessToken, accessPayload, err := server.tokenMaker.CreateToken(user.Username, user.ID, string(user.Role), server.config.AccessTokenDuration)
 	if err != nil {
@@ -726,7 +710,7 @@ func (server *Server) completeProfile(ctx *gin.Context) {
 		Name:     "refresh_token",
 		Value:    refreshToken,
 		MaxAge:   int(server.config.RefreshTokenDuration.Seconds()),
-		Path:     "/api/users/renew_access",
+		Path:     "/api/users/renew-access",
 		Domain:   "",
 		Secure:   isProduction,
 		HttpOnly: true,

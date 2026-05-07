@@ -31,6 +31,7 @@ type LoginUserParams struct {
 	Password  string
 	UserAgent string
 	ClientIP  string
+	RequireAdmin bool
 }
 
 type LoginUserResult struct {
@@ -157,6 +158,10 @@ func (s *ServiceImpl) LoginUser(ctx context.Context, req LoginUserParams) (*Logi
 	err = util.CheckPassword(req.Password, user.PasswordHash)
 	if err != nil {
 		return nil, errors.New("incorrect password")
+	}
+
+	if req.RequireAdmin && user.Role != "admin" && user.Role != "moderator" {
+		return nil, errors.New("access denied: administrators only")
 	}
 
 	// ─── AUTO-RESTORE SOFT-DELETED ACCOUNTS ──────────────────────────────────────

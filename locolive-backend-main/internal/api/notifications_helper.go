@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"privacy-social-backend/internal/repository/db"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
@@ -76,6 +77,24 @@ func (server *Server) createNotificationWithSound(
 			"notif_id": notif.ID.String(),
 		},
 	)
+
+	// REAL-TIME: Send to WebSocket if user is online
+	go func() {
+		wsMsg, _ := json.Marshal(map[string]interface{}{
+			"type": "notification",
+			"payload": map[string]interface{}{
+				"id":              notif.ID,
+				"type":            notif.Type,
+				"title":           notif.Title,
+				"message":         notif.Message,
+				"created_at":      notif.CreatedAt,
+				"is_read":         notif.IsRead,
+				"related_user_id": notif.RelatedUserID.UUID.String(),
+				"sound":           notif.Sound.String,
+			},
+		})
+		server.hub.SendToUser(userID, wsMsg)
+	}()
 
 	return notif, nil
 }

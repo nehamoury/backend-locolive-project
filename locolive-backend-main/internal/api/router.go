@@ -71,10 +71,8 @@ func (server *Server) setupRouter() {
 	// File upload
 	authRoutes.POST("/upload", server.uploadFile)
 	authRoutes.POST("/logout", server.logoutUser)
-	authRoutes.POST("/auth/verify-phone", server.otpVerifyRateLimiter(), server.verifyPhone)
 	authRoutes.POST("/auth/verify-firebase-phone", server.otpVerifyRateLimiter(), server.verifyFirebasePhone)
 	authRoutes.POST("/auth/resend-email", server.otpResendRateLimiter(), server.resendEmailVerification)
-	authRoutes.POST("/auth/resend-phone", server.otpResendRateLimiter(), server.resendPhoneVerification)
 
 	// Activation Gated Routes
 	activeRoutes := authRoutes.Group("/")

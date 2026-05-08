@@ -77,8 +77,12 @@ func (server *Server) getArchivedStories(ctx *gin.Context) {
 		return
 	}
 
+	resp := make([]ArchivedStoryResponse, len(archives))
+	for i, a := range archives {
+		resp[i] = toArchivedStoryResponse(a)
+	}
 	ctx.JSON(http.StatusOK, gin.H{
-		"archives":    archives,
+		"archives":    resp,
 		"total":       count,
 		"page":        page,
 		"page_size":   pageSize,

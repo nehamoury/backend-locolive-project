@@ -393,7 +393,6 @@ func (q *Queries) ListAllPostsAdmin(ctx context.Context, arg ListAllPostsAdminPa
 const listConnectionsPosts = `-- name: ListConnectionsPosts :many
 SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings,
        p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
-
        u.username, u.full_name, u.avatar_url,
        CASE WHEN p.geom IS NOT NULL THEN ST_Y(p.geom::geometry) ELSE NULL END as lat_out,
        CASE WHEN p.geom IS NOT NULL THEN ST_X(p.geom::geometry) ELSE NULL END as lng_out,
@@ -404,12 +403,16 @@ JOIN users u ON p.user_id = u.id
 LEFT JOIN connections c ON
     (c.requester_id = $1 AND c.target_id = p.user_id) OR
     (c.target_id = $1 AND c.requester_id = p.user_id)
-WHERE (p.user_id = $1 OR (c.status = 'accepted' AND u.is_shadow_banned = false))
-    AND NOT EXISTS (
-        SELECT 1 FROM blocked_users bu
-        WHERE (bu.blocker_id = $1 AND bu.blocked_id = p.user_id)
-           OR (bu.blocker_id = p.user_id AND bu.blocked_id = $1)
-    )
+WHERE (
+    p.user_id = $1 
+    OR c.status = 'accepted'
+    OR (u.is_private = false AND u.is_shadow_banned = false)
+)
+AND NOT EXISTS (
+    SELECT 1 FROM blocked_users bu
+    WHERE (bu.blocker_id = $1 AND bu.blocked_id = p.user_id)
+       OR (bu.blocker_id = p.user_id AND bu.blocked_id = $1)
+)
 ORDER BY p.created_at DESC
 LIMIT $3 OFFSET $2
 `

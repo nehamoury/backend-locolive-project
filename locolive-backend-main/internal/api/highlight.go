@@ -34,7 +34,7 @@ func (server *Server) createHighlight(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusCreated, highlight)
+	ctx.JSON(http.StatusCreated, toHighlightGroupResponse(highlight))
 }
 
 // getHighlights returns all highlight groups for a user.
@@ -53,7 +53,11 @@ func (server *Server) getHighlights(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, highlights)
+	resp := make([]HighlightGroupResponse, len(highlights))
+	for i, h := range highlights {
+		resp[i] = toHighlightGroupResponseFromList(h)
+	}
+	ctx.JSON(http.StatusOK, resp)
 }
 
 // getMyHighlights returns highlights for the authenticated user.
@@ -66,7 +70,11 @@ func (server *Server) getMyHighlights(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, highlights)
+	resp := make([]HighlightGroupResponse, len(highlights))
+	for i, h := range highlights {
+		resp[i] = toHighlightGroupResponseFromList(h)
+	}
+	ctx.JSON(http.StatusOK, resp)
 }
 
 // getHighlightDetails returns all stories in a specific highlight group.
@@ -83,7 +91,11 @@ func (server *Server) getHighlightDetails(ctx *gin.Context) {
 		return
 	}
 
-	ctx.JSON(http.StatusOK, stories)
+	resp := make([]HighlightStoryResponse, len(stories))
+	for i, s := range stories {
+		resp[i] = toHighlightStoryResponse(s)
+	}
+	ctx.JSON(http.StatusOK, resp)
 }
 
 // addStoryToHighlight links an archived story to a highlight group.

@@ -67,6 +67,7 @@ func (server *Server) setupRouter() {
 
 	// Profile completion (protected)
 	authRoutes.POST("/users/complete-profile", server.completeProfile)
+	authRoutes.POST("/account/set-password", server.rateLimitMiddleware(3, time.Hour), server.setPasswordForGoogleUser)
 
 	// File upload
 	authRoutes.POST("/upload", server.uploadFile)

@@ -4,9 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	"privacy-social-backend/internal/repository/db"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
+	"privacy-social-backend/internal/repository/db"
 )
 
 var notificationSoundMap = map[string]string{
@@ -22,31 +22,32 @@ var notificationSoundMap = map[string]string{
 	"reel_liked":      "chat_pop.wav",
 	"reel_commented":  "chat_pop.wav",
 	"story_mention":   "chat_pop.wav",
+	"comment_mention": "chat_pop.wav",
 }
 
 // createNotificationWithSound is a central helper to create persistent notifications with associated sounds
 func (server *Server) createNotificationWithSound(
-	ctx context.Context, 
-	userID uuid.UUID, 
-	nType db.NotificationType, 
-	subType string, 
-	title, 
+	ctx context.Context,
+	userID uuid.UUID,
+	nType db.NotificationType,
+	subType string,
+	title,
 	message string,
 	relatedIDs map[string]uuid.UUID,
 ) (db.Notification, error) {
-	
+
 	sound := notificationSoundMap[subType]
 	if sound == "" {
 		sound = notificationSoundMap[string(nType)]
 	}
 
 	arg := db.CreateNotificationParams{
-		UserID:   userID,
-		Type:     nType,
-		SubType:  sql.NullString{String: subType, Valid: subType != ""},
-		Sound:    sql.NullString{String: sound, Valid: sound != ""},
-		Title:    title,
-		Message:  message,
+		UserID:  userID,
+		Type:    nType,
+		SubType: sql.NullString{String: subType, Valid: subType != ""},
+		Sound:   sql.NullString{String: sound, Valid: sound != ""},
+		Title:   title,
+		Message: message,
 	}
 
 	if val, ok := relatedIDs["user"]; ok {
@@ -72,8 +73,8 @@ func (server *Server) createNotificationWithSound(
 		title,
 		message,
 		map[string]string{
-			"type":    string(nType),
-			"subtype": subType,
+			"type":     string(nType),
+			"subtype":  subType,
 			"notif_id": notif.ID.String(),
 		},
 	)
@@ -99,7 +100,6 @@ func (server *Server) createNotificationWithSound(
 	return notif, nil
 }
 
-
 // sendPushNotificationToUser fetches all FCM tokens for a user and sends a push notification
 func (server *Server) sendPushNotificationToUser(ctx context.Context, userID uuid.UUID, title, body string, data map[string]string) {
 	if server.notification == nil {
@@ -112,7 +112,7 @@ func (server *Server) sendPushNotificationToUser(ctx context.Context, userID uui
 		log.Error().Err(err).Str("user_id", userID.String()).Msg("failed to fetch FCM tokens for user")
 		return
 	}
-	
+
 	if len(tokens) == 0 {
 		return
 	}
@@ -138,4 +138,3 @@ func (server *Server) sendPushNotificationToUser(ctx context.Context, userID uui
 		}
 	}
 }
-

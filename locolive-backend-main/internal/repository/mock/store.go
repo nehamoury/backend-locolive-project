@@ -534,6 +534,21 @@ func (mr *MockStoreMockRecorder) CountUnreadNotifications(ctx, userID any) *gomo
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountUnreadNotifications", reflect.TypeOf((*MockStore)(nil).CountUnreadNotifications), ctx, userID)
 }
 
+// CountUserMentions mocks base method.
+func (m *MockStore) CountUserMentions(ctx context.Context, arg db.CountUserMentionsParams) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountUserMentions", ctx, arg)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountUserMentions indicates an expected call of CountUserMentions.
+func (mr *MockStoreMockRecorder) CountUserMentions(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountUserMentions", reflect.TypeOf((*MockStore)(nil).CountUserMentions), ctx, arg)
+}
+
 // CountUsers mocks base method.
 func (m *MockStore) CountUsers(ctx context.Context) (int64, error) {
 	m.ctrl.T.Helper()
@@ -697,6 +712,21 @@ func (m *MockStore) CreateLocation(ctx context.Context, arg db.CreateLocationPar
 func (mr *MockStoreMockRecorder) CreateLocation(ctx, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateLocation", reflect.TypeOf((*MockStore)(nil).CreateLocation), ctx, arg)
+}
+
+// CreateMention mocks base method.
+func (m *MockStore) CreateMention(ctx context.Context, arg db.CreateMentionParams) (db.Mention, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateMention", ctx, arg)
+	ret0, _ := ret[0].(db.Mention)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateMention indicates an expected call of CreateMention.
+func (mr *MockStoreMockRecorder) CreateMention(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateMention", reflect.TypeOf((*MockStore)(nil).CreateMention), ctx, arg)
 }
 
 // CreateMessage mocks base method.
@@ -1163,6 +1193,20 @@ func (m *MockStore) DeleteHighlight(ctx context.Context, arg db.DeleteHighlightP
 func (mr *MockStoreMockRecorder) DeleteHighlight(ctx, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteHighlight", reflect.TypeOf((*MockStore)(nil).DeleteHighlight), ctx, arg)
+}
+
+// DeleteMentionsByEntity mocks base method.
+func (m *MockStore) DeleteMentionsByEntity(ctx context.Context, arg db.DeleteMentionsByEntityParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteMentionsByEntity", ctx, arg)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteMentionsByEntity indicates an expected call of DeleteMentionsByEntity.
+func (mr *MockStoreMockRecorder) DeleteMentionsByEntity(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteMentionsByEntity", reflect.TypeOf((*MockStore)(nil).DeleteMentionsByEntity), ctx, arg)
 }
 
 // DeleteMessage mocks base method.
@@ -1825,6 +1869,21 @@ func (mr *MockStoreMockRecorder) GetLatestPhoneVerification(ctx, userID any) *go
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetLatestPhoneVerification", reflect.TypeOf((*MockStore)(nil).GetLatestPhoneVerification), ctx, userID)
 }
 
+// GetMentionedUsersByEntity mocks base method.
+func (m *MockStore) GetMentionedUsersByEntity(ctx context.Context, arg db.GetMentionedUsersByEntityParams) ([]db.GetMentionedUsersByEntityRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetMentionedUsersByEntity", ctx, arg)
+	ret0, _ := ret[0].([]db.GetMentionedUsersByEntityRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetMentionedUsersByEntity indicates an expected call of GetMentionedUsersByEntity.
+func (mr *MockStoreMockRecorder) GetMentionedUsersByEntity(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetMentionedUsersByEntity", reflect.TypeOf((*MockStore)(nil).GetMentionedUsersByEntity), ctx, arg)
+}
+
 // GetMessage mocks base method.
 func (m *MockStore) GetMessage(ctx context.Context, id uuid.UUID) (db.Message, error) {
 	m.ctrl.T.Helper()
@@ -2483,6 +2542,21 @@ func (m *MockStore) GetUserMentions(ctx context.Context, arg db.GetUserMentionsP
 func (mr *MockStoreMockRecorder) GetUserMentions(ctx, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserMentions", reflect.TypeOf((*MockStore)(nil).GetUserMentions), ctx, arg)
+}
+
+// GetUserMentionsForEntity mocks base method.
+func (m *MockStore) GetUserMentionsForEntity(ctx context.Context, arg db.GetUserMentionsForEntityParams) ([]db.GetUserMentionsForEntityRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetUserMentionsForEntity", ctx, arg)
+	ret0, _ := ret[0].([]db.GetUserMentionsForEntityRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetUserMentionsForEntity indicates an expected call of GetUserMentionsForEntity.
+func (mr *MockStoreMockRecorder) GetUserMentionsForEntity(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetUserMentionsForEntity", reflect.TypeOf((*MockStore)(nil).GetUserMentionsForEntity), ctx, arg)
 }
 
 // GetUserPreferences mocks base method.

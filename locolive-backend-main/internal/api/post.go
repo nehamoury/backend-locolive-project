@@ -20,31 +20,31 @@ import (
 // ─── Request / Response DTOs ────────────────────────────────────────────────
 
 type createPostRequest struct {
-	MediaURL     string  `json:"media_url"   binding:"required"`
-	MediaType    string  `json:"media_type"  binding:"required,oneof=image video text"`
-	Caption      string  `json:"caption"`
-	BodyText     string  `json:"body_text"`
-	LocationName string  `json:"location_name"`
-	Latitude     float64 `json:"latitude"`
+	MediaURL     string          `json:"media_url"   binding:"required"`
+	MediaType    string          `json:"media_type"  binding:"required,oneof=image video text"`
+	Caption      string          `json:"caption"`
+	BodyText     string          `json:"body_text"`
+	LocationName string          `json:"location_name"`
+	Latitude     float64         `json:"latitude"`
 	Longitude    float64         `json:"longitude"`
 	HasLocation  bool            `json:"has_location"`
 	CropSettings json.RawMessage `json:"crop_settings"`
 }
 
 type postResponse struct {
-	ID            uuid.UUID `json:"id"`
-	UserID        uuid.UUID `json:"user_id"`
-	MediaUrl      string    `json:"media_url"`
-	MediaType     string    `json:"media_type"`
-	Caption       string    `json:"caption"`
-	BodyText      string    `json:"body_text"`
-	LocationName  string    `json:"location_name"`
-	LikesCount    int32     `json:"likes_count"`
-	CommentsCount int32     `json:"comments_count"`
-	SharesCount   int32     `json:"shares_count"`
-	CreatedAt     time.Time `json:"created_at"`
-	Username      string    `json:"username,omitempty"`
-	FullName      string    `json:"full_name,omitempty"`
+	ID            uuid.UUID       `json:"id"`
+	UserID        uuid.UUID       `json:"user_id"`
+	MediaUrl      string          `json:"media_url"`
+	MediaType     string          `json:"media_type"`
+	Caption       string          `json:"caption"`
+	BodyText      string          `json:"body_text"`
+	LocationName  string          `json:"location_name"`
+	LikesCount    int32           `json:"likes_count"`
+	CommentsCount int32           `json:"comments_count"`
+	SharesCount   int32           `json:"shares_count"`
+	CreatedAt     time.Time       `json:"created_at"`
+	Username      string          `json:"username,omitempty"`
+	FullName      string          `json:"full_name,omitempty"`
 	AvatarUrl     string          `json:"avatar_url,omitempty"`
 	LikedByViewer bool            `json:"liked_by_viewer"`
 	IsSaved       bool            `json:"is_saved"`
@@ -52,14 +52,15 @@ type postResponse struct {
 }
 
 type postCommentResponse struct {
-	ID        uuid.UUID `json:"id"`
-	PostID    uuid.UUID `json:"post_id"`
-	UserID    uuid.UUID `json:"user_id"`
-	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
-	Username  string    `json:"username,omitempty"`
-	FullName  string    `json:"full_name,omitempty"`
-	AvatarUrl string    `json:"avatar_url,omitempty"`
+	ID        uuid.UUID       `json:"id"`
+	PostID    uuid.UUID       `json:"post_id"`
+	UserID    uuid.UUID       `json:"user_id"`
+	Content   string          `json:"content"`
+	CreatedAt time.Time       `json:"created_at"`
+	Username  string          `json:"username,omitempty"`
+	FullName  string          `json:"full_name,omitempty"`
+	AvatarUrl string          `json:"avatar_url,omitempty"`
+	Mentions  []MentionedUser `json:"mentions,omitempty"`
 }
 
 func toPostResponse(p db.CreatePostRow) postResponse {
@@ -168,13 +169,13 @@ func (server *Server) createPost(ctx *gin.Context) {
 	}
 
 	post, err := server.store.CreatePost(ctx, db.CreatePostParams{
-		UserID:      authPayload.UserID,
-		MediaUrl:    req.MediaURL,
-		MediaType:   req.MediaType,
-		Caption:     sql.NullString{String: req.Caption, Valid: req.Caption != ""},
-		BodyText:    sql.NullString{String: req.BodyText, Valid: req.BodyText != ""},
+		UserID:       authPayload.UserID,
+		MediaUrl:     req.MediaURL,
+		MediaType:    req.MediaType,
+		Caption:      sql.NullString{String: req.Caption, Valid: req.Caption != ""},
+		BodyText:     sql.NullString{String: req.BodyText, Valid: req.BodyText != ""},
 		LocationName: sql.NullString{String: req.LocationName, Valid: req.LocationName != ""},
-		Geohash:     sql.NullString{},
+		Geohash:      sql.NullString{},
 		HasLocation:  req.HasLocation,
 		Lat:          req.Latitude,
 		Lng:          req.Longitude,
@@ -466,7 +467,6 @@ func (server *Server) addPostComment(ctx *gin.Context) {
 
 	_ = server.store.IncrementPostComments(ctx, postID)
 
-
 	// Log activity & Broadcast to Admin
 	details, _ := json.Marshal(map[string]interface{}{"post_id": postID, "content": req.Content, "is_flagged": isFlagged})
 	_, _ = server.store.CreateActivityLog(ctx, db.CreateActivityLogParams{
@@ -494,7 +494,7 @@ func (server *Server) addPostComment(ctx *gin.Context) {
 
 	// Process @mentions in the comment
 	commenter, _ := server.store.GetUserByID(ctx, authPayload.UserID)
-	server.processMentions(ctx, req.Content, authPayload.UserID, commenter.Username)
+	mentions := server.processCommentMentions(ctx, "post_comment", comment.ID, req.Content, authPayload.UserID, commenter.Username)
 
 	ctx.JSON(http.StatusCreated, postCommentResponse{
 		ID:        comment.ID,
@@ -502,6 +502,7 @@ func (server *Server) addPostComment(ctx *gin.Context) {
 		UserID:    comment.UserID,
 		Content:   comment.Content,
 		CreatedAt: comment.CreatedAt,
+		Mentions:  mentions,
 	})
 }
 
@@ -641,4 +642,3 @@ func (server *Server) getSavedPosts(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, successResponse(gin.H{"posts": rsp, "page": page, "page_size": pageSize}))
 }
-

@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/mmcloughlin/geohash"
 
 	"privacy-social-backend/internal/repository/db"
@@ -66,19 +67,23 @@ func (server *Server) getStoriesMap(ctx *gin.Context) {
 		return
 	}
 
-	// Cluster stories by geohash (7 chars = ~152m precision)
+	// Cluster stories by geohash + UserID (7 chars = ~152m precision)
+	// This ensures each user at a location gets their own marker
 	clusters := make(map[string][]db.GetStoriesWithinRadiusRow)
 	for _, story := range stories {
 		hash := story.Geohash
 		if len(hash) > 7 {
 			hash = hash[:7]
 		}
-		clusters[hash] = append(clusters[hash], story)
+		// Group by location AND user
+		clusterKey := fmt.Sprintf("%s:%s", hash, story.UserID.String())
+		clusters[clusterKey] = append(clusters[clusterKey], story)
 	}
 
 	// Convert clusters to response format
 	type ClusterResponse struct {
 		Geohash   string          `json:"geohash"`
+		UserID    uuid.UUID       `json:"user_id"`
 		Latitude  float64         `json:"latitude"`
 		Longitude float64         `json:"longitude"`
 		Count     int             `json:"count"`
@@ -86,11 +91,17 @@ func (server *Server) getStoriesMap(ctx *gin.Context) {
 	}
 
 	var response []ClusterResponse
-	for hash, clusterStories := range clusters {
+	for _, clusterStories := range clusters {
+		// Use geohash from the first story in the cluster (truncated to 7 chars)
+		hash := clusterStories[0].Geohash
+		if len(hash) > 7 {
+			hash = hash[:7]
+		}
 		lat, lng := geohash.Decode(hash)
 
 		cluster := ClusterResponse{
 			Geohash:   hash,
+			UserID:    clusterStories[0].UserID,
 			Latitude:  lat,
 			Longitude: lng,
 			Count:     len(clusterStories),

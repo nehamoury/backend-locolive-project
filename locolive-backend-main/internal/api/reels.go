@@ -31,37 +31,38 @@ type reelCommentRequest struct {
 }
 
 type reelResponse struct {
-	ID             uuid.UUID `json:"id"`
-	UserID         uuid.UUID `json:"user_id"`
-	VideoURL       string    `json:"video_url"`
-	Caption        *string   `json:"caption"`
-	IsAiGenerated  bool      `json:"is_ai_generated"`
-	LocationName   *string   `json:"location_name"`
-	Geohash        *string   `json:"geohash"`
-	Lat            float64   `json:"lat"`
-	Lng            float64   `json:"lng"`
-	LikesCount     int32     `json:"likes_count"`
-	CommentsCount  int32     `json:"comments_count"`
-	SharesCount    int32     `json:"shares_count"`
-	SavesCount     int32     `json:"saves_count"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
-	Username       string    `json:"username,omitempty"`
-	AvatarURL      *string   `json:"avatar_url,omitempty"`
-	DistanceMeters *float64  `json:"distance_meters,omitempty"`
-	IsLiked        bool      `json:"is_liked"`
-	IsSaved        bool      `json:"is_saved"`
+	ID               uuid.UUID `json:"id"`
+	UserID           uuid.UUID `json:"user_id"`
+	VideoURL         string    `json:"video_url"`
+	Caption          *string   `json:"caption"`
+	IsAiGenerated    bool      `json:"is_ai_generated"`
+	LocationName     *string   `json:"location_name"`
+	Geohash          *string   `json:"geohash"`
+	Lat              float64   `json:"lat"`
+	Lng              float64   `json:"lng"`
+	LikesCount       int32     `json:"likes_count"`
+	CommentsCount    int32     `json:"comments_count"`
+	SharesCount      int32     `json:"shares_count"`
+	SavesCount       int32     `json:"saves_count"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+	Username         string    `json:"username,omitempty"`
+	AvatarURL        *string   `json:"avatar_url,omitempty"`
+	DistanceMeters   *float64  `json:"distance_meters,omitempty"`
+	IsLiked          bool      `json:"is_liked"`
+	IsSaved          bool      `json:"is_saved"`
 	ConnectionStatus string    `json:"connection_status,omitempty"`
 }
 
 type reelCommentResponse struct {
-	ID        uuid.UUID `json:"id"`
-	ReelID    uuid.UUID `json:"reel_id"`
-	UserID    uuid.UUID `json:"user_id"`
-	Username  string    `json:"username,omitempty"`
-	AvatarURL *string   `json:"avatar_url,omitempty"`
-	Content   string    `json:"content"`
-	CreatedAt time.Time `json:"created_at"`
+	ID        uuid.UUID       `json:"id"`
+	ReelID    uuid.UUID       `json:"reel_id"`
+	UserID    uuid.UUID       `json:"user_id"`
+	Username  string          `json:"username,omitempty"`
+	AvatarURL *string         `json:"avatar_url,omitempty"`
+	Content   string          `json:"content"`
+	CreatedAt time.Time       `json:"created_at"`
+	Mentions  []MentionedUser `json:"mentions,omitempty"`
 }
 
 // ─── Mappers ─────────────────────────────────────────────────────────────────
@@ -115,24 +116,24 @@ func toReelResponseFromGet(r db.GetReelRow) reelResponse {
 
 func toReelResponseFromFeed(r db.ListReelsFeedRow) reelResponse {
 	rsp := reelResponse{
-		ID:            r.ID,
-		UserID:        r.UserID,
-		VideoURL:      r.VideoUrl,
-		Caption:       nullStrToPtr(r.Caption),
-		IsAiGenerated: r.IsAiGenerated,
-		LocationName:  nullStrToPtr(r.LocationName),
-		Geohash:       nullStrToPtr(r.Geohash),
-		Lat:           r.Lat,
-		Lng:           r.Lng,
-		LikesCount:    r.LikesCount,
-		CommentsCount: r.CommentsCount,
-		SharesCount:   r.SharesCount,
-		SavesCount:    r.SavesCount,
-		CreatedAt:     r.CreatedAt,
-		UpdatedAt:     r.UpdatedAt,
-		Username:      r.Username,
-		IsLiked:       r.IsLiked,
-		IsSaved:       r.IsSaved,
+		ID:               r.ID,
+		UserID:           r.UserID,
+		VideoURL:         r.VideoUrl,
+		Caption:          nullStrToPtr(r.Caption),
+		IsAiGenerated:    r.IsAiGenerated,
+		LocationName:     nullStrToPtr(r.LocationName),
+		Geohash:          nullStrToPtr(r.Geohash),
+		Lat:              r.Lat,
+		Lng:              r.Lng,
+		LikesCount:       r.LikesCount,
+		CommentsCount:    r.CommentsCount,
+		SharesCount:      r.SharesCount,
+		SavesCount:       r.SavesCount,
+		CreatedAt:        r.CreatedAt,
+		UpdatedAt:        r.UpdatedAt,
+		Username:         r.Username,
+		IsLiked:          r.IsLiked,
+		IsSaved:          r.IsSaved,
 		ConnectionStatus: fmt.Sprintf("%v", r.ConnectionStatus),
 	}
 	if r.AvatarUrl.Valid {
@@ -143,24 +144,24 @@ func toReelResponseFromFeed(r db.ListReelsFeedRow) reelResponse {
 
 func toReelResponseFromNearby(r db.ListNearbyReelsRow) reelResponse {
 	rsp := reelResponse{
-		ID:            r.ID,
-		UserID:        r.UserID,
-		VideoURL:      r.VideoUrl,
-		Caption:       nullStrToPtr(r.Caption),
-		IsAiGenerated: r.IsAiGenerated,
-		LocationName:  nullStrToPtr(r.LocationName),
-		Geohash:       nullStrToPtr(r.Geohash),
-		Lat:           r.Lat,
-		Lng:           r.Lng,
-		LikesCount:    r.LikesCount,
-		CommentsCount: r.CommentsCount,
-		SharesCount:   r.SharesCount,
-		SavesCount:    r.SavesCount,
-		CreatedAt:     r.CreatedAt,
-		UpdatedAt:     r.UpdatedAt,
-		Username:      r.Username,
-		IsLiked:       r.IsLiked,
-		IsSaved:       r.IsSaved,
+		ID:               r.ID,
+		UserID:           r.UserID,
+		VideoURL:         r.VideoUrl,
+		Caption:          nullStrToPtr(r.Caption),
+		IsAiGenerated:    r.IsAiGenerated,
+		LocationName:     nullStrToPtr(r.LocationName),
+		Geohash:          nullStrToPtr(r.Geohash),
+		Lat:              r.Lat,
+		Lng:              r.Lng,
+		LikesCount:       r.LikesCount,
+		CommentsCount:    r.CommentsCount,
+		SharesCount:      r.SharesCount,
+		SavesCount:       r.SavesCount,
+		CreatedAt:        r.CreatedAt,
+		UpdatedAt:        r.UpdatedAt,
+		Username:         r.Username,
+		IsLiked:          r.IsLiked,
+		IsSaved:          r.IsSaved,
 		ConnectionStatus: fmt.Sprintf("%v", r.ConnectionStatus),
 	}
 	if r.AvatarUrl.Valid {
@@ -174,24 +175,24 @@ func toReelResponseFromNearby(r db.ListNearbyReelsRow) reelResponse {
 
 func toReelResponseFromUserReels(r db.ListUserReelsRow) reelResponse {
 	rsp := reelResponse{
-		ID:            r.ID,
-		UserID:        r.UserID,
-		VideoURL:      r.VideoUrl,
-		Caption:       nullStrToPtr(r.Caption),
-		IsAiGenerated: r.IsAiGenerated,
-		LocationName:  nullStrToPtr(r.LocationName),
-		Geohash:       nullStrToPtr(r.Geohash),
-		Lat:           r.Lat,
-		Lng:           r.Lng,
-		LikesCount:    r.LikesCount,
-		CommentsCount: r.CommentsCount,
-		SharesCount:   r.SharesCount,
-		SavesCount:    r.SavesCount,
-		CreatedAt:     r.CreatedAt,
-		UpdatedAt:     r.UpdatedAt,
-		Username:      r.Username,
-		IsLiked:       r.IsLiked,
-		IsSaved:       r.IsSaved,
+		ID:               r.ID,
+		UserID:           r.UserID,
+		VideoURL:         r.VideoUrl,
+		Caption:          nullStrToPtr(r.Caption),
+		IsAiGenerated:    r.IsAiGenerated,
+		LocationName:     nullStrToPtr(r.LocationName),
+		Geohash:          nullStrToPtr(r.Geohash),
+		Lat:              r.Lat,
+		Lng:              r.Lng,
+		LikesCount:       r.LikesCount,
+		CommentsCount:    r.CommentsCount,
+		SharesCount:      r.SharesCount,
+		SavesCount:       r.SavesCount,
+		CreatedAt:        r.CreatedAt,
+		UpdatedAt:        r.UpdatedAt,
+		Username:         r.Username,
+		IsLiked:          r.IsLiked,
+		IsSaved:          r.IsSaved,
 		ConnectionStatus: fmt.Sprintf("%v", r.ConnectionStatus),
 	}
 	if r.AvatarUrl.Valid {
@@ -207,6 +208,17 @@ func toReelCommentResponse(c db.ReelComment) reelCommentResponse {
 		UserID:    c.UserID,
 		Content:   c.Content,
 		CreatedAt: c.CreatedAt,
+	}
+}
+
+func toReelCommentResponseWithMentions(c db.ReelComment, mentions []MentionedUser) reelCommentResponse {
+	return reelCommentResponse{
+		ID:        c.ID,
+		ReelID:    c.ReelID,
+		UserID:    c.UserID,
+		Content:   c.Content,
+		CreatedAt: c.CreatedAt,
+		Mentions:  mentions,
 	}
 }
 
@@ -511,10 +523,10 @@ func (server *Server) addReelComment(ctx *gin.Context) {
 				map[string]uuid.UUID{"user": authPayload.UserID})
 		}
 
-		server.processMentions(ctx, req.Content, authPayload.UserID, commenter.Username)
+		server.processCommentMentions(ctx, "reel_comment", comment.ID, req.Content, authPayload.UserID, commenter.Username)
 	}
 
-	ctx.JSON(http.StatusCreated, successResponse(toReelCommentResponse(comment)))
+	ctx.JSON(http.StatusCreated, successResponse(toReelCommentResponseWithMentions(comment, nil)))
 }
 
 // listReelComments returns comments for a reel.
@@ -634,7 +646,7 @@ func (server *Server) deleteReelComment(ctx *gin.Context) {
 // deleteReel deletes a reel the user owns.
 func (server *Server) deleteReel(ctx *gin.Context) {
 	reelID, err := uuid.Parse(ctx.Param("id"))
-	if (err != nil) {
+	if err != nil {
 		ctx.JSON(http.StatusBadRequest, errorResponse(fmt.Errorf("invalid reel id")))
 		return
 	}

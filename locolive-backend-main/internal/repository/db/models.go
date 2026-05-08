@@ -72,6 +72,7 @@ const (
 	NotificationTypeNearbyStory        NotificationType = "nearby_story"
 	NotificationTypeReelLiked          NotificationType = "reel_liked"
 	NotificationTypeReelCommented      NotificationType = "reel_commented"
+	NotificationTypeCommentMention     NotificationType = "comment_mention"
 )
 
 func (e *NotificationType) Scan(src interface{}) error {
@@ -387,6 +388,15 @@ type Location struct {
 	TimeBucket time.Time   `json:"time_bucket"`
 	CreatedAt  time.Time   `json:"created_at"`
 	ExpiresAt  time.Time   `json:"expires_at"`
+}
+
+type Mention struct {
+	ID                uuid.UUID `json:"id"`
+	EntityType        string    `json:"entity_type"`
+	EntityID          uuid.UUID `json:"entity_id"`
+	MentionedUserID   uuid.UUID `json:"mentioned_user_id"`
+	MentionedByUserID uuid.UUID `json:"mentioned_by_user_id"`
+	CreatedAt         time.Time `json:"created_at"`
 }
 
 type Message struct {

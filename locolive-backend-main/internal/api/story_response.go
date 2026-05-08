@@ -31,6 +31,50 @@ type StoryResponse struct {
 	CropSettings json.RawMessage `json:"crop_settings,omitempty"`
 }
 
+// ArchivedStoryResponse is the DTO for archived story API responses
+type ArchivedStoryResponse struct {
+	ID                uuid.UUID  `json:"id"`
+	UserID            uuid.UUID  `json:"user_id"`
+	StoryID           uuid.UUID  `json:"story_id"`
+	MediaUrl          string     `json:"media_url"`
+	MediaType         string     `json:"media_type"`
+	Caption           *string    `json:"caption"`
+	Geohash           string     `json:"geohash"`
+	IsAnonymous       bool       `json:"is_anonymous"`
+	ShowLocation      bool       `json:"show_location"`
+	OriginalCreatedAt time.Time  `json:"original_created_at"`
+	ArchivedAt        *time.Time `json:"archived_at"`
+	CreatedAt         *time.Time `json:"created_at"`
+}
+
+func toArchivedStoryResponse(row db.ArchivedStory) ArchivedStoryResponse {
+	resp := ArchivedStoryResponse{
+		ID:                row.ID,
+		UserID:            row.UserID,
+		StoryID:           row.StoryID,
+		MediaUrl:          row.MediaUrl,
+		MediaType:         row.MediaType,
+		Geohash:           row.Geohash,
+		IsAnonymous:       row.IsAnonymous.Bool,
+		ShowLocation:      row.ShowLocation.Bool,
+		OriginalCreatedAt: row.OriginalCreatedAt,
+	}
+
+	if row.Caption.Valid {
+		resp.Caption = &row.Caption.String
+	}
+
+	if row.ArchivedAt.Valid {
+		resp.ArchivedAt = &row.ArchivedAt.Time
+	}
+
+	if row.CreatedAt.Valid {
+		resp.CreatedAt = &row.CreatedAt.Time
+	}
+
+	return resp
+}
+
 // Convert db.GetStoriesWithinRadiusRow to StoryResponse
 func toStoryResponse(row db.GetStoriesWithinRadiusRow) StoryResponse {
 	resp := StoryResponse{
@@ -45,7 +89,7 @@ func toStoryResponse(row db.GetStoriesWithinRadiusRow) StoryResponse {
 		IsAnonymous:  row.IsAnonymous,
 		ShowLocation: row.ShowLocation,
 		Username:     row.Username,
-		CropSettings:  row.CropSettings.RawMessage,
+		CropSettings: row.CropSettings.RawMessage,
 	}
 
 	if val, ok := row.Lat.(float64); ok {
@@ -88,7 +132,7 @@ func toStoryResponseFromConnection(row db.GetConnectionStoriesRow) StoryResponse
 		IsAnonymous:  row.IsAnonymous,
 		ShowLocation: row.ShowLocation,
 		Username:     row.Username,
-		CropSettings:  row.CropSettings.RawMessage,
+		CropSettings: row.CropSettings.RawMessage,
 	}
 
 	if val, ok := row.Lat.(float64); ok {
@@ -131,7 +175,7 @@ func toStoryResponseFromBounds(row db.GetStoriesInBoundsRow) StoryResponse {
 		IsAnonymous:  row.IsAnonymous,
 		ShowLocation: row.ShowLocation,
 		Username:     row.Username,
-		CropSettings:  row.CropSettings.RawMessage,
+		CropSettings: row.CropSettings.RawMessage,
 	}
 
 	if val, ok := row.Lat.(float64); ok {
@@ -170,7 +214,7 @@ func toStoryResponseFromCreate(row db.CreateStoryRow) StoryResponse {
 		IsAnonymous:  row.IsAnonymous,
 		ShowLocation: row.ShowLocation,
 		Username:     "",
-		CropSettings:  row.CropSettings.RawMessage,
+		CropSettings: row.CropSettings.RawMessage,
 	}
 
 	if val, ok := row.Lat.(float64); ok {
@@ -209,7 +253,7 @@ func toStoryResponseFromGet(row db.GetStoryByIDRow) StoryResponse {
 		IsAnonymous:  row.IsAnonymous,
 		ShowLocation: row.ShowLocation,
 		Username:     "",
-		CropSettings:  row.CropSettings.RawMessage,
+		CropSettings: row.CropSettings.RawMessage,
 	}
 
 	if val, ok := row.Lat.(float64); ok {
@@ -248,7 +292,7 @@ func toStoryResponseFromUpdate(row db.UpdateStoryRow) StoryResponse {
 		IsAnonymous:  row.IsAnonymous,
 		ShowLocation: row.ShowLocation,
 		Username:     "",
-		CropSettings:  row.CropSettings.RawMessage,
+		CropSettings: row.CropSettings.RawMessage,
 	}
 
 	if val, ok := row.Lat.(float64); ok {
@@ -286,7 +330,7 @@ func toStoryResponseFromActive(row db.GetActiveStoriesByUserIDRow) StoryResponse
 		IsAnonymous:  row.IsAnonymous,
 		ShowLocation: row.ShowLocation,
 		Username:     row.Username,
-		CropSettings:  row.CropSettings.RawMessage,
+		CropSettings: row.CropSettings.RawMessage,
 	}
 
 	if val, ok := row.Lat.(float64); ok {

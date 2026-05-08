@@ -27,10 +27,10 @@ type CreateUserParams struct {
 }
 
 type LoginUserParams struct {
-	Identity  string
-	Password  string
-	UserAgent string
-	ClientIP  string
+	Identity     string
+	Password     string
+	UserAgent    string
+	ClientIP     string
 	RequireAdmin bool
 }
 
@@ -56,7 +56,7 @@ type Service interface {
 	UpdatePassword(ctx context.Context, userID uuid.UUID, currentPassword, newPassword string) error
 	SearchUsers(ctx context.Context, query string) ([]db.SearchUsersRow, error)
 	UpdateTrustScore(ctx context.Context, userID uuid.UUID) (int32, error)
-	
+
 	// Verification
 	VerifyEmail(ctx context.Context, token string) (db.User, error)
 	VerifyPhone(ctx context.Context, userID uuid.UUID, code string) (db.User, error)
@@ -157,6 +157,9 @@ func (s *ServiceImpl) LoginUser(ctx context.Context, req LoginUserParams) (*Logi
 
 	err = util.CheckPassword(req.Password, user.PasswordHash)
 	if err != nil {
+		if user.Provider == "google" {
+			return nil, errors.New("this account was created with Google. Set a password first or use Google to sign in.")
+		}
 		return nil, errors.New("incorrect password")
 	}
 
@@ -348,7 +351,7 @@ func (s *ServiceImpl) VerifyEmail(ctx context.Context, token string) (db.User, e
 
 func (s *ServiceImpl) VerifyPhone(ctx context.Context, userID uuid.UUID, code string) (db.User, error) {
 	fmt.Printf("[DEBUG] Verifying phone for user: %s with code: %s\n", userID, code)
-	
+
 	verification, err := s.store.GetLatestPhoneVerification(ctx, userID)
 	if err != nil {
 		fmt.Printf("[DEBUG] GetLatestPhoneVerification error: %v\n", err)

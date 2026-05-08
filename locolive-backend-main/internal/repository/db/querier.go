@@ -48,6 +48,7 @@ type Querier interface {
 	CountStoryReactions(ctx context.Context, storyID uuid.UUID) (int64, error)
 	CountStoryViews(ctx context.Context, storyID uuid.UUID) (int64, error)
 	CountUnreadNotifications(ctx context.Context, userID uuid.UUID) (int64, error)
+	CountUserMentions(ctx context.Context, arg CountUserMentionsParams) (int64, error)
 	CountUsers(ctx context.Context) (int64, error)
 	CreateActivityLog(ctx context.Context, arg CreateActivityLogParams) (ActivityLog, error)
 	CreateBadge(ctx context.Context, arg CreateBadgeParams) (Badge, error)
@@ -59,6 +60,7 @@ type Querier interface {
 	CreateGroup(ctx context.Context, arg CreateGroupParams) (Group, error)
 	CreateHighlight(ctx context.Context, arg CreateHighlightParams) (HighlightGroup, error)
 	CreateLocation(ctx context.Context, arg CreateLocationParams) (Location, error)
+	CreateMention(ctx context.Context, arg CreateMentionParams) (Mention, error)
 	CreateMessage(ctx context.Context, arg CreateMessageParams) (Message, error)
 	CreateMessageReaction(ctx context.Context, arg CreateMessageReactionParams) (MessageReaction, error)
 	CreateNotification(ctx context.Context, arg CreateNotificationParams) (Notification, error)
@@ -94,6 +96,7 @@ type Querier interface {
 	DeleteExpiredPasswordResets(ctx context.Context) error
 	DeleteExpiredStories(ctx context.Context) error
 	DeleteHighlight(ctx context.Context, arg DeleteHighlightParams) error
+	DeleteMentionsByEntity(ctx context.Context, arg DeleteMentionsByEntityParams) error
 	DeleteMessage(ctx context.Context, arg DeleteMessageParams) error
 	DeleteMessageReaction(ctx context.Context, arg DeleteMessageReactionParams) error
 	// Delete messages older than specified days (default: 30 days)
@@ -145,6 +148,7 @@ type Querier interface {
 	GetLatestCrossingBetweenUsers(ctx context.Context, arg GetLatestCrossingBetweenUsersParams) (Crossing, error)
 	GetLatestDataExportJob(ctx context.Context, userID uuid.UUID) (DataExportJob, error)
 	GetLatestPhoneVerification(ctx context.Context, userID uuid.UUID) (PhoneVerification, error)
+	GetMentionedUsersByEntity(ctx context.Context, arg GetMentionedUsersByEntityParams) ([]GetMentionedUsersByEntityRow, error)
 	GetMessage(ctx context.Context, id uuid.UUID) (Message, error)
 	GetMessageReactions(ctx context.Context, messageID uuid.UUID) ([]GetMessageReactionsRow, error)
 	GetMyProfileViews(ctx context.Context, viewerID uuid.UUID) ([]GetMyProfileViewsRow, error)
@@ -198,6 +202,7 @@ type Querier interface {
 	GetUserFCMTokens(ctx context.Context, userID uuid.UUID) ([]string, error)
 	GetUserGroups(ctx context.Context, userID uuid.UUID) ([]Group, error)
 	GetUserMentions(ctx context.Context, arg GetUserMentionsParams) ([]GetUserMentionsRow, error)
+	GetUserMentionsForEntity(ctx context.Context, arg GetUserMentionsForEntityParams) ([]GetUserMentionsForEntityRow, error)
 	GetUserPreferences(ctx context.Context, userID uuid.UUID) (UserPreference, error)
 	GetUserPrivacyState(ctx context.Context, id uuid.UUID) (GetUserPrivacyStateRow, error)
 	GetUserProfile(ctx context.Context, id uuid.UUID) (GetUserProfileRow, error)

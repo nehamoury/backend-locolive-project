@@ -7,16 +7,16 @@ import (
 	"privacy-social-backend/internal/util"
 	"time"
 
+	"encoding/json"
+	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog/log"
+	"github.com/sqlc-dev/pqtype"
 	"privacy-social-backend/internal/repository/db"
 	"privacy-social-backend/internal/token"
 	"strconv"
-	"fmt"
-	"encoding/json"
-	"github.com/sqlc-dev/pqtype"
 )
 
 const (
@@ -170,9 +170,9 @@ func (server *Server) getAdminDashboard(ctx *gin.Context) {
 
 	// Add dynamic data
 	stats["activeWebsockets"] = server.hub.GetTotalConnections()
-	
+
 	// Error count (last 1h) - mock for now or query logs table if exists
-	stats["errorsLastHour"] = 0 
+	stats["errorsLastHour"] = 0
 
 	ctx.JSON(http.StatusOK, gin.H{
 		"success": true,
@@ -302,13 +302,13 @@ func (server *Server) listAllStories(ctx *gin.Context) {
 		ctx.JSON(http.StatusBadRequest, errorResponse(err))
 		return
 	}
-	
+
 	stories, total, err := server.admin.ListAllStories(ctx, req.PageID, req.PageSize)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
 	}
-	
+
 	ctx.JSON(http.StatusOK, gin.H{
 		"success": true,
 		"data": gin.H{
@@ -777,7 +777,7 @@ func (server *Server) sendBroadcastNotification(ctx *gin.Context) {
 	// Create notifications for all target users
 	notificationCount := 0
 	for _, userID := range userIDs {
-		_, notifErr := server.createNotificationWithSound(ctx, userID, "system_announcement", "system", 
+		_, notifErr := server.createNotificationWithSound(ctx, userID, "system_announcement", "system",
 			req.Title, req.Message, nil)
 		if notifErr == nil {
 			notificationCount++
@@ -1063,6 +1063,7 @@ func (server *Server) deleteAdminUser(ctx *gin.Context) {
 		"data":    newAdminUserResponse(updatedUser),
 	})
 }
+
 // ─── New Admin Handlers ──────────────────────────────────────────────────
 
 // Admin: Get User Detail
@@ -1081,7 +1082,7 @@ func (server *Server) getAdminUserDetail(ctx *gin.Context) {
 
 // Admin: Handle User Actions
 type adminUserActionRequest struct {
-	Action string `json:"action" binding:"required,oneof=ban unban revoke_sessions soft_delete"`
+	Action string `json:"action" binding:"required,oneof=ban unban revoke_sessions soft_delete promote_admin demote_user"`
 }
 
 func (server *Server) handleAdminUserAction(ctx *gin.Context) {
@@ -1092,6 +1093,7 @@ func (server *Server) handleAdminUserAction(ctx *gin.Context) {
 
 	var req adminUserActionRequest
 	if err := ctx.ShouldBindJSON(&req); err != nil {
+		log.Warn().Err(err).Msg("admin user action validation failed")
 		ctx.JSON(http.StatusBadRequest, errorResponse(err))
 		return
 	}
@@ -1114,6 +1116,18 @@ func (server *Server) handleAdminUserAction(ctx *gin.Context) {
 	case "soft_delete":
 		err = server.store.SoftDeleteUser(ctx, uid)
 		message = "user soft deleted"
+	case "promote_admin":
+		_, err = server.store.UpdateUserRole(ctx, db.UpdateUserRoleParams{
+			ID:   uid,
+			Role: db.UserRoleAdmin,
+		})
+		message = "user promoted to admin"
+	case "demote_user":
+		_, err = server.store.UpdateUserRole(ctx, db.UpdateUserRoleParams{
+			ID:   uid,
+			Role: db.UserRoleUser,
+		})
+		message = "user demoted to regular user"
 	}
 
 	if err != nil {
@@ -1248,9 +1262,9 @@ func (server *Server) getSystemMonitor(ctx *gin.Context) {
 // Helper: Log Admin Action
 func (server *Server) logAdminAction(ctx *gin.Context, action string, targetID uuid.UUID, details gin.H) {
 	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
-	
+
 	detailsJSON, _ := json.Marshal(details)
-	
+
 	_, err := server.store.CreateActivityLog(ctx, db.CreateActivityLogParams{
 		UserID:     authPayload.UserID,
 		ActionType: "admin_" + action,
@@ -1258,7 +1272,7 @@ func (server *Server) logAdminAction(ctx *gin.Context, action string, targetID u
 		TargetType: sql.NullString{String: "user", Valid: true},
 		Details:    pqtype.NullRawMessage{RawMessage: detailsJSON, Valid: true},
 	})
-	
+
 	if err != nil {
 		log.Error().Err(err).Msg("failed to log admin action")
 	}

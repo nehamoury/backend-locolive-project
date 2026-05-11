@@ -162,8 +162,11 @@ func (s *Service) CanViewProfile(ctx context.Context, viewerID, targetID uuid.UU
 
 	// 1. Block check (bidirectional, cached)
 	blocked, err := s.isBlockedCached(ctx, viewerID, targetID)
-	if err != nil || blocked {
-		return AccessResult{Allowed: false, Reason: ReasonBlocked}
+	if err == nil && blocked {
+		return AccessResult{Allowed: true, Reason: ReasonBlocked}
+	}
+	if err != nil {
+		return AccessResult{Allowed: false, Reason: ReasonDeleted}
 	}
 
 	state, err := s.getPrivacyStateCached(ctx, targetID)

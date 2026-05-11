@@ -1,6 +1,8 @@
 -- name: BlockUser :one
 INSERT INTO blocked_users (blocker_id, blocked_id)
 VALUES ($1, $2)
+ON CONFLICT (blocker_id, blocked_id) DO UPDATE 
+SET created_at = NOW()
 RETURNING *;
 
 -- name: UnblockUser :exec

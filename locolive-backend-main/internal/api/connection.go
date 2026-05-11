@@ -24,6 +24,10 @@ type friendResponse struct {
 	FullName     string     `json:"full_name"`
 	AvatarUrl    string     `json:"avatar_url"`
 	LastActiveAt *time.Time `json:"last_active_at"`
+	YouFollow    bool       `json:"you_follow"`
+	FollowsYou   bool       `json:"follows_you"`
+	IsMutual     bool       `json:"is_mutual"`
+	Requested    bool       `json:"requested"`
 }
 
 type connectionResponse struct {
@@ -148,7 +152,9 @@ func (server *Server) listMeFollowers(ctx *gin.Context) {
 		Msg("[PRIVACY DEBUG] Fetching followers")
 
 	query := `
-		SELECT u.id, u.username, u.full_name, u.avatar_url, u.last_active_at
+		SELECT u.id, u.username, u.full_name, u.avatar_url, u.last_active_at,
+               EXISTS(SELECT 1 FROM connections WHERE requester_id = $1 AND target_id = u.id AND status = 'accepted') as you_follow,
+               EXISTS(SELECT 1 FROM connections WHERE requester_id = $1 AND target_id = u.id AND status = 'pending') as requested
 		FROM connections c
 		JOIN users u ON u.id = c.requester_id
 		WHERE c.target_id = $1
@@ -161,18 +167,20 @@ func (server *Server) listMeFollowers(ctx *gin.Context) {
 	}
 	defer rows.Close()
 
-	var rsp []friendResponse
+	var rsp = []friendResponse{}
 	for rows.Next() {
 		var c friendResponse
 		var lastActive sql.NullTime
 		var avatarUrl sql.NullString
-		if err := rows.Scan(&c.ID, &c.Username, &c.FullName, &avatarUrl, &lastActive); err != nil {
+		if err := rows.Scan(&c.ID, &c.Username, &c.FullName, &avatarUrl, &lastActive, &c.YouFollow, &c.Requested); err != nil {
 			continue
 		}
 		if lastActive.Valid {
 			c.LastActiveAt = &lastActive.Time
 		}
 		c.AvatarUrl = avatarUrl.String
+		c.FollowsYou = true // Since they are in my followers list
+		c.IsMutual = c.YouFollow && c.FollowsYou
 		rsp = append(rsp, c)
 	}
 
@@ -228,7 +236,7 @@ func (server *Server) listUserFollowers(ctx *gin.Context) {
 	}
 	defer rows.Close()
 
-	var rsp []friendResponse
+	var rsp = []friendResponse{}
 	for rows.Next() {
 		var c friendResponse
 		var lastActive sql.NullTime
@@ -260,7 +268,9 @@ func (server *Server) listMeFollowing(ctx *gin.Context) {
 		Msg("[PRIVACY DEBUG] Fetching following")
 
 	query := `
-		SELECT u.id, u.username, u.full_name, u.avatar_url, u.last_active_at
+		SELECT u.id, u.username, u.full_name, u.avatar_url, u.last_active_at,
+               EXISTS(SELECT 1 FROM connections WHERE requester_id = u.id AND target_id = $1 AND status = 'accepted') as follows_you,
+               EXISTS(SELECT 1 FROM connections WHERE requester_id = $1 AND target_id = u.id AND status = 'pending') as requested_by_them
 		FROM connections c
 		JOIN users u ON u.id = c.target_id
 		WHERE c.requester_id = $1
@@ -273,18 +283,21 @@ func (server *Server) listMeFollowing(ctx *gin.Context) {
 	}
 	defer rows.Close()
 
-	var rsp []friendResponse
+	var rsp = []friendResponse{}
 	for rows.Next() {
 		var c friendResponse
 		var lastActive sql.NullTime
 		var avatarUrl sql.NullString
-		if err := rows.Scan(&c.ID, &c.Username, &c.FullName, &avatarUrl, &lastActive); err != nil {
+		var requestedByThem bool
+		if err := rows.Scan(&c.ID, &c.Username, &c.FullName, &avatarUrl, &lastActive, &c.FollowsYou, &requestedByThem); err != nil {
 			continue
 		}
 		if lastActive.Valid {
 			c.LastActiveAt = &lastActive.Time
 		}
 		c.AvatarUrl = avatarUrl.String
+		c.YouFollow = true // Since they are in my following list
+		c.IsMutual = c.YouFollow && c.FollowsYou
 		rsp = append(rsp, c)
 	}
 
@@ -340,7 +353,7 @@ func (server *Server) listUserFollowing(ctx *gin.Context) {
 	}
 	defer rows.Close()
 
-	var rsp []friendResponse
+	var rsp = []friendResponse{}
 	for rows.Next() {
 		var c friendResponse
 		var lastActive sql.NullTime

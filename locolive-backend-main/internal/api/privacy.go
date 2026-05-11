@@ -15,6 +15,7 @@ import (
 	"privacy-social-backend/internal/service/privacy"
 	"privacy-social-backend/internal/token"
 	"privacy-social-backend/internal/util"
+	"github.com/rs/zerolog/log"
 )
 
 // Privacy Settings Handlers
@@ -89,7 +90,8 @@ func (server *Server) getPrivacySettings(ctx *gin.Context) {
 // Blocking Handlers
 
 type blockUserRequest struct {
-	UserID string `json:"user_id" binding:"required,uuid"`
+	UserID     string `json:"user_id" binding:"required,uuid"`
+	DeleteChat bool   `json:"delete_chat"`
 }
 
 func (server *Server) blockUser(ctx *gin.Context) {
@@ -114,6 +116,21 @@ func (server *Server) blockUser(ctx *gin.Context) {
 		BlockerID: payload.UserID,
 		BlockedID: blockID,
 	})
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	// Optional: Delete chat history if requested
+	if req.DeleteChat {
+		err = server.store.DeleteConversation(ctx, db.DeleteConversationParams{
+			SenderID:   payload.UserID,
+			ReceiverID: uuid.NullUUID{UUID: blockID, Valid: true},
+		})
+		if err != nil {
+			log.Error().Err(err).Msg("failed to delete conversation on block")
+		}
+	}
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return

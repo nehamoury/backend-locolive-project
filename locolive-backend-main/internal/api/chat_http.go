@@ -149,8 +149,8 @@ func (server *Server) getChatHistory(ctx *gin.Context) {
 		}
 	}
 
-	// Cache the result
-	responseJSON, _ := json.Marshal(responseMsgs)
+	// Cache the result - Wrap in successResponse format for consistency
+	responseJSON, _ := json.Marshal(successResponse(responseMsgs))
 	server.redis.Set(context.Background(), cacheKey, responseJSON, chatCacheTTL)
 
 	ctx.Header("X-Cache", "MISS")

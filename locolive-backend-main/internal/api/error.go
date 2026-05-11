@@ -24,13 +24,13 @@ func (e *AppError) Error() string {
 
 // Predefined application errors
 var (
-	ErrUserNotFound     = &AppError{Code: http.StatusNotFound, Message: "user not found"}
-	ErrInvalidPassword  = &AppError{Code: http.StatusUnauthorized, Message: "invalid credentials"}
-	ErrUnauthorized     = &AppError{Code: http.StatusUnauthorized, Message: "unauthorized"}
-	ErrForbidden        = &AppError{Code: http.StatusForbidden, Message: "forbidden"}
-	ErrInvalidInput     = &AppError{Code: http.StatusBadRequest, Message: "invalid input"}
-	ErrDuplicateEntry   = &AppError{Code: http.StatusConflict, Message: "resource already exists"}
-	ErrInternalServer   = &AppError{Code: http.StatusInternalServerError, Message: "internal server error"}
+	ErrUserNotFound       = &AppError{Code: http.StatusNotFound, Message: "user not found"}
+	ErrInvalidPassword    = &AppError{Code: http.StatusUnauthorized, Message: "invalid credentials"}
+	ErrUnauthorized       = &AppError{Code: http.StatusUnauthorized, Message: "unauthorized"}
+	ErrForbidden          = &AppError{Code: http.StatusForbidden, Message: "forbidden"}
+	ErrInvalidInput       = &AppError{Code: http.StatusBadRequest, Message: "invalid input"}
+	ErrDuplicateEntry     = &AppError{Code: http.StatusConflict, Message: "resource already exists"}
+	ErrInternalServer     = &AppError{Code: http.StatusInternalServerError, Message: "internal server error"}
 	ErrServiceUnavailable = &AppError{Code: http.StatusServiceUnavailable, Message: "service temporarily unavailable"}
 )
 
@@ -62,13 +62,19 @@ func errorResponse(err error) gin.H {
 		return handleDBError(pqErr)
 	}
 
-	// Validation errors - return generic message
+	// Validation errors - return generic message in production, specific in dev
 	if strings.Contains(err.Error(), "validation") ||
 		strings.Contains(err.Error(), "required") ||
 		strings.Contains(err.Error(), "binding") {
+		if isProduction() {
+			return gin.H{
+				"success": false,
+				"error":   "invalid input data",
+			}
+		}
 		return gin.H{
 			"success": false,
-			"error":   "invalid input data",
+			"error":   sanitizeErrorMessage(err.Error()),
 		}
 	}
 
@@ -165,4 +171,3 @@ func sanitizeErrorMessage(msg string) string {
 
 	return msg
 }
-

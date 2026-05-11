@@ -61,6 +61,11 @@ type ProfileResponse struct {
 	IsPrivate         bool       `json:"is_private"`
 	ConnectionStatus  string     `json:"connection_status"`
 	IsBlocked         bool       `json:"is_blocked"`
+	IsBlockedByMe     bool       `json:"is_blocked_by_me"`
+	IAmBlocked        bool       `json:"i_am_blocked"`
+	YouFollow         bool       `json:"you_follow"`
+	FollowsYou        bool       `json:"follows_you"`
+	IsMutual          bool       `json:"is_mutual"`
 }
 
 func mapProfileResponse(p db.GetUserProfileRow) ProfileResponse {
@@ -156,9 +161,15 @@ func (server *Server) getUserProfile(ctx *gin.Context) {
 				Str("target_id", userID.String()).
 				Str("reason", string(result.Reason)).
 				Msg("[PRIVACY BLOCKED] Profile access denied")
-			// As per production spec: Blocked, Panic, or Ghost = Invisible (404)
-			ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
-			return
+			
+			// If reason is blocked, we actually want to return 200 with IsBlocked=true
+			// so the UI can show the correct state.
+			if result.Reason == "blocked" {
+				// Continue to fetch profile but restricted
+			} else {
+				ctx.JSON(http.StatusNotFound, gin.H{"error": "user not found"})
+				return
+			}
 		}
 
 		// Note: "private" accounts are handled later after data is prepared
@@ -230,18 +241,42 @@ func (server *Server) getUserProfile(ctx *gin.Context) {
 			})
 			if err == nil {
 				rsp.ConnectionStatus = string(conn.Status)
-			} else if err != sql.ErrNoRows {
-				log.Error().Err(err).Msg("failed to get connection status")
 			}
 
-			// Check if blocked
-			blocked, err := server.store.IsUserBlocked(ctx, db.IsUserBlockedParams{
+			// Check if I blocked them
+			blockedByMe, _ := server.store.IsUserBlocked(ctx, db.IsUserBlockedParams{
 				BlockerID: payload.UserID,
 				BlockedID: userID,
 			})
-			if err == nil && blocked {
+			rsp.IsBlockedByMe = blockedByMe
+
+			// Check if they blocked me
+			iAmBlocked, _ := server.store.IsUserBlocked(ctx, db.IsUserBlockedParams{
+				BlockerID: userID,
+				BlockedID: payload.UserID,
+			})
+			rsp.IAmBlocked = iAmBlocked
+
+			if blockedByMe || iAmBlocked {
 				rsp.IsBlocked = true
 				rsp.ConnectionStatus = "blocked"
+			}
+
+			// Mutual Follow Detection
+			if rsp.ConnectionStatus == "accepted" {
+				rsp.YouFollow = true
+			}
+
+			reverseConn, err := server.store.GetConnection(ctx, db.GetConnectionParams{
+				RequesterID: userID,
+				TargetID:    payload.UserID,
+			})
+			if err == nil && reverseConn.Status == db.ConnectionStatusAccepted {
+				rsp.FollowsYou = true
+			}
+
+			if rsp.YouFollow && rsp.FollowsYou {
+				rsp.IsMutual = true
 			}
 		}
 	}
@@ -250,20 +285,22 @@ func (server *Server) getUserProfile(ctx *gin.Context) {
 	// We check this after the cache/DB fetch so we have the 'IsPrivate' flag if unauthenticated,
 	// but use the 'result' from earlier if authenticated.
 	isPrivateDenial := false
+	isBlockedDenial := false
 	if authExists && authPayload != nil {
 		payload := authPayload.(*token.Payload)
-		// We already checked result.Allowed at the start.
-		// Now we check if it's a 'private' restriction.
 		result := server.privacy.CanViewProfile(ctx, payload.UserID, userID)
-		if result.Reason == "private" {
+		switch result.Reason {
+		case "private":
 			isPrivateDenial = true
+		case "blocked":
+			isBlockedDenial = true
 		}
 	} else if rsp.IsPrivate {
 		isPrivateDenial = true
 	}
 
-	if isPrivateDenial {
-		// Profile is "found" but "locked" (private)
+	if isPrivateDenial || isBlockedDenial {
+		// Profile is "found" but "locked" (private/blocked)
 		// Blank out private information
 		rsp.StoryCount = 0
 		rsp.PostCount = 0
@@ -273,7 +310,11 @@ func (server *Server) getUserProfile(ctx *gin.Context) {
 		rsp.ConnectionCount = 0
 		rsp.ViewsCount = 0
 		rsp.CrossingsCount = 0
-		// Still allow avatar, username, full_name, and bio for discovery
+		
+		if isBlockedDenial {
+			rsp.Bio = "Profile unavailable due to block status."
+			rsp.IsBlocked = true
+		}
 	}
 
 	// 4. Calculate distance if user is authenticated and viewing different profile

@@ -153,8 +153,15 @@ func (server *Server) listMeFollowers(ctx *gin.Context) {
 
 	query := `
 		SELECT u.id, u.username, u.full_name, u.avatar_url, u.last_active_at,
-               EXISTS(SELECT 1 FROM connections WHERE requester_id = $1 AND target_id = u.id AND status = 'accepted') as you_follow,
-               EXISTS(SELECT 1 FROM connections WHERE requester_id = $1 AND target_id = u.id AND status = 'pending') as requested
+               EXISTS(
+                 SELECT 1 FROM connections 
+                 WHERE ((requester_id = $1 AND target_id = u.id) OR (requester_id = u.id AND target_id = $1))
+                 AND status = 'accepted'
+               ) as you_follow,
+               EXISTS(
+                 SELECT 1 FROM connections 
+                 WHERE requester_id = $1 AND target_id = u.id AND status = 'pending'
+               ) as requested
 		FROM connections c
 		JOIN users u ON u.id = c.requester_id
 		WHERE c.target_id = $1
@@ -461,8 +468,49 @@ func (server *Server) sendConnectionRequest(ctx *gin.Context) {
 	})
 
 	if err == nil {
-		if existing.Status == "accepted" {
+		// If we are the requester and it's already accepted, we already follow them
+		if existing.RequesterID == authPayload.UserID && existing.Status == "accepted" {
 			ctx.JSON(http.StatusOK, successResponse(gin.H{"message": "already connected", "is_match": false}))
+			return
+		}
+
+		// If they are the requester and it's accepted, they follow us — we need to follow back
+		if existing.RequesterID == targetID && existing.Status == "accepted" {
+			// Check if a reverse row already exists (B→A)
+			_, reverseErr := server.store.GetDB().ExecContext(ctx,
+				`INSERT INTO connections (requester_id, target_id, status) VALUES ($1, $2, 'accepted') ON CONFLICT DO NOTHING`,
+				authPayload.UserID, targetID)
+			if reverseErr != nil {
+				log.Error().Err(reverseErr).Msg("[FollowBack] Failed to create reverse connection")
+			}
+
+			// Send notification to the original follower that their follow was reciprocated
+			sender, _ := server.store.GetUserByID(ctx, authPayload.UserID)
+			server.createNotificationWithSound(ctx, targetID, "connection_accepted", "connection",
+				"New Connection", fmt.Sprintf("%s followed you back! 🤝", sender.Username),
+				map[string]uuid.UUID{"user": authPayload.UserID})
+
+			// Broadcast real-time mutual event to both users
+			msg, _ := json.Marshal(gin.H{
+				"type": "connection_accepted",
+				"payload": gin.H{
+					"requester_id": authPayload.UserID,
+					"target_id":    targetID,
+					"is_mutual":    true,
+				},
+			})
+			server.hub.SendToUser(targetID, msg)
+			server.hub.SendToUser(authPayload.UserID, msg)
+
+			// Invalidate profile caches
+			server.redis.Del(ctx, "profile:"+authPayload.UserID.String())
+			server.redis.Del(ctx, "profile:"+targetID.String())
+
+			ctx.JSON(http.StatusOK, successResponse(gin.H{
+				"status":   "accepted",
+				"is_match": true,
+				"message":  "followed back",
+			}))
 			return
 		}
 

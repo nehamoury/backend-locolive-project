@@ -97,12 +97,22 @@ func (server *Server) logoutUser(ctx *gin.Context) {
 		return
 	}
 
-	// Clear cookie
+	// Clear cookies
 	http.SetCookie(ctx.Writer, &http.Cookie{
 		Name:     "access_token",
 		Value:    "",
 		MaxAge:   -1,
 		Path:     "/",
+		Domain:   "",
+		Secure:   false,
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+	})
+	http.SetCookie(ctx.Writer, &http.Cookie{
+		Name:     "refresh_token",
+		Value:    "",
+		MaxAge:   -1,
+		Path:     "/api/users/renew-access",
 		Domain:   "",
 		Secure:   false,
 		HttpOnly: true,

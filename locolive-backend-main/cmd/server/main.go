@@ -14,6 +14,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -33,12 +34,23 @@ func main() {
 		log.Fatal().Err(err).Msg("cannot load config")
 	}
 
+	// Set gin to release mode in production
+	if config.Environment == "production" {
+		gin.SetMode(gin.ReleaseMode)
+	}
+
 	// Connect to database
 	conn, err := sql.Open(config.DBDriver, config.DBSource)
 	if err != nil {
 		log.Fatal().Err(err).Msg("cannot connect to db")
 	}
 	defer conn.Close()
+
+	// Configure DB connection pool
+	conn.SetMaxOpenConns(config.DBMaxOpenConns)
+	conn.SetMaxIdleConns(config.DBMaxIdleConns)
+	conn.SetConnMaxLifetime(config.DBConnMaxLifetime)
+	conn.SetConnMaxIdleTime(config.DBConnMaxIdleTime)
 
 	store := repository.NewStore(conn)
 

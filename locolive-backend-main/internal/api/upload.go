@@ -16,7 +16,8 @@ import (
 )
 
 const (
-	maxFileSize = 100 * 1024 * 1024 // 100MB
+	maxFileSize       = 20 * 1024 * 1024 // 20MB
+	maxImageDimension = 8000             // max width/height to prevent decompression bomb
 )
 
 var allowedExtensions = map[string]bool{
@@ -31,13 +32,13 @@ var allowedExtensions = map[string]bool{
 }
 
 var allowedMimeTypes = map[string]bool{
-	"image/jpeg":       true,
-	"image/png":        true,
-	"image/gif":        true,
-	"image/webp":       true,
-	"video/mp4":        true,
-	"video/quicktime":  true, // .mov
-	"video/webm":       true,
+	"image/jpeg":      true,
+	"image/png":       true,
+	"image/gif":       true,
+	"image/webp":      true,
+	"video/mp4":       true,
+	"video/quicktime": true, // .mov
+	"video/webm":      true,
 }
 
 func isValidExtension(ext string) bool {
@@ -159,6 +160,12 @@ func (server *Server) processImage(file io.Reader, cX, cY, cW, cH int, aspectRat
 	img, err := imaging.Decode(file)
 	if err != nil {
 		return nil, "", err
+	}
+
+	// Prevent decompression bomb: reject unreasonably large images
+	bounds := img.Bounds()
+	if bounds.Dx() > maxImageDimension || bounds.Dy() > maxImageDimension {
+		return nil, "", fmt.Errorf("image dimensions exceed maximum allowed (%dx%d)", maxImageDimension, maxImageDimension)
 	}
 
 	// 1. Crop

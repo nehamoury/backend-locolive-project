@@ -79,11 +79,19 @@ func TestCreateUser(t *testing.T) {
 					Email:             user.Email,
 					Provider:          "local",
 					IsProfileComplete: true,
+					IsEmailVerified:   false,
+					IsPhoneVerified:   false,
+					IsActive:          false,
 				}
 				store.EXPECT().
 					CreateUser(gomock.Any(), EqCreateUserParams(arg, password)).
 					Times(1).
 					Return(user, nil)
+
+				store.EXPECT().
+					CreateEmailVerification(gomock.Any(), gomock.Any()).
+					Times(1).
+					Return(db.EmailVerification{}, nil)
 
 				store.EXPECT().
 					CreateSession(gomock.Any(), gomock.Any()).
@@ -186,7 +194,7 @@ func randomUser(t *testing.T) (user db.User, password string) {
 		Username:     util.RandomOwner(),
 		PasswordHash: hashedPassword,
 		FullName:     util.RandomString(10),
-		Phone:        util.RandomString(10),
+		Phone:        "+91" + util.RandomDigitString(10),
 		Email:        sql.NullString{String: util.RandomEmail(), Valid: true},
 	}
 	return

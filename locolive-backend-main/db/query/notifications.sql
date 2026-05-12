@@ -68,3 +68,11 @@ LIMIT $1 OFFSET $2;
 -- name: CountNotificationsAdmin :one
 SELECT COUNT(*) FROM notifications
 WHERE type = 'system_announcement';
+
+-- name: DeleteNotification :exec
+DELETE FROM notifications
+WHERE id = $1 AND user_id = $2;
+
+-- name: DeleteAllNotifications :exec
+DELETE FROM notifications
+WHERE user_id = $1;

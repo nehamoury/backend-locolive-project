@@ -797,6 +797,7 @@ func (server *Server) deleteAccount(ctx *gin.Context) {
 
 	// 4. Clear cookies
 	ctx.SetCookie("access_token", "", -1, "/", "", false, true)
+	ctx.SetCookie("refresh_token", "", -1, "/api/users/renew-access", "", false, true)
 
 	ctx.JSON(http.StatusOK, successResponse("Account has been deactivated. You can restore it within 30 days by logging back in."))
 }

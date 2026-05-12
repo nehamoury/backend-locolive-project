@@ -32,7 +32,8 @@ WHERE ((m.sender_id = $1 AND m.receiver_id = $2)
    OR (m.sender_id = $2 AND m.receiver_id = $1))
    AND m.group_id IS NULL
    AND (m.expires_at IS NULL OR m.expires_at > NOW())
-ORDER BY m.created_at ASC;
+ORDER BY m.created_at ASC
+LIMIT 100;
 
 -- name: GetGroupMessages :many
 SELECT m.*, 
@@ -55,7 +56,8 @@ SELECT m.*,
 FROM messages m
 JOIN users u ON m.sender_id = u.id
 WHERE m.group_id = $1
-ORDER BY m.created_at ASC;
+ORDER BY m.created_at ASC
+LIMIT 100;
 
 
 -- name: DeleteOldMessages :exec
@@ -113,7 +115,8 @@ FROM message_reactions mr
 JOIN users u ON mr.user_id = u.id
 WHERE mr.message_id = $1
 
-ORDER BY mr.created_at ASC;
+ORDER BY mr.created_at ASC
+LIMIT 50;
 
 -- name: GetUnreadMessageCount :one
 SELECT COUNT(*) FROM messages
@@ -174,7 +177,8 @@ SELECT
 FROM conversation_partners cp
 JOIN users u ON u.id = cp.partner_id
 JOIN latest_messages lm ON lm.partner_id = cp.partner_id
-ORDER BY lm.last_message_at DESC;
+ORDER BY lm.last_message_at DESC
+LIMIT 100;
 
 -- name: DeleteConversation :exec
 DELETE FROM messages

@@ -102,3 +102,47 @@ func (server *Server) getUnreadCount(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, gin.H{"unread_count": count})
 }
+
+type deleteNotificationRequest struct {
+	ID string `uri:"id" binding:"required,uuid"`
+}
+
+// deleteNotification deletes a specific notification
+func (server *Server) deleteNotification(ctx *gin.Context) {
+	var req deleteNotificationRequest
+	if err := ctx.ShouldBindUri(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, errorResponse(err))
+		return
+	}
+
+	authPayload := getAuthPayload(ctx)
+
+	notificationID, ok := parseUUIDParam(ctx, req.ID, "id")
+	if !ok {
+		return
+	}
+
+	err := server.store.DeleteNotification(ctx, db.DeleteNotificationParams{
+		ID:     notificationID,
+		UserID: authPayload.UserID,
+	})
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"message": "notification deleted"})
+}
+
+// deleteAllNotifications deletes all notifications for the authenticated user
+func (server *Server) deleteAllNotifications(ctx *gin.Context) {
+	authPayload := getAuthPayload(ctx)
+
+	err := server.store.DeleteAllNotifications(ctx, authPayload.UserID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{"message": "all notifications deleted"})
+}

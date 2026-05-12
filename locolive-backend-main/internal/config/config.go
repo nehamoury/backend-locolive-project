@@ -30,13 +30,19 @@ type Config struct {
 	SMTPHost             string        `mapstructure:"SMTP_HOST"`
 	SMTPPort             string        `mapstructure:"SMTP_PORT"`
 	// TLS Configuration (optional - for HTTPS)
-	TLSCertFile          string        `mapstructure:"TLS_CERT_FILE"`
-	TLSKeyFile           string        `mapstructure:"TLS_KEY_FILE"`
-	ForceHTTPS           bool          `mapstructure:"FORCE_HTTPS"`
-	FirebaseCredentialsPath string     `mapstructure:"FIREBASE_CREDENTIALS_PATH"`
-	TwilioAccountSID        string     `mapstructure:"TWILIO_ACCOUNT_SID"`
-	TwilioAuthToken         string     `mapstructure:"TWILIO_AUTH_TOKEN"`
-	TwilioFromNumber        string     `mapstructure:"TWILIO_FROM_NUMBER"`
+	TLSCertFile             string `mapstructure:"TLS_CERT_FILE"`
+	TLSKeyFile              string `mapstructure:"TLS_KEY_FILE"`
+	ForceHTTPS              bool   `mapstructure:"FORCE_HTTPS"`
+	FirebaseCredentialsPath string `mapstructure:"FIREBASE_CREDENTIALS_PATH"`
+	TwilioAccountSID        string `mapstructure:"TWILIO_ACCOUNT_SID"`
+	TwilioAuthToken         string `mapstructure:"TWILIO_AUTH_TOKEN"`
+	TwilioFromNumber        string `mapstructure:"TWILIO_FROM_NUMBER"`
+
+	// Database connection pool settings
+	DBMaxOpenConns    int           `mapstructure:"DB_MAX_OPEN_CONNS"`
+	DBMaxIdleConns    int           `mapstructure:"DB_MAX_IDLE_CONNS"`
+	DBConnMaxLifetime time.Duration `mapstructure:"DB_CONN_MAX_LIFETIME"`
+	DBConnMaxIdleTime time.Duration `mapstructure:"DB_CONN_MAX_IDLE_TIME"`
 }
 
 func LoadConfig(path string) (config Config, err error) {

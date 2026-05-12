@@ -36,7 +36,8 @@ FROM connections c
 JOIN users u ON (u.id = c.requester_id OR u.id = c.target_id)
 WHERE (c.requester_id = $1 OR c.target_id = $1)
   AND u.id != $1
-  AND c.status = 'accepted';
+  AND c.status = 'accepted'
+LIMIT 200;
 
 -- name: ListPendingRequests :many
 WITH my_connections AS (
@@ -80,7 +81,8 @@ FROM connections c
 JOIN users u ON c.requester_id = u.id
 WHERE c.target_id = $1 
   AND c.status = 'pending'
-ORDER BY c.created_at DESC;
+ORDER BY c.created_at DESC
+LIMIT 50;
 
 -- name: ListSentConnectionRequests :many
 SELECT 
@@ -95,7 +97,8 @@ FROM connections c
 JOIN users u ON c.target_id = u.id
 WHERE c.requester_id = $1 
   AND c.status = 'pending'
-ORDER BY c.created_at DESC;
+ORDER BY c.created_at DESC
+LIMIT 50;
 
 -- name: DeleteConnection :exec
 DELETE FROM connections

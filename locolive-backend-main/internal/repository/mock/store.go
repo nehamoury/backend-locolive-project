@@ -1097,6 +1097,48 @@ func (mr *MockStoreMockRecorder) DeleteConnectionRequestNotifications(ctx, arg a
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteConnectionRequestNotifications", reflect.TypeOf((*MockStore)(nil).DeleteConnectionRequestNotifications), ctx, arg)
 }
 
+// DeleteAllNotifications mocks base method.
+func (m *MockStore) DeleteAllNotifications(ctx context.Context, userID uuid.UUID) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteAllNotifications", ctx, userID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteAllNotifications indicates an expected call of DeleteAllNotifications.
+func (mr *MockStoreMockRecorder) DeleteAllNotifications(ctx, userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteAllNotifications", reflect.TypeOf((*MockStore)(nil).DeleteAllNotifications), ctx, userID)
+}
+
+// DeleteNotification mocks base method.
+func (m *MockStore) DeleteNotification(ctx context.Context, arg db.DeleteNotificationParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteNotification", ctx, arg)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteNotification indicates an expected call of DeleteNotification.
+func (mr *MockStoreMockRecorder) DeleteNotification(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteNotification", reflect.TypeOf((*MockStore)(nil).DeleteNotification), ctx, arg)
+}
+
+// DeleteOldNotifications mocks base method.
+func (m *MockStore) DeleteOldNotifications(ctx context.Context) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteOldNotifications", ctx)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteOldNotifications indicates an expected call of DeleteOldNotifications.
+func (mr *MockStoreMockRecorder) DeleteOldNotifications(ctx any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteOldNotifications", reflect.TypeOf((*MockStore)(nil).DeleteOldNotifications), ctx)
+}
+
 // DeleteConversation mocks base method.
 func (m *MockStore) DeleteConversation(ctx context.Context, arg db.DeleteConversationParams) error {
 	m.ctrl.T.Helper()
@@ -1249,20 +1291,6 @@ func (m *MockStore) DeleteOldMessages(ctx context.Context) error {
 func (mr *MockStoreMockRecorder) DeleteOldMessages(ctx any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteOldMessages", reflect.TypeOf((*MockStore)(nil).DeleteOldMessages), ctx)
-}
-
-// DeleteOldNotifications mocks base method.
-func (m *MockStore) DeleteOldNotifications(ctx context.Context) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "DeleteOldNotifications", ctx)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// DeleteOldNotifications indicates an expected call of DeleteOldNotifications.
-func (mr *MockStoreMockRecorder) DeleteOldNotifications(ctx any) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteOldNotifications", reflect.TypeOf((*MockStore)(nil).DeleteOldNotifications), ctx)
 }
 
 // DeletePasswordResetByToken mocks base method.

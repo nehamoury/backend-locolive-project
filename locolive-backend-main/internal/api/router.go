@@ -124,6 +124,8 @@ func (server *Server) setupRouter() {
 	activeRoutes.GET("/notifications", server.getNotifications)
 	activeRoutes.PUT("/notifications/:id/read", server.markNotificationRead)
 	activeRoutes.PUT("/notifications/read-all", server.markAllNotificationsRead)
+	activeRoutes.DELETE("/notifications/:id", server.deleteNotification)
+	activeRoutes.DELETE("/notifications", server.deleteAllNotifications)
 	activeRoutes.GET("/notifications/unread-count", server.getUnreadCount)
 	activeRoutes.POST("/notifications/token", server.registerFCMToken)
 	activeRoutes.DELETE("/notifications/token", server.removeFCMToken)

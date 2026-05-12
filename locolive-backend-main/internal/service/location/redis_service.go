@@ -23,7 +23,7 @@ const (
 	crossingKeyPrefix = "crossing:"
 	lastPosKeyPrefix  = "user:lastpos:"
 
-	crossingTTL          = 10 * time.Minute
+	crossingTTL          = 4 * time.Hour
 	crossingRadiusMeters = 50.0
 	nearbyRadiusKm       = 5.0
 	minMovementMeters    = 20.0 // Skip updates if user moved less than this

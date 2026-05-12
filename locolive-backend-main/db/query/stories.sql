@@ -104,7 +104,8 @@ WHERE
     WHERE (bu.blocker_id = @user_id AND bu.blocked_id = s.user_id)
        OR (bu.blocker_id = s.user_id AND bu.blocked_id = @user_id)
   )
-ORDER BY s.created_at DESC;
+ORDER BY s.created_at DESC
+LIMIT 100;
 
 -- name: GetStoriesInBounds :many
 -- Get stories within a bounding box for map view

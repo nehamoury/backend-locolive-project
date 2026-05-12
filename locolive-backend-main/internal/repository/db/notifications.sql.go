@@ -96,6 +96,16 @@ func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotification
 	return i, err
 }
 
+const deleteAllNotifications = `-- name: DeleteAllNotifications :exec
+DELETE FROM notifications
+WHERE user_id = $1
+`
+
+func (q *Queries) DeleteAllNotifications(ctx context.Context, userID uuid.UUID) error {
+	_, err := q.db.ExecContext(ctx, deleteAllNotifications, userID)
+	return err
+}
+
 const deleteConnectionRequestNotifications = `-- name: DeleteConnectionRequestNotifications :exec
 DELETE FROM notifications
 WHERE user_id = $1 
@@ -110,6 +120,21 @@ type DeleteConnectionRequestNotificationsParams struct {
 
 func (q *Queries) DeleteConnectionRequestNotifications(ctx context.Context, arg DeleteConnectionRequestNotificationsParams) error {
 	_, err := q.db.ExecContext(ctx, deleteConnectionRequestNotifications, arg.UserID, arg.RelatedUserID)
+	return err
+}
+
+const deleteNotification = `-- name: DeleteNotification :exec
+DELETE FROM notifications
+WHERE id = $1 AND user_id = $2
+`
+
+type DeleteNotificationParams struct {
+	ID     uuid.UUID `json:"id"`
+	UserID uuid.UUID `json:"user_id"`
+}
+
+func (q *Queries) DeleteNotification(ctx context.Context, arg DeleteNotificationParams) error {
+	_, err := q.db.ExecContext(ctx, deleteNotification, arg.ID, arg.UserID)
 	return err
 }
 

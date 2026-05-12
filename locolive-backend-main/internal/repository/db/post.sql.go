@@ -406,7 +406,7 @@ LEFT JOIN connections c ON
 WHERE (
     p.user_id = $1 
     OR c.status = 'accepted'
-    OR (u.is_private = false AND u.is_shadow_banned = false)
+    OR (u.is_private = false AND u.is_shadow_banned = false) -- Discovery: Public users
 )
 AND NOT EXISTS (
     SELECT 1 FROM blocked_users bu
@@ -446,7 +446,7 @@ type ListConnectionsPostsRow struct {
 	IsSaved       bool                  `json:"is_saved"`
 }
 
-// Get posts from connections AND own posts
+// Get posts from connections AND own posts AND nearby discovery (public posts)
 func (q *Queries) ListConnectionsPosts(ctx context.Context, arg ListConnectionsPostsParams) ([]ListConnectionsPostsRow, error) {
 	rows, err := q.db.QueryContext(ctx, listConnectionsPosts, arg.ViewerID, arg.Off, arg.Lim)
 	if err != nil {

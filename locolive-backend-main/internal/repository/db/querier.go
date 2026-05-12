@@ -84,6 +84,7 @@ type Querier interface {
 	DecrementPostComments(ctx context.Context, id uuid.UUID) error
 	DecrementReelComments(ctx context.Context, id uuid.UUID) error
 	DeleteActivityLog(ctx context.Context, id uuid.UUID) error
+	DeleteAllNotifications(ctx context.Context, userID uuid.UUID) error
 	// Used for panic mode - deletes all user data
 	DeleteAllUserData(ctx context.Context, id uuid.UUID) error
 	DeleteArchivedStory(ctx context.Context, arg DeleteArchivedStoryParams) error
@@ -99,6 +100,7 @@ type Querier interface {
 	DeleteMentionsByEntity(ctx context.Context, arg DeleteMentionsByEntityParams) error
 	DeleteMessage(ctx context.Context, arg DeleteMessageParams) error
 	DeleteMessageReaction(ctx context.Context, arg DeleteMessageReactionParams) error
+	DeleteNotification(ctx context.Context, arg DeleteNotificationParams) error
 	// Delete messages older than specified days (default: 30 days)
 	DeleteOldMessages(ctx context.Context) error
 	// Delete notifications older than 30 days
@@ -236,7 +238,7 @@ type Querier interface {
 	// Admin: List all stories
 	ListAllStories(ctx context.Context, arg ListAllStoriesParams) ([]ListAllStoriesRow, error)
 	ListConnections(ctx context.Context, requesterID uuid.UUID) ([]ListConnectionsRow, error)
-	// Get posts from connections AND own posts
+	// Get posts from connections AND own posts AND nearby discovery (public posts)
 	ListConnectionsPosts(ctx context.Context, arg ListConnectionsPostsParams) ([]ListConnectionsPostsRow, error)
 	ListHighlightsByUserID(ctx context.Context, userID uuid.UUID) ([]ListHighlightsByUserIDRow, error)
 	ListLikedPostsByUserID(ctx context.Context, userID uuid.UUID) ([]Post, error)

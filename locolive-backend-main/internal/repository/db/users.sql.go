@@ -1564,7 +1564,7 @@ func (q *Queries) UpdateUserActivity(ctx context.Context, id uuid.UUID) (User, e
 
 const updateUserEmail = `-- name: UpdateUserEmail :one
 UPDATE users
-SET email = $2
+SET email = $2, is_email_verified = false
 WHERE id = $1
 RETURNING id, username, email, full_name
 `

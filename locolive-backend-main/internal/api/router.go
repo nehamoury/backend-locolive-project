@@ -61,6 +61,7 @@ func (server *Server) setupRouter() {
 	api.POST("/auth/verify-reset-token", server.authRateLimiter(), server.verifyResetToken)
 	api.POST("/auth/reset-password", server.authRateLimiter(), server.resetPassword)
 	api.POST("/auth/verify-email", server.otpVerifyRateLimiter(), server.verifyEmail)
+	api.POST("/auth/verify-otp", server.otpVerifyRateLimiter(), server.verifyEmailOTP)
 
 	// Protected routes (as sub-group of api)
 	authRoutes := api.Group("/")
@@ -73,8 +74,11 @@ func (server *Server) setupRouter() {
 	// File upload
 	authRoutes.POST("/upload", server.uploadFile)
 	authRoutes.POST("/logout", server.logoutUser)
-	authRoutes.POST("/auth/verify-firebase-phone", server.otpVerifyRateLimiter(), server.verifyFirebasePhone)
-	authRoutes.POST("/auth/resend-email", server.otpResendRateLimiter(), server.resendEmailVerification)
+
+	// Auth-specific routes moved to api group for better path resolution
+	api.POST("/auth/verify-firebase-phone", server.authMiddleware(), server.otpVerifyRateLimiter(), server.verifyFirebasePhone)
+	api.POST("/auth/resend-email", server.authMiddleware(), server.otpResendRateLimiter(), server.resendEmailVerification)
+	api.POST("/auth/verify-otp", server.otpVerifyRateLimiter(), server.verifyEmailOTP)
 
 	// Activation Gated Routes
 	activeRoutes := authRoutes.Group("/")

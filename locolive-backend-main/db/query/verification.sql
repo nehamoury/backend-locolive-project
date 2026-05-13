@@ -55,3 +55,16 @@ SET is_phone_verified = true,
     is_active = CASE WHEN is_email_verified = true THEN true ELSE is_active END
 WHERE id = $1
 RETURNING *;
+
+-- name: GetEmailVerificationByOTP :one
+SELECT * FROM email_verifications
+WHERE token = $1 AND email = $2 AND expires_at > now()
+LIMIT 1;
+
+-- name: VerifyEmailWithOTP :one
+UPDATE users
+SET is_email_verified = true,
+    is_phone_verified = true,
+    is_active = true
+WHERE id = $1
+RETURNING *;

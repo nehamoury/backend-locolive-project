@@ -214,6 +214,7 @@ FROM conversation_partners cp
 JOIN users u ON u.id = cp.partner_id
 JOIN latest_messages lm ON lm.partner_id = cp.partner_id
 ORDER BY lm.last_message_at DESC
+LIMIT 100
 `
 
 type GetConversationListRow struct {
@@ -281,6 +282,7 @@ FROM messages m
 JOIN users u ON m.sender_id = u.id
 WHERE m.group_id = $1
 ORDER BY m.created_at ASC
+LIMIT 100
 `
 
 type GetGroupMessagesRow struct {
@@ -368,6 +370,7 @@ JOIN users u ON mr.user_id = u.id
 WHERE mr.message_id = $1
 
 ORDER BY mr.created_at ASC
+LIMIT 50
 `
 
 type GetMessageReactionsRow struct {
@@ -445,6 +448,7 @@ WHERE ((m.sender_id = $1 AND m.receiver_id = $2)
    AND m.group_id IS NULL
    AND (m.expires_at IS NULL OR m.expires_at > NOW())
 ORDER BY m.created_at ASC
+LIMIT 100
 `
 
 type ListMessagesParams struct {

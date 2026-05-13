@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 	"time"
 
@@ -27,7 +28,12 @@ func (server *Server) verifyEmail(ctx *gin.Context) {
 
 	user, err := server.user.VerifyEmail(ctx, req.Token)
 	if err != nil {
-		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		errMsg := err.Error()
+		if errMsg == "invalid or expired verification token" || errMsg == "verification token has expired" {
+			ctx.JSON(http.StatusBadRequest, errorResponse(err))
+		} else {
+			ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		}
 		return
 	}
 
@@ -36,7 +42,6 @@ func (server *Server) verifyEmail(ctx *gin.Context) {
 		"user":    user,
 	})
 }
-
 
 func (server *Server) resendEmailVerification(ctx *gin.Context) {
 	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
@@ -74,7 +79,6 @@ func (server *Server) resendEmailVerification(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, gin.H{"message": "Verification email sent"})
 }
-
 
 // verifyFirebasePhone verifies a Firebase phone auth token and marks the user's phone as verified
 func (server *Server) verifyFirebasePhone(ctx *gin.Context) {
@@ -117,6 +121,68 @@ func (server *Server) verifyFirebasePhone(ctx *gin.Context) {
 		"message": "Phone verified successfully via Firebase",
 		"user":    newUserResponse(updatedUser),
 	})
+}
+
+type verifyOTPRequest struct {
+	Email string `json:"email" binding:"required,email"`
+	OTP   string `json:"otp" binding:"required,len=6"`
+}
+
+func (server *Server) verifyEmailOTP(ctx *gin.Context) {
+	var req verifyOTPRequest
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, errorResponse(err))
+		return
+	}
+
+	// Look up OTP in email_verifications table
+	verification, err := server.store.GetEmailVerificationByOTP(ctx, db.GetEmailVerificationByOTPParams{
+		Token: req.OTP,
+		Email: req.Email,
+	})
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, errorResponse(fmt.Errorf("invalid or expired verification code")))
+		return
+	}
+
+	// Mark both email and phone verified → activates the user
+	user, err := server.store.VerifyEmailWithOTP(ctx, verification.UserID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	// Clean up used token
+	_ = server.store.DeleteEmailVerification(ctx, verification.UserID)
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"message": "Account verified successfully",
+		"user":    dbToUserResponse(user),
+	})
+}
+
+type dbUserResponse struct {
+	ID                string `json:"id"`
+	Username          string `json:"username"`
+	FullName          string `json:"full_name"`
+	Email             string `json:"email"`
+	IsEmailVerified   bool   `json:"is_email_verified"`
+	IsPhoneVerified   bool   `json:"is_phone_verified"`
+	IsActive          bool   `json:"is_active"`
+	IsProfileComplete bool   `json:"is_profile_complete"`
+}
+
+func dbToUserResponse(u db.User) dbUserResponse {
+	return dbUserResponse{
+		ID:                u.ID.String(),
+		Username:          u.Username,
+		FullName:          u.FullName,
+		Email:             u.Email.String,
+		IsEmailVerified:   u.IsEmailVerified,
+		IsPhoneVerified:   u.IsPhoneVerified,
+		IsActive:          u.IsActive,
+		IsProfileComplete: u.IsProfileComplete,
+	}
 }
 
 func (server *Server) testEmail(ctx *gin.Context) {

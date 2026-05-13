@@ -100,25 +100,34 @@ func NewServer(
 	modService := moderation.NewService(store)
 	privacyService := privacy.NewService(store, rdb)
 
-	// Initialize SMTP Mailer (recommended for Gmail App Passwords)
-	host := config.SMTPHost
-	if host == "" {
-		host = "smtp.gmail.com"
+	// Initialize Mailer (Resend API preferred, fallback to SMTP/Gmail)
+	var mailer util.Mailer
+	if config.ResendAPIKey != "" {
+		from := config.ResendFromAddress
+		if from == "" {
+			from = config.EmailSenderName + " <" + config.EmailSenderAddress + ">"
+		}
+		mailer = util.NewResendMailer(config.ResendAPIKey, from, config.FrontendURL)
+		log.Info().Msg("Email Service Initialized (Resend API)")
+	} else {
+		host := config.SMTPHost
+		if host == "" {
+			host = "smtp.gmail.com"
+		}
+		port := config.SMTPPort
+		if port == "" {
+			port = "587"
+		}
+		mailer = util.NewGmailMailer(
+			config.EmailSenderName,
+			config.EmailSenderAddress,
+			config.EmailSenderPassword,
+			host,
+			port,
+			config.FrontendURL,
+		)
+		log.Info().Str("host", host).Msg("Email Service Initialized (SMTP)")
 	}
-	port := config.SMTPPort
-	if port == "" {
-		port = "587"
-	}
-	mailer := util.NewGmailMailer(
-		config.EmailSenderName,
-		config.EmailSenderAddress,
-		config.EmailSenderPassword,
-		host,
-		port,
-		config.FrontendURL,
-	)
-	log.Info().Str("host", host).Msg("Email Service Initialized (SMTP)")
-
 
 	// Initialize Notification Service (FCM)
 	var notificationService *notification.NotificationService

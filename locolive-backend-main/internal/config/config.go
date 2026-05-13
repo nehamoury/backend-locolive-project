@@ -29,6 +29,8 @@ type Config struct {
 	EmailSenderPassword  string        `mapstructure:"EMAIL_SENDER_PASSWORD"`
 	SMTPHost             string        `mapstructure:"SMTP_HOST"`
 	SMTPPort             string        `mapstructure:"SMTP_PORT"`
+	ResendAPIKey         string        `mapstructure:"RESEND_API_KEY"`
+	ResendFromAddress    string        `mapstructure:"RESEND_FROM_ADDRESS"`
 	// TLS Configuration (optional - for HTTPS)
 	TLSCertFile             string `mapstructure:"TLS_CERT_FILE"`
 	TLSKeyFile              string `mapstructure:"TLS_KEY_FILE"`

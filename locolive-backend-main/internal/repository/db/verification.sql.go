@@ -127,6 +127,31 @@ func (q *Queries) GetEmailVerification(ctx context.Context, token string) (Email
 	return i, err
 }
 
+const getEmailVerificationByOTP = `-- name: GetEmailVerificationByOTP :one
+SELECT id, user_id, email, token, expires_at, created_at FROM email_verifications
+WHERE token = $1 AND email = $2 AND expires_at > now()
+LIMIT 1
+`
+
+type GetEmailVerificationByOTPParams struct {
+	Token string `json:"token"`
+	Email string `json:"email"`
+}
+
+func (q *Queries) GetEmailVerificationByOTP(ctx context.Context, arg GetEmailVerificationByOTPParams) (EmailVerification, error) {
+	row := q.db.QueryRowContext(ctx, getEmailVerificationByOTP, arg.Token, arg.Email)
+	var i EmailVerification
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.Email,
+		&i.Token,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
 const getLatestPhoneVerification = `-- name: GetLatestPhoneVerification :one
 SELECT id, user_id, phone, code, expires_at, created_at, attempts FROM phone_verifications
 WHERE user_id = $1
@@ -181,6 +206,65 @@ RETURNING id, phone, password_hash, username, full_name, avatar_url, bio, role, 
 
 func (q *Queries) VerifyEmail(ctx context.Context, id uuid.UUID) (User, error) {
 	row := q.db.QueryRowContext(ctx, verifyEmail, id)
+	var i User
+	err := row.Scan(
+		&i.ID,
+		&i.Phone,
+		&i.PasswordHash,
+		&i.Username,
+		&i.FullName,
+		&i.AvatarUrl,
+		&i.Bio,
+		&i.Role,
+		&i.TrustLevel,
+		&i.IsVerified,
+		&i.IsShadowBanned,
+		&i.LastActiveAt,
+		&i.CreatedAt,
+		&i.IsGhostMode,
+		&i.ActivityStreak,
+		&i.StreakUpdatedAt,
+		&i.IsPremium,
+		&i.StreakFreezesRemaining,
+		&i.BoostExpiresAt,
+		&i.BannerUrl,
+		&i.Theme,
+		&i.ProfileVisibility,
+		&i.Email,
+		&i.WebsiteUrl,
+		&i.Links,
+		&i.GoogleID,
+		&i.Provider,
+		&i.IsProfileComplete,
+		&i.GhostModeExpiresAt,
+		pq.Array(&i.Interests),
+		&i.TrustScore,
+		&i.UsernameNormalized,
+		&i.IsPrivate,
+		&i.PrivacyUpdatedAt,
+		&i.PanicMode,
+		&i.DeletedAt,
+		&i.TwoFaEnabled,
+		&i.TwoFaSecret,
+		&i.LastPasswordChange,
+		&i.IsEmailVerified,
+		&i.IsPhoneVerified,
+		&i.IsActive,
+	)
+	return i, err
+}
+
+const verifyEmailWithOTP = `-- name: VerifyEmailWithOTP :one
+UPDATE users
+SET is_email_verified = true,
+    is_phone_verified = true,
+    is_active = true
+WHERE id = $1
+RETURNING id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, provider, is_profile_complete, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at, two_fa_enabled, two_fa_secret, last_password_change, is_email_verified, is_phone_verified, is_active
+`
+
+func (q *Queries) VerifyEmailWithOTP(ctx context.Context, id uuid.UUID) (User, error) {
+	row := q.db.QueryRowContext(ctx, verifyEmailWithOTP, id)
 	var i User
 	err := row.Scan(
 		&i.ID,

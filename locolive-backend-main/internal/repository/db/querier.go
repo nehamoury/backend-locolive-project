@@ -139,6 +139,7 @@ type Querier interface {
 	GetDailyStats(ctx context.Context, arg GetDailyStatsParams) ([]DailyStat, error)
 	GetDataExportJob(ctx context.Context, id uuid.UUID) (DataExportJob, error)
 	GetEmailVerification(ctx context.Context, token string) (EmailVerification, error)
+	GetEmailVerificationByOTP(ctx context.Context, arg GetEmailVerificationByOTPParams) (EmailVerification, error)
 	GetEngagementStats(ctx context.Context) (GetEngagementStatsRow, error)
 	GetGroupByID(ctx context.Context, id uuid.UUID) (Group, error)
 	GetGroupMembers(ctx context.Context, groupID uuid.UUID) ([]GetGroupMembersRow, error)
@@ -323,6 +324,7 @@ type Querier interface {
 	UpsertPrivacySettings(ctx context.Context, arg UpsertPrivacySettingsParams) (PrivacySetting, error)
 	UpsertUserPreferences(ctx context.Context, arg UpsertUserPreferencesParams) (UserPreference, error)
 	VerifyEmail(ctx context.Context, id uuid.UUID) (User, error)
+	VerifyEmailWithOTP(ctx context.Context, id uuid.UUID) (User, error)
 	VerifyPhone(ctx context.Context, id uuid.UUID) (User, error)
 }
 

@@ -232,6 +232,7 @@ JOIN users u ON (u.id = c.requester_id OR u.id = c.target_id)
 WHERE (c.requester_id = $1 OR c.target_id = $1)
   AND u.id != $1
   AND c.status = 'accepted'
+LIMIT 200
 `
 
 type ListConnectionsRow struct {
@@ -314,6 +315,7 @@ JOIN users u ON c.requester_id = u.id
 WHERE c.target_id = $1 
   AND c.status = 'pending'
 ORDER BY c.created_at DESC
+LIMIT 50
 `
 
 type ListPendingRequestsRow struct {
@@ -375,6 +377,7 @@ JOIN users u ON c.target_id = u.id
 WHERE c.requester_id = $1 
   AND c.status = 'pending'
 ORDER BY c.created_at DESC
+LIMIT 50
 `
 
 type ListSentConnectionRequestsRow struct {

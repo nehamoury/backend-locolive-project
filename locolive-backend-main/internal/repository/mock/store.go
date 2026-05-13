@@ -1747,6 +1747,21 @@ func (mr *MockStoreMockRecorder) GetEmailVerification(ctx, token any) *gomock.Ca
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEmailVerification", reflect.TypeOf((*MockStore)(nil).GetEmailVerification), ctx, token)
 }
 
+// GetEmailVerificationByOTP mocks base method.
+func (m *MockStore) GetEmailVerificationByOTP(ctx context.Context, arg db.GetEmailVerificationByOTPParams) (db.EmailVerification, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetEmailVerificationByOTP", ctx, arg)
+	ret0, _ := ret[0].(db.EmailVerification)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetEmailVerificationByOTP indicates an expected call of GetEmailVerificationByOTP.
+func (mr *MockStoreMockRecorder) GetEmailVerificationByOTP(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetEmailVerificationByOTP", reflect.TypeOf((*MockStore)(nil).GetEmailVerificationByOTP), ctx, arg)
+}
+
 // GetEngagementStats mocks base method.
 func (m *MockStore) GetEngagementStats(ctx context.Context) (db.GetEngagementStatsRow, error) {
 	m.ctrl.T.Helper()
@@ -4096,6 +4111,21 @@ func (m *MockStore) VerifyEmail(ctx context.Context, id uuid.UUID) (db.User, err
 func (mr *MockStoreMockRecorder) VerifyEmail(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VerifyEmail", reflect.TypeOf((*MockStore)(nil).VerifyEmail), ctx, id)
+}
+
+// VerifyEmailWithOTP mocks base method.
+func (m *MockStore) VerifyEmailWithOTP(ctx context.Context, id uuid.UUID) (db.User, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "VerifyEmailWithOTP", ctx, id)
+	ret0, _ := ret[0].(db.User)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// VerifyEmailWithOTP indicates an expected call of VerifyEmailWithOTP.
+func (mr *MockStoreMockRecorder) VerifyEmailWithOTP(ctx, id any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "VerifyEmailWithOTP", reflect.TypeOf((*MockStore)(nil).VerifyEmailWithOTP), ctx, id)
 }
 
 // VerifyPhone mocks base method.

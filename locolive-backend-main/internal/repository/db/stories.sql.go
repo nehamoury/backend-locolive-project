@@ -223,6 +223,7 @@ WHERE
        OR (bu.blocker_id = s.user_id AND bu.blocked_id = $1)
   )
 ORDER BY s.created_at DESC
+LIMIT 100
 `
 
 type GetConnectionStoriesRow struct {

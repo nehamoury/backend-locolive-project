@@ -58,7 +58,7 @@ func (server *Server) resendEmailVerification(ctx *gin.Context) {
 	}
 
 	// Generate new token
-	token := util.RandomString(32)
+	token := util.RandomDigitString(6)
 	_, err = server.store.CreateEmailVerification(ctx, db.CreateEmailVerificationParams{
 		UserID:    user.ID,
 		Email:     user.Email.String,
@@ -71,7 +71,7 @@ func (server *Server) resendEmailVerification(ctx *gin.Context) {
 	}
 
 	// Send email
-	err = server.mailer.SendVerificationEmail(user.Email.String, token)
+	err = server.mailer.SendOTPEmail(user.Email.String, token)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return

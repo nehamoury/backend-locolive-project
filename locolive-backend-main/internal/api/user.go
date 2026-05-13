@@ -164,8 +164,7 @@ func (server *Server) createUser(ctx *gin.Context) {
 		return
 	}
 
-	// 1. Generate & Send Email Verification (link + OTP)
-	emailToken := util.RandomString(32)
+	// 1. Generate & Send Email Verification OTP
 	otp := util.RandomDigitString(6)
 	_, err = server.store.CreateEmailVerification(ctx, db.CreateEmailVerificationParams{
 		UserID:    user.ID,
@@ -178,7 +177,6 @@ func (server *Server) createUser(ctx *gin.Context) {
 		if err != nil {
 			log.Error().Err(err).Str("email", user.Email.String).Msg("failed to send OTP email during signup")
 		}
-		_ = server.mailer.SendVerificationEmail(user.Email.String, emailToken)
 	}
 
 	// Generate Tokens for Auto-Login

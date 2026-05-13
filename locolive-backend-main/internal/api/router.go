@@ -18,7 +18,7 @@ func (server *Server) setupRouter() {
 	router.Use(corsMiddleware(server.config.FrontendURL))
 
 	// Security headers middleware
-	router.Use(securityHeadersMiddleware())
+	router.Use(securityHeadersMiddleware(server.config.FrontendURL))
 
 	// Enable gzip compression (70% bandwidth reduction)
 	router.Use(gzip.Gzip(gzip.DefaultCompression))
@@ -41,6 +41,7 @@ func (server *Server) setupRouter() {
 			"status": "healthy",
 		})
 	})
+	api.GET("/test-email", server.testEmail)
 	api.POST("/users", server.authRateLimiter(), server.createUser)
 	api.POST("/users/register", server.authRateLimiter(), server.createUser)
 	api.POST("/users/login", server.authRateLimiter(), server.loginUser)

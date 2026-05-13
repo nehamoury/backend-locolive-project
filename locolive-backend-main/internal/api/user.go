@@ -173,7 +173,10 @@ func (server *Server) createUser(ctx *gin.Context) {
 		ExpiresAt: time.Now().Add(24 * time.Hour),
 	})
 	if err == nil {
-		_ = server.mailer.SendVerificationEmail(user.Email.String, emailToken)
+		err = server.mailer.SendVerificationEmail(user.Email.String, emailToken)
+		if err != nil {
+			log.Error().Err(err).Str("email", user.Email.String).Msg("failed to send verification email during signup")
+		}
 	}
 
 	// Generate Tokens for Auto-Login

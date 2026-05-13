@@ -118,3 +118,24 @@ func (server *Server) verifyFirebasePhone(ctx *gin.Context) {
 		"user":    newUserResponse(updatedUser),
 	})
 }
+
+func (server *Server) testEmail(ctx *gin.Context) {
+	to := ctx.Query("to")
+	if to == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "to query parameter is required"})
+		return
+	}
+
+	err := server.mailer.SendVerificationEmail(to, "test-token-123")
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, gin.H{
+			"error":   err.Error(),
+			"details": "Check VPS logs for more info",
+		})
+		return
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"message": "Test email sent successfully to " + to,
+	})
+}

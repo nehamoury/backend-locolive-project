@@ -65,9 +65,11 @@ func (m *GmailMailer) SendResetEmail(toEmail string, token string) error {
 	addr := fmt.Sprintf("%s:%s", m.host, m.port)
 	err := smtp.SendMail(addr, auth, m.senderEmail, []string{toEmail}, msg)
 	if err != nil {
+		fmt.Printf("[EMAIL ERROR] Failed to send email to %s: %v\n", toEmail, err)
 		return fmt.Errorf("failed to send email via SMTP: %w", err)
 	}
 
+	fmt.Printf("[EMAIL SUCCESS] Sent reset email to %s\n", toEmail)
 	return nil
 }
 
@@ -105,9 +107,11 @@ func (m *GmailMailer) SendVerificationEmail(toEmail string, token string) error 
 	addr := fmt.Sprintf("%s:%s", m.host, m.port)
 	err := smtp.SendMail(addr, auth, m.senderEmail, []string{toEmail}, msg)
 	if err != nil {
+		fmt.Printf("[EMAIL ERROR] Failed to send verification email to %s: %v\n", toEmail, err)
 		return fmt.Errorf("failed to send verification email via SMTP: %w", err)
 	}
 
+	fmt.Printf("[EMAIL SUCCESS] Sent verification email to %s\n", toEmail)
 	return nil
 }
 

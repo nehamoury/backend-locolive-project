@@ -165,18 +165,25 @@ func corsMiddleware(frontendURL string) gin.HandlerFunc {
 		isRelease := gin.Mode() == gin.ReleaseMode
 
 		if origin != "" {
-			// In production, strictly match the configured frontend URL. DO NOT allow wildcard.
-			if isRelease {
-				if origin == frontendURL {
-					c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
-				} else {
-					// Disallowed origin
-					c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "CORS policy: origin not allowed"})
-					return
-				}
-			} else {
-				// In development, allow localhost and any other origin for flexibility
+			// Check if origin is allowed
+			isAllowed := false
+			if origin == frontendURL {
+				isAllowed = true
+			} else if !isRelease {
+				// In development, allow all origins
+				isAllowed = true
+			} else if strings.Contains(origin, "localhost") || strings.Contains(origin, "127.0.0.1") {
+				// Even in release mode, allow localhost for easier testing/debugging
+				isAllowed = true
+			}
+
+			if isAllowed {
 				c.Writer.Header().Set("Access-Control-Allow-Origin", origin)
+			} else {
+				// Disallowed origin
+				log.Warn().Str("origin", origin).Str("frontend_url", frontendURL).Msg("CORS policy: origin not allowed")
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "CORS policy: origin not allowed"})
+				return
 			}
 		}
 
@@ -194,7 +201,7 @@ func corsMiddleware(frontendURL string) gin.HandlerFunc {
 }
 
 // securityHeadersMiddleware adds essential security headers and polished CSP
-func securityHeadersMiddleware() gin.HandlerFunc {
+func securityHeadersMiddleware(frontendURL string) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		c.Writer.Header().Set("X-Content-Type-Options", "nosniff")
 		c.Writer.Header().Set("X-Frame-Options", "DENY")
@@ -205,13 +212,18 @@ func securityHeadersMiddleware() gin.HandlerFunc {
 
 		// Polished Content-Security-Policy (CSP)
 		// Allows external assets like Mapbox, Google Fonts, and local dev assets.
+		connectSrc := "connect-src 'self' http://localhost:* ws://localhost:* https://api.mapbox.com https://*.tiles.mapbox.com ws: wss:"
+		if frontendURL != "" {
+			connectSrc += " " + frontendURL
+		}
+
 		csp := strings.Join([]string{
 			"default-src 'self'",
 			"img-src 'self' data: https: blob: *", // Allow all image sources (or narrow down to your media domain)
 			"script-src 'self' 'unsafe-inline' https://api.mapbox.com",
 			"style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://api.mapbox.com",
 			"font-src 'self' https://fonts.gstatic.com",
-			"connect-src 'self' https://api.mapbox.com https://*.tiles.mapbox.com ws: wss: https://locolive.appnity.co.in",
+			connectSrc,
 			"worker-src 'self' blob:",
 		}, "; ")
 		c.Writer.Header().Set("Content-Security-Policy", csp)

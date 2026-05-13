@@ -78,7 +78,6 @@ func (server *Server) setupRouter() {
 	// Auth-specific routes moved to api group for better path resolution
 	api.POST("/auth/verify-firebase-phone", server.authMiddleware(), server.otpVerifyRateLimiter(), server.verifyFirebasePhone)
 	api.POST("/auth/resend-email", server.authMiddleware(), server.otpResendRateLimiter(), server.resendEmailVerification)
-	api.POST("/auth/verify-otp", server.otpVerifyRateLimiter(), server.verifyEmailOTP)
 
 	// Activation Gated Routes
 	activeRoutes := authRoutes.Group("/")

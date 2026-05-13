@@ -5,11 +5,11 @@ GREEN='\033[0;32m'
 NC='\033[0m'
 
 # ═══ CONFIGURATION ═══
-# Note: These paths must point to the actual folders on your VPS
-BE_PATH="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
-FE_PATH="/var/www/locolive/frontend/frontend" # ADJUST THIS TO YOUR FRONTEND PATH
+# Note: These paths must match your VPS structure (from screenshot)
+BE_PATH="/var/www/locolive/locolive-backend-main"
+FE_PATH="/var/www/locolive/locolive-frontend-main"
 
-echo "🚀 Starting System Update (Multi-Repo Version)..."
+echo "🚀 Starting System Update (VPS Version)..."
 
 # 1. Update Backend Repo
 echo "═══ Updating Backend ═══"

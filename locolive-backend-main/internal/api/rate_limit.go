@@ -13,16 +13,16 @@ import (
 
 // Rate limit configurations
 var (
-	// General API rate limit: 100 requests per minute
+	// General API rate limit: 200 requests per minute
 	generalRate = limiter.Rate{
 		Period: 1 * time.Minute,
-		Limit:  100,
+		Limit:  200,
 	}
 
-	// Auth endpoints: 10 requests per 1 minute (Stricter for production)
+	// Auth endpoints: 30 requests per 1 minute
 	authRate = limiter.Rate{
 		Period: 1 * time.Minute,
-		Limit:  10,
+		Limit:  30,
 	}
 
 	// Engagement (Likes/Follows): 60 per minute
@@ -75,7 +75,7 @@ var (
 )
 
 // createRateLimiter creates a rate limiter with Redis store
-func (server *Server) createRateLimiter(rate limiter.Rate) gin.HandlerFunc {
+func (server *Server) createRateLimiter(rate limiter.Rate, name string) gin.HandlerFunc {
 	// Bypass rate limiting in tests
 	if gin.Mode() == gin.TestMode {
 		return func(ctx *gin.Context) {
@@ -94,7 +94,7 @@ func (server *Server) createRateLimiter(rate limiter.Rate) gin.HandlerFunc {
 	} else {
 		var err error
 		store, err = sredis.NewStoreWithOptions(server.redis, limiter.StoreOptions{
-			Prefix:   "rate_limit",
+			Prefix:   "rate_limit:" + name,
 			MaxRetry: 3,
 		})
 		if err != nil {
@@ -106,6 +106,12 @@ func (server *Server) createRateLimiter(rate limiter.Rate) gin.HandlerFunc {
 	middleware := mgin.NewMiddleware(instance)
 
 	return func(ctx *gin.Context) {
+		// Bypass for OPTIONS requests (CORS preflight)
+		if ctx.Request.Method == "OPTIONS" {
+			ctx.Next()
+			return
+		}
+
 		// Bypass for localhost / load tests / development mode
 		ip := ctx.ClientIP()
 		if gin.Mode() != gin.ReleaseMode || ip == "::1" || ip == "127.0.0.1" {
@@ -118,50 +124,50 @@ func (server *Server) createRateLimiter(rate limiter.Rate) gin.HandlerFunc {
 
 // generalRateLimiter applies general rate limiting
 func (server *Server) generalRateLimiter() gin.HandlerFunc {
-	return server.createRateLimiter(generalRate)
+	return server.createRateLimiter(generalRate, "general")
 }
 
 // authRateLimiter applies strict rate limiting for auth endpoints
 func (server *Server) authRateLimiter() gin.HandlerFunc {
-	return server.createRateLimiter(authRate)
+	return server.createRateLimiter(authRate, "auth")
 }
 
 // storyRateLimiter applies rate limiting for story creation
 func (server *Server) storyRateLimiter() gin.HandlerFunc {
-	return server.createRateLimiter(storyRate)
+	return server.createRateLimiter(storyRate, "story")
 }
 
 // locationRateLimiter applies rate limiting for location updates
 func (server *Server) locationRateLimiter() gin.HandlerFunc {
-	return server.createRateLimiter(locationRate)
+	return server.createRateLimiter(locationRate, "location")
 }
 
 // messageRateLimiter applies rate limiting for messaging
 func (server *Server) messageRateLimiter() gin.HandlerFunc {
-	return server.createRateLimiter(messageRate)
+	return server.createRateLimiter(messageRate, "message")
 }
 
 // searchRateLimiter applies rate limiting for user search
 func (server *Server) searchRateLimiter() gin.HandlerFunc {
-	return server.createRateLimiter(searchRate)
+	return server.createRateLimiter(searchRate, "search")
 }
 
 // usernameCheckRateLimiter applies strict rate limiting for username availability checks
 func (server *Server) usernameCheckRateLimiter() gin.HandlerFunc {
-	return server.createRateLimiter(usernameCheckRate)
+	return server.createRateLimiter(usernameCheckRate, "username_check")
 }
 
 // engagementRateLimiter applies rate limiting for likes and follows
 func (server *Server) engagementRateLimiter() gin.HandlerFunc {
-	return server.createRateLimiter(engagementRate)
+	return server.createRateLimiter(engagementRate, "engagement")
 }
 
 // otpVerifyRateLimiter applies strict rate limiting for OTP verification (brute-force protection)
 func (server *Server) otpVerifyRateLimiter() gin.HandlerFunc {
-	return server.createRateLimiter(otpVerifyRate)
+	return server.createRateLimiter(otpVerifyRate, "otp_verify")
 }
 
 // otpResendRateLimiter applies rate limiting for OTP resend requests
 func (server *Server) otpResendRateLimiter() gin.HandlerFunc {
-	return server.createRateLimiter(otpResendRate)
+	return server.createRateLimiter(otpResendRate, "otp_resend")
 }

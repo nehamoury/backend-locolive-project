@@ -2423,7 +2423,7 @@ func (mr *MockStoreMockRecorder) GetUserBadges(ctx, userID any) *gomock.Call {
 }
 
 // GetUserByEmail mocks base method.
-func (m *MockStore) GetUserByEmail(ctx context.Context, email sql.NullString) (db.User, error) {
+func (m *MockStore) GetUserByEmail(ctx context.Context, email string) (db.User, error) {
 	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "GetUserByEmail", ctx, email)
 	ret0, _ := ret[0].(db.User)

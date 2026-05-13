@@ -507,11 +507,11 @@ func (q *Queries) GetUserActivityStatus(ctx context.Context, id uuid.UUID) (GetU
 
 const getUserByEmail = `-- name: GetUserByEmail :one
 SELECT id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, provider, is_profile_complete, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at, two_fa_enabled, two_fa_secret, last_password_change, is_email_verified, is_phone_verified, is_active FROM users
-WHERE email = $1 LIMIT 1
+WHERE LOWER(email) = LOWER($1) LIMIT 1
 `
 
-func (q *Queries) GetUserByEmail(ctx context.Context, email sql.NullString) (User, error) {
-	row := q.db.QueryRowContext(ctx, getUserByEmail, email)
+func (q *Queries) GetUserByEmail(ctx context.Context, lower string) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByEmail, lower)
 	var i User
 	err := row.Scan(
 		&i.ID,
@@ -727,11 +727,11 @@ func (q *Queries) GetUserByPhone(ctx context.Context, phone string) (User, error
 
 const getUserByUsername = `-- name: GetUserByUsername :one
 SELECT id, phone, password_hash, username, full_name, avatar_url, bio, role, trust_level, is_verified, is_shadow_banned, last_active_at, created_at, is_ghost_mode, activity_streak, streak_updated_at, is_premium, streak_freezes_remaining, boost_expires_at, banner_url, theme, profile_visibility, email, website_url, links, google_id, provider, is_profile_complete, ghost_mode_expires_at, interests, trust_score, username_normalized, is_private, privacy_updated_at, panic_mode, deleted_at, two_fa_enabled, two_fa_secret, last_password_change, is_email_verified, is_phone_verified, is_active FROM users
-WHERE username = $1 LIMIT 1
+WHERE LOWER(username) = LOWER($1) LIMIT 1
 `
 
-func (q *Queries) GetUserByUsername(ctx context.Context, username string) (User, error) {
-	row := q.db.QueryRowContext(ctx, getUserByUsername, username)
+func (q *Queries) GetUserByUsername(ctx context.Context, lower string) (User, error) {
+	row := q.db.QueryRowContext(ctx, getUserByUsername, lower)
 	var i User
 	err := row.Scan(
 		&i.ID,

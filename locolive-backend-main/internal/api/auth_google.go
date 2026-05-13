@@ -78,7 +78,7 @@ func (server *Server) googleLogin(ctx *gin.Context) {
 	if err != nil {
 		if err == sql.ErrNoRows {
 			// 3. Not found by Google ID, check by Email for account linking
-			existingUser, err = server.store.GetUserByEmail(ctx, sql.NullString{String: gUser.Email, Valid: true})
+			existingUser, err = server.store.GetUserByEmail(ctx, gUser.Email)
 			if err != nil {
 				if err == sql.ErrNoRows {
 					// 4. Create new Google user (email verified by Google, phone still needed)

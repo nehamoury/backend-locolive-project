@@ -12,7 +12,7 @@ import (
 )
 
 type forgotPasswordRequest struct {
-	Email string `json:"email" binding:"required,email"`
+	Email string `json:"email" binding:"required"` // This field can now be email or username
 }
 
 func (server *Server) forgotPassword(ctx *gin.Context) {
@@ -22,22 +22,41 @@ func (server *Server) forgotPassword(ctx *gin.Context) {
 		return
 	}
 
-	user, err := server.store.GetUserByEmail(ctx, sql.NullString{String: req.Email, Valid: true})
+	var user db.User
+	var err error
+
+	// 1. Try finding by Email (case-insensitive handled by DB LOWER() query)
+	user, err = server.store.GetUserByEmail(ctx, req.Email)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			// Do not reveal email existence for security
-			ctx.JSON(http.StatusOK, gin.H{"message": "If this email exists, a reset link has been sent."})
+			// 2. Fallback: Try finding by Username (case-insensitive handled by DB LOWER() query)
+			user, err = server.store.GetUserByUsername(ctx, req.Email)
+			if err != nil {
+				if err == sql.ErrNoRows {
+					// Security: Do not reveal user existence
+					ctx.JSON(http.StatusOK, gin.H{"message": "If an account exists, a reset link has been sent."})
+					return
+				}
+				ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+				return
+			}
+		} else {
+			ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 			return
 		}
-		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+	}
+
+	// 3. Ensure user has an email address
+	if !user.Email.Valid || user.Email.String == "" {
+		ctx.JSON(http.StatusBadRequest, gin.H{"error": "This account does not have an email address associated with it. Please contact support."})
 		return
 	}
 
-	// Generate Token
+	// 4. Generate Token
 	resetToken := util.RandomString(32)
-	expiresAt := time.Now().Add(15 * time.Minute)
+	expiresAt := time.Now().Add(2 * time.Minute)
 
-	// Save to DB
+	// 5. Save to DB
 	_, err = server.store.CreatePasswordReset(ctx, db.CreatePasswordResetParams{
 		UserID:    user.ID,
 		Token:     resetToken,
@@ -48,14 +67,14 @@ func (server *Server) forgotPassword(ctx *gin.Context) {
 		return
 	}
 
-	// Send Email
-	err = server.mailer.SendResetEmail(req.Email, resetToken)
+	// 6. Send Email to the REGISTERED email
+	err = server.mailer.SendResetEmail(user.Email.String, resetToken)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, gin.H{"error": "failed to send email"})
 		return
 	}
 
-	ctx.JSON(http.StatusOK, gin.H{"message": "If this email exists, a reset link has been sent."})
+	ctx.JSON(http.StatusOK, gin.H{"message": "If an account exists, a reset link has been sent."})
 }
 
 type verifyResetTokenRequest struct {

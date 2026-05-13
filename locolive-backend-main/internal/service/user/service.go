@@ -139,7 +139,7 @@ func (s *ServiceImpl) LoginUser(ctx context.Context, req LoginUserParams) (*Logi
 	var err error
 
 	// 1. Try Email
-	user, err = s.store.GetUserByEmail(ctx, sql.NullString{String: req.Identity, Valid: true})
+	user, err = s.store.GetUserByEmail(ctx, req.Identity)
 	if err != nil {
 		if err == sql.ErrNoRows {
 			// 2. Try Username

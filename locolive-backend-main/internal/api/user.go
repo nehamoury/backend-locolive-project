@@ -813,7 +813,7 @@ func (server *Server) checkEmail(ctx *gin.Context) {
 		return
 	}
 
-	u, err := server.store.GetUserByEmail(ctx, sql.NullString{String: email, Valid: true})
+	u, err := server.store.GetUserByEmail(ctx, email)
 	if err == nil {
 		// Only consider it 'taken' if the account is not soft-deleted
 		if !u.DeletedAt.Valid {

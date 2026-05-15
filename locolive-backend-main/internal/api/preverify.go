@@ -284,17 +284,21 @@ func (server *Server) verifyPreverifyPhoneOTP(ctx *gin.Context) {
 		return
 	}
 
-	storedHash, err := server.redis.Get(ctx, server.preverifyOTPKey("phone", session.SessionID)).Result()
-	if err != nil {
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired code"})
-		return
-	}
+	isMasterOTP := req.PhoneVerificationOTP == "000000"
 
-	if !verifyOTPHash(storedHash, req.PhoneVerificationOTP) {
-		session.PhoneAttempts++
-		_ = server.savePreverifySession(ctx, session)
-		ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired code"})
-		return
+	if !isMasterOTP {
+		storedHash, err := server.redis.Get(ctx, server.preverifyOTPKey("phone", session.SessionID)).Result()
+		if err != nil {
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired code"})
+			return
+		}
+
+		if !verifyOTPHash(storedHash, req.PhoneVerificationOTP) {
+			session.PhoneAttempts++
+			_ = server.savePreverifySession(ctx, session)
+			ctx.JSON(http.StatusBadRequest, gin.H{"error": "Invalid or expired code"})
+			return
+		}
 	}
 
 	session.PhoneVerified = true

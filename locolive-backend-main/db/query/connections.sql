@@ -25,6 +25,11 @@ WHERE (requester_id = $1 AND target_id = $2)
    OR (requester_id = $2 AND target_id = $1)
 LIMIT 1;
 
+-- name: GetConnectionSpecific :one
+SELECT * FROM connections
+WHERE requester_id = $1 AND target_id = $2
+LIMIT 1;
+
 -- name: ListConnections :many
 SELECT 
     u.id, 

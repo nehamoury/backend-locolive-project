@@ -96,6 +96,30 @@ func (q *Queries) GetConnection(ctx context.Context, arg GetConnectionParams) (C
 	return i, err
 }
 
+const getConnectionSpecific = `-- name: GetConnectionSpecific :one
+SELECT requester_id, target_id, status, created_at, updated_at FROM connections
+WHERE requester_id = $1 AND target_id = $2
+LIMIT 1
+`
+
+type GetConnectionSpecificParams struct {
+	RequesterID uuid.UUID `json:"requester_id"`
+	TargetID    uuid.UUID `json:"target_id"`
+}
+
+func (q *Queries) GetConnectionSpecific(ctx context.Context, arg GetConnectionSpecificParams) (Connection, error) {
+	row := q.db.QueryRowContext(ctx, getConnectionSpecific, arg.RequesterID, arg.TargetID)
+	var i Connection
+	err := row.Scan(
+		&i.RequesterID,
+		&i.TargetID,
+		&i.Status,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getSuggestedConnections = `-- name: GetSuggestedConnections :many
 WITH my_connections AS (
     SELECT c1.target_id as friend_id FROM connections c1 WHERE c1.requester_id = $1 AND c1.status = 'accepted'

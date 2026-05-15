@@ -235,12 +235,27 @@ func (server *Server) getUserProfile(ctx *gin.Context) {
 		if payload.UserID == userID {
 			rsp.ConnectionStatus = "self"
 		} else {
-			conn, err := server.store.GetConnection(ctx, db.GetConnectionParams{
+			// 1. My connection status towards them (Viewer -> Target)
+			conn, err := server.store.GetConnectionSpecific(ctx, db.GetConnectionSpecificParams{
 				RequesterID: payload.UserID,
 				TargetID:    userID,
 			})
 			if err == nil {
 				rsp.ConnectionStatus = string(conn.Status)
+				if conn.Status == db.ConnectionStatusAccepted {
+					rsp.YouFollow = true
+				}
+			}
+
+			// 2. Their connection status towards me (Target -> Viewer)
+			reverseConn, err := server.store.GetConnectionSpecific(ctx, db.GetConnectionSpecificParams{
+				RequesterID: userID,
+				TargetID:    payload.UserID,
+			})
+			if err == nil {
+				if reverseConn.Status == db.ConnectionStatusAccepted {
+					rsp.FollowsYou = true
+				}
 			}
 
 			// Check if I blocked them
@@ -260,19 +275,6 @@ func (server *Server) getUserProfile(ctx *gin.Context) {
 			if blockedByMe || iAmBlocked {
 				rsp.IsBlocked = true
 				rsp.ConnectionStatus = "blocked"
-			}
-
-			// Mutual Follow Detection
-			if rsp.ConnectionStatus == "accepted" {
-				rsp.YouFollow = true
-			}
-
-			reverseConn, err := server.store.GetConnection(ctx, db.GetConnectionParams{
-				RequesterID: userID,
-				TargetID:    payload.UserID,
-			})
-			if err == nil && reverseConn.Status == db.ConnectionStatusAccepted {
-				rsp.FollowsYou = true
 			}
 
 			if rsp.YouFollow && rsp.FollowsYou {

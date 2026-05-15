@@ -93,8 +93,8 @@ func (server *Server) googleLogin(ctx *gin.Context) {
 						Provider:          "google",
 						IsProfileComplete: false,
 						IsEmailVerified:   true,
-						IsPhoneVerified:   false,
-						IsActive:          false,
+						IsPhoneVerified:   true,
+						IsActive:          true,
 					})
 					if err != nil {
 						ctx.JSON(http.StatusInternalServerError, errorResponse(err))
@@ -154,6 +154,15 @@ func (server *Server) googleLogin(ctx *gin.Context) {
 	} else {
 		// Found by Google ID
 		user = existingUser
+		
+		// Ensure Google users are always active and phone-verified
+		if !user.IsActive || !user.IsPhoneVerified {
+			updatedUser, err := server.store.VerifyEmailWithOTP(ctx, user.ID)
+			if err == nil {
+				user = updatedUser
+			}
+		}
+		
 		requiresProfileCompletion = !user.IsProfileComplete
 	}
 

@@ -61,16 +61,16 @@ var (
 		Limit:  10,
 	}
 
-	// OTP verification: 5 attempts per 5 minutes (brute-force protection)
+	// OTP verification: 20 attempts per 5 minutes (relaxed for testing)
 	otpVerifyRate = limiter.Rate{
 		Period: 5 * time.Minute,
-		Limit:  5,
+		Limit:  20,
 	}
 
-	// OTP resend: 3 per 15 minutes per IP
+	// OTP resend: 10 per 5 minutes per IP (relaxed for testing)
 	otpResendRate = limiter.Rate{
-		Period: 15 * time.Minute,
-		Limit:  3,
+		Period: 5 * time.Minute,
+		Limit:  10,
 	}
 )
 

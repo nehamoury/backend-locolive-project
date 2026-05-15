@@ -631,18 +631,16 @@ func (server *Server) completeProfile(ctx *gin.Context) {
 	}
 
 	// Twilio Lookup: detect VoIP/virtual numbers
-	if server.config.Environment == "production" {
+	if server.config.Environment == "production" && server.config.TwilioAccountSID != "" {
 		lookup := util.NewPhoneLookupProvider(server.config.TwilioAccountSID, server.config.TwilioAuthToken, true)
-		if lookup == nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Phone verification service is not configured. Please contact support."})
-			return
+		if lookup != nil {
+			lookupResult, err := lookup.ValidateAndCheck(phone)
+			if err != nil {
+				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			_ = lookupResult
 		}
-		lookupResult, err := lookup.ValidateAndCheck(phone)
-		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		_ = lookupResult
 	} else {
 		if err := util.ValidateE164(phone); err != nil {
 			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

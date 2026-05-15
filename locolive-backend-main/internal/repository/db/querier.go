@@ -130,6 +130,7 @@ type Querier interface {
 	GetBlockedUsers(ctx context.Context, blockerID uuid.UUID) ([]GetBlockedUsersRow, error)
 	GetBlocksForUser(ctx context.Context, blockerID uuid.UUID) ([]GetBlocksForUserRow, error)
 	GetConnection(ctx context.Context, arg GetConnectionParams) (Connection, error)
+	GetConnectionSpecific(ctx context.Context, arg GetConnectionSpecificParams) (Connection, error)
 	// Get stories from connected users (not limited by radius)
 	GetConnectionStories(ctx context.Context, userID uuid.UUID) ([]GetConnectionStoriesRow, error)
 	GetConversationList(ctx context.Context, receiverID uuid.NullUUID) ([]GetConversationListRow, error)

@@ -21,12 +21,15 @@ import (
 )
 
 type createUserRequest struct {
-	Phone       string `json:"phone" binding:"required"`
-	Email       string `json:"email" binding:"required,email"`
-	Username    string `json:"username" binding:"required,alphanum"`
-	FullName    string `json:"full_name" binding:"required"`
-	Password    string `json:"password" binding:"required,min=6"`
-	IsGhostMode bool   `json:"is_ghost_mode"`
+	Phone                  string `json:"phone" binding:"required"`
+	Email                  string `json:"email" binding:"required,email"`
+	Username               string `json:"username" binding:"required,alphanum"`
+	FullName               string `json:"full_name" binding:"required"`
+	Password               string `json:"password" binding:"required,min=8"`
+	IsGhostMode            bool   `json:"is_ghost_mode"`
+	SignupSessionID        string `json:"signup_session_id" binding:"required"`
+	EmailVerificationToken string `json:"email_verification_token" binding:"required"`
+	PhoneVerificationToken string `json:"phone_verification_token" binding:"required"`
 }
 
 type userResponse struct {
@@ -144,6 +147,33 @@ func (server *Server) createUser(ctx *gin.Context) {
 		return
 	}
 
+	preverifyMaker := util.NewPreverifyTokenMaker(server.config.TokenSymmetricKey)
+	emailClaims, err := preverifyMaker.VerifyToken(req.EmailVerificationToken)
+	if err != nil || emailClaims.Kind != util.VerificationKindEmail {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid email verification token"})
+		return
+	}
+	phoneClaims, err := preverifyMaker.VerifyToken(req.PhoneVerificationToken)
+	if err != nil || phoneClaims.Kind != util.VerificationKindPhone {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid phone verification token"})
+		return
+	}
+
+	if emailClaims.SignupSessionID != req.SignupSessionID || phoneClaims.SignupSessionID != req.SignupSessionID {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Verification session mismatch"})
+		return
+	}
+
+	if !strings.EqualFold(emailClaims.Email, req.Email) || !strings.EqualFold(phoneClaims.Email, req.Email) {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Email does not match verified token"})
+		return
+	}
+
+	if phoneClaims.Phone != req.Phone {
+		ctx.JSON(http.StatusUnauthorized, gin.H{"error": "Phone does not match verified token"})
+		return
+	}
+
 	user, err := server.user.CreateUser(ctx, user.CreateUserParams{
 		Phone:       req.Phone,
 		Email:       req.Email,
@@ -164,20 +194,12 @@ func (server *Server) createUser(ctx *gin.Context) {
 		return
 	}
 
-	// 1. Generate & Send Email Verification OTP
-	otp := util.RandomDigitString(6)
-	_, err = server.store.CreateEmailVerification(ctx, db.CreateEmailVerificationParams{
-		UserID:    user.ID,
-		Email:     user.Email.String,
-		Token:     otp,
-		ExpiresAt: time.Now().Add(24 * time.Hour),
-	})
-	if err == nil {
-		err = server.mailer.SendOTPEmail(user.Email.String, otp)
-		if err != nil {
-			log.Error().Err(err).Str("email", user.Email.String).Msg("failed to send OTP email during signup")
-		}
+	verifiedUser, err := server.store.VerifyEmailWithOTP(ctx, user.ID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
 	}
+	user = verifiedUser
 
 	// Generate Tokens for Auto-Login
 	accessToken, accessPayload, err := server.tokenMaker.CreateToken(user.Username, user.ID, string(user.Role), server.config.AccessTokenDuration)

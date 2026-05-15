@@ -113,8 +113,12 @@ func (server *Server) createRateLimiter(rate limiter.Rate, name string) gin.Hand
 		}
 
 		// Bypass for localhost / load tests / development mode
+		if gin.Mode() != gin.ReleaseMode {
+			ctx.Next()
+			return
+		}
 		ip := ctx.ClientIP()
-		if gin.Mode() != gin.ReleaseMode || ip == "::1" || ip == "127.0.0.1" {
+		if ip == "::1" || ip == "127.0.0.1" {
 			ctx.Next()
 			return
 		}

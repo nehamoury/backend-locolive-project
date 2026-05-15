@@ -62,6 +62,12 @@ func (server *Server) setupRouter() {
 	api.POST("/auth/reset-password", server.authRateLimiter(), server.resetPassword)
 	api.POST("/auth/verify-email", server.otpVerifyRateLimiter(), server.verifyEmail)
 	api.POST("/auth/verify-otp", server.otpVerifyRateLimiter(), server.verifyEmailOTP)
+	api.POST("/auth/preverify/start", server.authRateLimiter(), server.startPreverify)
+	api.POST("/auth/preverify/email/send", server.otpResendRateLimiter(), server.sendPreverifyEmailOTP)
+	api.POST("/auth/preverify/email/verify", server.otpVerifyRateLimiter(), server.verifyPreverifyEmailOTP)
+	api.POST("/auth/preverify/phone/send", server.otpResendRateLimiter(), server.sendPreverifyPhoneOTP)
+	api.POST("/auth/preverify/phone/verify", server.otpVerifyRateLimiter(), server.verifyPreverifyPhoneOTP)
+	api.POST("/auth/preverify/phone/verify-firebase", server.otpVerifyRateLimiter(), server.verifyPreverifyFirebasePhone)
 
 	// Protected routes (as sub-group of api)
 	authRoutes := api.Group("/")

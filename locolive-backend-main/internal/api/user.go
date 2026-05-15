@@ -117,18 +117,16 @@ func (server *Server) createUser(ctx *gin.Context) {
 	}
 
 	// Twilio Lookup: detect VoIP/virtual numbers and verify carrier
-	if server.config.Environment == "production" {
+	if server.config.Environment == "production" && server.config.TwilioAccountSID != "" {
 		lookup := util.NewPhoneLookupProvider(server.config.TwilioAccountSID, server.config.TwilioAuthToken, true)
-		if lookup == nil {
-			ctx.JSON(http.StatusInternalServerError, gin.H{"error": "Phone verification service is not configured. Please contact support."})
-			return
+		if lookup != nil {
+			lookupResult, err := lookup.ValidateAndCheck(phone)
+			if err != nil {
+				ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+				return
+			}
+			_ = lookupResult // carrier info available for logging/audit
 		}
-		lookupResult, err := lookup.ValidateAndCheck(phone)
-		if err != nil {
-			ctx.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-			return
-		}
-		_ = lookupResult // carrier info available for logging/audit
 	} else {
 		// Development: still validate E.164 format but skip Twilio Lookup
 		if err := util.ValidateE164(phone); err != nil {

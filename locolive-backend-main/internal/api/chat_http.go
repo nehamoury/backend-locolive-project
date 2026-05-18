@@ -321,8 +321,13 @@ func (server *Server) sendMessage(ctx *gin.Context) {
 	// Wait, for groups, sender is also a member.
 	// For 1:1, sender needs update.
 
+	echoType := "new_message"
+	if groupID.Valid {
+		echoType = "new_group_message"
+	}
+
 	wsMsg := realtime.WSMessage{
-		Type:      "new_message",
+		Type:      echoType,
 		SubType:   "message",
 		Sound:     "", // No sound for self-echo usually, but keeping struct consistent
 		Payload:   msg,

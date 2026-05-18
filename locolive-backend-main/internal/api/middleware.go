@@ -172,9 +172,6 @@ func corsMiddleware(frontendURL string) gin.HandlerFunc {
 			} else if !isRelease {
 				// In development, allow all origins
 				isAllowed = true
-			} else if strings.Contains(origin, "localhost") || strings.Contains(origin, "127.0.0.1") {
-				// Even in release mode, allow localhost for easier testing/debugging
-				isAllowed = true
 			}
 
 			if isAllowed {

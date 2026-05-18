@@ -41,7 +41,6 @@ func (server *Server) setupRouter() {
 			"status": "healthy",
 		})
 	})
-	api.GET("/test-email", server.testEmail)
 	api.POST("/users", server.authRateLimiter(), server.createUser)
 	api.POST("/users/register", server.authRateLimiter(), server.createUser)
 	api.POST("/users/login", server.authRateLimiter(), server.loginUser)
@@ -266,7 +265,10 @@ func (server *Server) setupRouter() {
 	// Groups
 	activeRoutes.POST("/groups", server.createGroup)
 	activeRoutes.GET("/groups", server.getMyGroups)
+	activeRoutes.GET("/groups/:id", server.getGroupByID)
 	activeRoutes.GET("/groups/:id/messages", server.getGroupMessages)
+	activeRoutes.GET("/groups/:id/members", server.getGroupMembers)
+	activeRoutes.POST("/groups/:id/leave", server.leaveGroup)
 
 	// Admin routes
 	adminRoutes := api.Group("/admin")

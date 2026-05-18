@@ -155,7 +155,7 @@ func (server *Server) listMeFollowers(ctx *gin.Context) {
 		SELECT u.id, u.username, u.full_name, u.avatar_url, u.last_active_at,
                EXISTS(
                  SELECT 1 FROM connections 
-                 WHERE ((requester_id = $1 AND target_id = u.id) OR (requester_id = u.id AND target_id = $1))
+                 WHERE requester_id = $1 AND target_id = u.id
                  AND status = 'accepted'
                ) as you_follow,
                EXISTS(

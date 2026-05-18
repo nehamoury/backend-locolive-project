@@ -66,6 +66,8 @@ type ProfileResponse struct {
 	YouFollow         bool       `json:"you_follow"`
 	FollowsYou        bool       `json:"follows_you"`
 	IsMutual          bool       `json:"is_mutual"`
+	IsProfileComplete bool       `json:"is_profile_complete"`
+	IsActive          bool       `json:"is_active"`
 }
 
 func mapProfileResponse(p db.GetUserProfileRow) ProfileResponse {
@@ -202,6 +204,11 @@ func (server *Server) getUserProfile(ctx *gin.Context) {
 		}
 
 		rsp = mapProfileResponse(profile)
+		var isProfileComplete, isActive bool
+		server.store.GetDB().QueryRowContext(ctx, "SELECT is_profile_complete, is_active FROM users WHERE id = $1", userID).Scan(&isProfileComplete, &isActive)
+		rsp.IsProfileComplete = isProfileComplete
+		rsp.IsActive = isActive
+
 		rsp.ViewsCount = profile.TotalViews
 		rsp.CrossingsCount = profile.CrossingsCount
 
@@ -339,15 +346,6 @@ func (server *Server) getUserProfile(ctx *gin.Context) {
 func (server *Server) getMyProfile(ctx *gin.Context) {
 	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
 
-	// Try Redis cache first
-	cacheKey := "profile:" + authPayload.UserID.String()
-	cachedData, err := server.redis.Get(context.Background(), cacheKey).Result()
-	if err == nil && cachedData != "" {
-		ctx.Header("X-Cache", "HIT")
-		ctx.Data(http.StatusOK, "application/json", []byte(cachedData))
-		return
-	}
-
 	profile, err := server.store.GetUserProfile(ctx, authPayload.UserID)
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
@@ -355,6 +353,15 @@ func (server *Server) getMyProfile(ctx *gin.Context) {
 	}
 
 	rsp := mapProfileResponse(profile)
+	var isProfileComplete, isActive bool
+	err = server.store.GetDB().QueryRowContext(ctx, "SELECT is_profile_complete, is_active FROM users WHERE id = $1", authPayload.UserID).Scan(&isProfileComplete, &isActive)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+	rsp.IsProfileComplete = isProfileComplete
+	rsp.IsActive = isActive
+
 	rsp.ViewsCount = profile.TotalViews
 	rsp.CrossingsCount = profile.CrossingsCount
 	rsp.ConnectionStatus = "self"
@@ -373,11 +380,6 @@ func (server *Server) getMyProfile(ctx *gin.Context) {
 	savedReelsCount, _ := server.store.CountSavedReels(ctx, authPayload.UserID)
 	rsp.SavedCount = savedPostsCount + savedReelsCount
 
-	// Cache the result
-	responseJSON, _ := json.Marshal(rsp)
-	server.redis.Set(context.Background(), cacheKey, responseJSON, profileCacheTTL)
-
-	ctx.Header("X-Cache", "MISS")
 	ctx.JSON(http.StatusOK, rsp)
 }
 

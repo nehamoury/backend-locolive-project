@@ -54,7 +54,7 @@ func (server *Server) forgotPassword(ctx *gin.Context) {
 
 	// 4. Generate Token
 	resetToken := util.RandomString(32)
-	expiresAt := time.Now().Add(2 * time.Minute)
+	expiresAt := time.Now().Add(15 * time.Minute)
 
 	// 5. Save to DB
 	_, err = server.store.CreatePasswordReset(ctx, db.CreatePasswordResetParams{

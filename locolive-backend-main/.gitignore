@@ -54,3 +54,8 @@ firebase-adminsdk.json
 # Secrets
 app.env.vps
 *.env.vps
+
+# Secrets and certs
+certs/
+*.crt
+*.key

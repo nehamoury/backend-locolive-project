@@ -1025,6 +1025,11 @@ func (server *Server) updateAdminUser(ctx *gin.Context) {
 		return
 	}
 
+	// Revoke sessions instantly if demoted to user
+	if req.Role == "user" {
+		server.redis.Set(ctx, fmt.Sprintf("revoke_all:%s", uid.String()), time.Now().Unix(), 24*time.Hour)
+	}
+
 	log.Info().Str("user_id", userID).Str("new_role", req.Role).Msg("admin user role updated")
 
 	ctx.JSON(http.StatusOK, gin.H{
@@ -1055,6 +1060,9 @@ func (server *Server) deleteAdminUser(ctx *gin.Context) {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(updateErr))
 		return
 	}
+
+	// Revoke sessions instantly on demotion
+	server.redis.Set(ctx, fmt.Sprintf("revoke_all:%s", uid.String()), time.Now().Unix(), 24*time.Hour)
 
 	log.Info().Str("user_id", userID).Msg("admin user demoted to regular user")
 
@@ -1127,6 +1135,10 @@ func (server *Server) handleAdminUserAction(ctx *gin.Context) {
 			ID:   uid,
 			Role: db.UserRoleUser,
 		})
+		if err == nil {
+			// Revoke sessions instantly on demotion
+			server.redis.Set(ctx, fmt.Sprintf("revoke_all:%s", uid.String()), time.Now().Unix(), 24*time.Hour)
+		}
 		message = "user demoted to regular user"
 	}
 

@@ -245,7 +245,7 @@ func (q *Queries) GetTotalConnectionsCount(ctx context.Context) (int64, error) {
 }
 
 const listConnections = `-- name: ListConnections :many
-SELECT 
+SELECT DISTINCT ON (u.id)
     u.id, 
     u.username, 
     u.full_name, 
@@ -256,6 +256,7 @@ JOIN users u ON (u.id = c.requester_id OR u.id = c.target_id)
 WHERE (c.requester_id = $1 OR c.target_id = $1)
   AND u.id != $1
   AND c.status = 'accepted'
+ORDER BY u.id
 LIMIT 200
 `
 

@@ -30,7 +30,7 @@ LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
 
 -- name: ListConnectionsPosts :many
 -- Get posts from connections AND own posts AND nearby discovery (public posts)
-SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings,
+SELECT DISTINCT ON (p.id) p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings,
        p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
        u.username, u.full_name, u.avatar_url,
        CASE WHEN p.geom IS NOT NULL THEN ST_Y(p.geom::geometry) ELSE NULL END as lat_out,
@@ -52,7 +52,7 @@ AND NOT EXISTS (
     WHERE (bu.blocker_id = sqlc.arg(viewer_id) AND bu.blocked_id = p.user_id)
        OR (bu.blocker_id = p.user_id AND bu.blocked_id = sqlc.arg(viewer_id))
 )
-ORDER BY p.created_at DESC
+ORDER BY p.id, p.created_at DESC
 LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
 
 -- name: DeletePost :exec

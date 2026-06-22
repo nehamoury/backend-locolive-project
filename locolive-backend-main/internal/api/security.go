@@ -1,15 +1,17 @@
 package api
 
 import (
+	"database/sql"
 	"fmt"
 	"net/http"
 	"time"
 
+	"privacy-social-backend/internal/repository/db"
+	"privacy-social-backend/internal/util"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/sqlc-dev/pqtype"
-	"privacy-social-backend/internal/repository/db"
-	"privacy-social-backend/internal/util"
 )
 
 type changePasswordRequest struct {
@@ -317,4 +319,138 @@ func (server *Server) revokeToken(ctx *gin.Context, tokenID uuid.UUID, expiresAt
 	}
 
 	return server.redis.Set(ctx, fmt.Sprintf("blacklist:%s", tokenID.String()), "revoked", duration).Err()
+}
+
+// getActiveSessions fetches all unexpired device sessions for the user
+func (server *Server) getActiveSessions(ctx *gin.Context) {
+	authPayload := getAuthPayload(ctx)
+
+	query := `
+		SELECT id, refresh_token, user_agent, client_ip, created_at, expires_at 
+		FROM sessions 
+		WHERE user_id = $1 AND is_blocked = false AND expires_at > NOW()
+		ORDER BY created_at DESC
+	`
+
+	rows, err := server.store.GetDB().QueryContext(ctx, query, authPayload.UserID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+	defer rows.Close()
+
+	var sessions []gin.H
+	for rows.Next() {
+		var id uuid.UUID
+		var refreshToken, userAgent, clientIp string
+		var createdAt, expiresAt time.Time
+
+		if err := rows.Scan(&id, &refreshToken, &userAgent, &clientIp, &createdAt, &expiresAt); err != nil {
+			continue
+		}
+
+		// Basic parsing to show device type
+		deviceType := "Unknown Device"
+		if userAgent != "" {
+			deviceType = userAgent
+		}
+
+		sessions = append(sessions, gin.H{
+			"id":         id,
+			"device":     deviceType,
+			"ip_address": clientIp,
+			"created_at": createdAt,
+			"expires_at": expiresAt,
+		})
+	}
+
+	ctx.JSON(http.StatusOK, sessions)
+}
+
+// revokeDeviceSession logs a user out of a specific device session
+func (server *Server) revokeDeviceSession(ctx *gin.Context) {
+	sessionIDStr := ctx.Param("id")
+	sessionID, err := uuid.Parse(sessionIDStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, errorResponse(fmt.Errorf("invalid session ID")))
+		return
+	}
+
+	authPayload := getAuthPayload(ctx)
+
+	// Block the session in DB
+	query := `UPDATE sessions SET is_blocked = true WHERE id = $1 AND user_id = $2`
+	result, err := server.store.GetDB().ExecContext(ctx, query, sessionID, authPayload.UserID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		ctx.JSON(http.StatusNotFound, errorResponse(fmt.Errorf("session not found or already revoked")))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, successResponse("Session revoked successfully"))
+}
+
+// updateLoginAlerts toggles login alerts in user preferences
+func (server *Server) updateLoginAlerts(ctx *gin.Context) {
+	var req struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, errorResponse(err))
+		return
+	}
+
+	// For now, we will just return success as a mock
+	ctx.JSON(http.StatusOK, successResponse("Login alerts updated successfully"))
+}
+
+// getLoginActivity logs
+func (server *Server) getLoginActivity(ctx *gin.Context) {
+	authPayload := getAuthPayload(ctx)
+
+	query := `
+		SELECT id, action, ip_address, user_agent, created_at 
+		FROM user_activity_logs 
+		WHERE user_id = $1 AND action IN ('login', 'password_change', 'password_set')
+		ORDER BY created_at DESC 
+		LIMIT 20
+	`
+
+	rows, err := server.store.GetDB().QueryContext(ctx, query, authPayload.UserID)
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+	defer rows.Close()
+
+	var logs []gin.H
+	for rows.Next() {
+		var id uuid.UUID
+		var action string
+		var ipAddress, userAgent sql.NullString
+		var createdAt time.Time
+
+		if err := rows.Scan(&id, &action, &ipAddress, &userAgent, &createdAt); err != nil {
+			continue
+		}
+
+		logs = append(logs, gin.H{
+			"id":         id,
+			"action":     action,
+			"ip_address": ipAddress.String,
+			"device":     userAgent.String,
+			"created_at": createdAt,
+		})
+	}
+
+	if len(logs) == 0 {
+		logs = []gin.H{}
+	}
+
+	ctx.JSON(http.StatusOK, logs)
 }

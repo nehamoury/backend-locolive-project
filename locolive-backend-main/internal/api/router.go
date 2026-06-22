@@ -1,9 +1,10 @@
 package api
 
 import (
+	"time"
+
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
-	"time"
 )
 
 func (server *Server) setupRouter() {
@@ -170,6 +171,11 @@ func (server *Server) setupRouter() {
 	authRoutes.PUT("/settings/preferences", server.updatePreferences)
 	authRoutes.GET("/settings/notifications", server.getNotificationSettings)
 	authRoutes.PUT("/settings/notifications", server.updateNotificationSettings)
+
+	// Security & Sessions
+	authRoutes.GET("/account/sessions", server.getActiveSessions)
+	authRoutes.DELETE("/account/sessions/:id", server.revokeDeviceSession)
+	authRoutes.GET("/account/activity", server.getLoginActivity)
 
 	// Support System
 	authRoutes.POST("/support/tickets", server.rateLimitMiddleware(5, 24*time.Hour), server.createSupportTicket)

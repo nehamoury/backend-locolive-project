@@ -642,3 +642,54 @@ func (server *Server) getSavedPosts(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, successResponse(gin.H{"posts": rsp, "page": page, "page_size": pageSize}))
 }
+
+// updatePost handles updating the caption of a post the user owns.
+func (server *Server) updatePost(ctx *gin.Context) {
+	postID, err := uuid.Parse(ctx.Param("id"))
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, errorResponse(err))
+		return
+	}
+
+	var req struct {
+		Caption string `json:"caption"`
+	}
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, errorResponse(err))
+		return
+	}
+
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+
+	post, err := server.store.UpdatePost(ctx, db.UpdatePostParams{
+		ID:      postID,
+		UserID:  authPayload.UserID,
+		Caption: sql.NullString{String: req.Caption, Valid: true},
+	})
+	if err != nil {
+		if err == sql.ErrNoRows {
+			ctx.JSON(http.StatusNotFound, errorResponse(fmt.Errorf("post not found or unauthorized")))
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, successResponse(gin.H{
+		"message": "post updated",
+		"post": postResponse{
+			ID:            post.ID,
+			UserID:        post.UserID,
+			MediaUrl:      post.MediaUrl,
+			MediaType:     post.MediaType,
+			Caption:       post.Caption.String,
+			BodyText:      post.BodyText.String,
+			LocationName:  post.LocationName.String,
+			LikesCount:    post.LikesCount,
+			CommentsCount: post.CommentsCount,
+			SharesCount:   post.SharesCount,
+			CreatedAt:     post.CreatedAt,
+			CropSettings:  post.CropSettings.RawMessage,
+		},
+	}))
+}

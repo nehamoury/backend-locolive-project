@@ -187,3 +187,6 @@ LIMIT $1 OFFSET $2;
 
 -- name: CountAllPostsAdmin :one
 SELECT COUNT(*) FROM posts;
+
+-- name: UpdatePost :one
+UPDATE posts SET caption = sqlc.arg(caption), updated_at = now() WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id) RETURNING *;

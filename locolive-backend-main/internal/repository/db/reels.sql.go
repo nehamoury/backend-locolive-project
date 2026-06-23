@@ -955,3 +955,35 @@ func (q *Queries) UnsaveReelAtomic(ctx context.Context, arg UnsaveReelAtomicPara
 	err := row.Scan(&saves_count)
 	return saves_count, err
 }
+
+const updateReel = `-- name: UpdateReel :one
+UPDATE reels SET caption = $1, updated_at = now() WHERE id = $2 AND user_id = $3 RETURNING id, user_id, video_url, caption, is_ai_generated, location_name, geohash, geom, likes_count, comments_count, shares_count, saves_count, created_at, updated_at
+`
+
+type UpdateReelParams struct {
+	Caption sql.NullString `json:"caption"`
+	ID      uuid.UUID      `json:"id"`
+	UserID  uuid.UUID      `json:"user_id"`
+}
+
+func (q *Queries) UpdateReel(ctx context.Context, arg UpdateReelParams) (Reel, error) {
+	row := q.db.QueryRowContext(ctx, updateReel, arg.Caption, arg.ID, arg.UserID)
+	var i Reel
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.VideoUrl,
+		&i.Caption,
+		&i.IsAiGenerated,
+		&i.LocationName,
+		&i.Geohash,
+		&i.Geom,
+		&i.LikesCount,
+		&i.CommentsCount,
+		&i.SharesCount,
+		&i.SavesCount,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}

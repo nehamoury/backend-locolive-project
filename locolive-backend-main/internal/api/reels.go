@@ -770,3 +770,55 @@ func (server *Server) getMyReels(ctx *gin.Context) {
 
 	ctx.JSON(http.StatusOK, successResponse(gin.H{"reels": rsp, "page": page, "page_size": pageSize}))
 }
+
+// updateReel handles updating the caption of a reel the user owns.
+func (server *Server) updateReel(ctx *gin.Context) {
+	reelID, err := uuid.Parse(ctx.Param("id"))
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, errorResponse(err))
+		return
+	}
+
+	var req struct {
+		Caption string `json:"caption"`
+	}
+	if err := ctx.ShouldBindJSON(&req); err != nil {
+		ctx.JSON(http.StatusBadRequest, errorResponse(err))
+		return
+	}
+
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+
+	reel, err := server.store.UpdateReel(ctx, db.UpdateReelParams{
+		ID:      reelID,
+		UserID:  authPayload.UserID,
+		Caption: sql.NullString{String: req.Caption, Valid: true},
+	})
+	if err != nil {
+		if err == sql.ErrNoRows {
+			ctx.JSON(http.StatusNotFound, errorResponse(fmt.Errorf("reel not found or unauthorized")))
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, successResponse(gin.H{
+		"message": "reel updated",
+		"reel": reelResponse{
+			ID:            reel.ID,
+			UserID:        reel.UserID,
+			VideoURL:      reel.VideoUrl,
+			Caption:       nullStrToPtr(reel.Caption),
+			IsAiGenerated: reel.IsAiGenerated,
+			LocationName:  nullStrToPtr(reel.LocationName),
+			Geohash:       nullStrToPtr(reel.Geohash),
+			LikesCount:    reel.LikesCount,
+			CommentsCount: reel.CommentsCount,
+			SharesCount:   reel.SharesCount,
+			SavesCount:    reel.SavesCount,
+			CreatedAt:     reel.CreatedAt,
+			UpdatedAt:     reel.UpdatedAt,
+		},
+	}))
+}

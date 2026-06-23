@@ -844,3 +844,37 @@ func (q *Queries) UnsavePostAtomic(ctx context.Context, arg UnsavePostAtomicPara
 	err := row.Scan(&saves_count)
 	return saves_count, err
 }
+
+const updatePost = `-- name: UpdatePost :one
+UPDATE posts SET caption = $1, updated_at = now() WHERE id = $2 AND user_id = $3 RETURNING id, user_id, media_url, media_type, caption, location_name, geohash, geom, likes_count, comments_count, created_at, updated_at, body_text, shares_count, crop_settings, saves_count
+`
+
+type UpdatePostParams struct {
+	Caption sql.NullString `json:"caption"`
+	ID      uuid.UUID      `json:"id"`
+	UserID  uuid.UUID      `json:"user_id"`
+}
+
+func (q *Queries) UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, error) {
+	row := q.db.QueryRowContext(ctx, updatePost, arg.Caption, arg.ID, arg.UserID)
+	var i Post
+	err := row.Scan(
+		&i.ID,
+		&i.UserID,
+		&i.MediaUrl,
+		&i.MediaType,
+		&i.Caption,
+		&i.LocationName,
+		&i.Geohash,
+		&i.Geom,
+		&i.LikesCount,
+		&i.CommentsCount,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.BodyText,
+		&i.SharesCount,
+		&i.CropSettings,
+		&i.SavesCount,
+	)
+	return i, err
+}

@@ -307,7 +307,9 @@ type Querier interface {
 	UpdateMessage(ctx context.Context, arg UpdateMessageParams) (Message, error)
 	UpdateNotificationPreferences(ctx context.Context, arg UpdateNotificationPreferencesParams) (NotificationPreference, error)
 	UpdatePhoneVerificationAttempts(ctx context.Context, id uuid.UUID) (PhoneVerification, error)
+	UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, error)
 	UpdatePostCommentFlag(ctx context.Context, arg UpdatePostCommentFlagParams) error
+	UpdateReel(ctx context.Context, arg UpdateReelParams) (Reel, error)
 	UpdateReelCommentFlag(ctx context.Context, arg UpdateReelCommentFlagParams) error
 	UpdateStory(ctx context.Context, arg UpdateStoryParams) (UpdateStoryRow, error)
 	UpdateSupportTicketStatus(ctx context.Context, arg UpdateSupportTicketStatusParams) (SupportTicket, error)

@@ -196,3 +196,6 @@ LIMIT $1 OFFSET $2;
 
 -- name: CountAllReelsAdmin :one
 SELECT COUNT(*) FROM reels;
+
+-- name: UpdateReel :one
+UPDATE reels SET caption = sqlc.arg(caption), updated_at = now() WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id) RETURNING *;

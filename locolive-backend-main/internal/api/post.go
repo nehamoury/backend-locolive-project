@@ -20,7 +20,7 @@ import (
 // ─── Request / Response DTOs ────────────────────────────────────────────────
 
 type createPostRequest struct {
-	MediaURL     string          `json:"media_url"   binding:"required"`
+	MediaURL     string          `json:"media_url"`
 	MediaType    string          `json:"media_type"  binding:"required,oneof=image video text"`
 	Caption      string          `json:"caption"`
 	BodyText     string          `json:"body_text"`

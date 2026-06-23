@@ -13,6 +13,7 @@ import (
 
 type Querier interface {
 	AddGroupMember(ctx context.Context, arg AddGroupMemberParams) (GroupMember, error)
+	AddReelHashtag(ctx context.Context, arg AddReelHashtagParams) error
 	// Add a new reserved username (admin only)
 	AddReservedUsername(ctx context.Context, arg AddReservedUsernameParams) error
 	AddStoryToHighlight(ctx context.Context, arg AddStoryToHighlightParams) (HighlightStory, error)
@@ -187,6 +188,7 @@ type Querier interface {
 	GetTotalConnectionsCount(ctx context.Context) (int64, error)
 	GetTotalCrossingsCountToday(ctx context.Context) (int64, error)
 	GetTotalReelsCountToday(ctx context.Context) (int64, error)
+	GetTrendingHashtags(ctx context.Context, limit int32) ([]Hashtag, error)
 	GetUnreadMessageCount(ctx context.Context, receiverID uuid.NullUUID) (int64, error)
 	// Get user's activity status and visibility
 	GetUserActivityStatus(ctx context.Context, id uuid.UUID) (GetUserActivityStatusRow, error)
@@ -254,6 +256,7 @@ type Querier interface {
 	ListPostComments(ctx context.Context, postID uuid.UUID) ([]ListPostCommentsRow, error)
 	ListPostsByUserID(ctx context.Context, arg ListPostsByUserIDParams) ([]ListPostsByUserIDRow, error)
 	ListReelComments(ctx context.Context, reelID uuid.UUID) ([]ListReelCommentsRow, error)
+	ListReelsByHashtag(ctx context.Context, arg ListReelsByHashtagParams) ([]ListReelsByHashtagRow, error)
 	ListReelsFeed(ctx context.Context, arg ListReelsFeedParams) ([]ListReelsFeedRow, error)
 	// Admin: List all reports
 	ListReports(ctx context.Context, arg ListReportsParams) ([]ListReportsRow, error)
@@ -283,6 +286,7 @@ type Querier interface {
 	SaveMessage(ctx context.Context, id uuid.UUID) (Message, error)
 	SavePostAtomic(ctx context.Context, arg SavePostAtomicParams) (int32, error)
 	SaveReelAtomic(ctx context.Context, arg SaveReelAtomicParams) (int32, error)
+	SearchHashtags(ctx context.Context, arg SearchHashtagsParams) ([]Hashtag, error)
 	SearchUsers(ctx context.Context, query string) ([]SearchUsersRow, error)
 	SearchUsersAdmin(ctx context.Context, arg SearchUsersAdminParams) ([]User, error)
 	SoftDeleteUser(ctx context.Context, id uuid.UUID) error
@@ -321,6 +325,7 @@ type Querier interface {
 	// Update user username with history tracking
 	// Note: This should be called within a transaction that also records history
 	UpdateUsername(ctx context.Context, arg UpdateUsernameParams) (User, error)
+	UpsertHashtag(ctx context.Context, name string) (Hashtag, error)
 	UpsertNotificationSettings(ctx context.Context, arg UpsertNotificationSettingsParams) (NotificationSetting, error)
 	UpsertPrivacySettings(ctx context.Context, arg UpsertPrivacySettingsParams) (PrivacySetting, error)
 	UpsertUserPreferences(ctx context.Context, arg UpsertUserPreferencesParams) (UserPreference, error)

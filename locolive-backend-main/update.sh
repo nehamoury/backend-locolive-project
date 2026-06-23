@@ -32,12 +32,6 @@ fi
 
 # 4. Build Backend
 cd "$BE_PATH"
-# Generate Go code from SQL files before building
-if command -v sqlc &> /dev/null; then
-    sqlc generate
-else
-    echo "⚠️ sqlc not found. Skipping SQL generation."
-fi
 go build -o locolive-api cmd/server/main.go
 # Run migrations
 DB_URL=$(grep "^DB_SOURCE=" app.env | cut -d'=' -f2- | sed 's/"//g' | sed "s/'//g")

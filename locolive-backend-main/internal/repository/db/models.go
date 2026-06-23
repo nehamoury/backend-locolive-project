@@ -364,6 +364,15 @@ type GroupMember struct {
 	JoinedAt time.Time `json:"joined_at"`
 }
 
+type Hashtag struct {
+	ID         uuid.UUID `json:"id"`
+	Name       string    `json:"name"`
+	UsageCount int32     `json:"usage_count"`
+	ReelsCount int32     `json:"reels_count"`
+	LastUsedAt time.Time `json:"last_used_at"`
+	CreatedAt  time.Time `json:"created_at"`
+}
+
 type HighlightGroup struct {
 	ID        uuid.UUID      `json:"id"`
 	UserID    uuid.UUID      `json:"user_id"`
@@ -563,6 +572,11 @@ type ReelComment struct {
 	Content   string    `json:"content"`
 	CreatedAt time.Time `json:"created_at"`
 	IsFlagged bool      `json:"is_flagged"`
+}
+
+type ReelHashtag struct {
+	ReelID    uuid.UUID `json:"reel_id"`
+	HashtagID uuid.UUID `json:"hashtag_id"`
 }
 
 type ReelLike struct {

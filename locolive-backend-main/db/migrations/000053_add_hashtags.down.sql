@@ -1,0 +1,2 @@
+DROP TABLE IF EXISTS reel_hashtags;
+DROP TABLE IF EXISTS hashtags;

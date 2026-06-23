@@ -1,10 +1,9 @@
 package api
 
 import (
-	"time"
-
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-gonic/gin"
+	"time"
 )
 
 func (server *Server) setupRouter() {
@@ -171,6 +170,7 @@ func (server *Server) setupRouter() {
 	authRoutes.PUT("/settings/preferences", server.updatePreferences)
 	authRoutes.GET("/settings/notifications", server.getNotificationSettings)
 	authRoutes.PUT("/settings/notifications", server.updateNotificationSettings)
+	authRoutes.PUT("/settings/login-alerts", server.updateLoginAlerts)
 
 	// Security & Sessions
 	authRoutes.GET("/account/sessions", server.getActiveSessions)
@@ -258,6 +258,11 @@ func (server *Server) setupRouter() {
 	activeRoutes.POST("/reels/:id/save", server.engagementRateLimiter(), server.saveReel)
 	activeRoutes.DELETE("/reels/:id/save", server.engagementRateLimiter(), server.unsaveReel)
 	activeRoutes.DELETE("/reels/:id/comments/:commentId", server.deleteReelComment)
+
+	// Hashtags
+	activeRoutes.GET("/hashtags/trending", server.getTrendingHashtags)
+	activeRoutes.GET("/hashtags/search", server.searchHashtags)
+	activeRoutes.GET("/hashtags/:name/reels", server.getReelsByHashtag)
 
 	// Highlights
 	activeRoutes.POST("/highlights", server.createHighlight)

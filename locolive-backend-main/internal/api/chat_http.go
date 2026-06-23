@@ -254,6 +254,49 @@ func (server *Server) sendMessage(ctx *gin.Context) {
 		return
 	}
 
+	// Map to response struct to ensure fields like MediaUrl and MediaType are serialized correctly
+	type MessageResponse struct {
+		ID         uuid.UUID       `json:"id"`
+		SenderID   uuid.UUID       `json:"sender_id"`
+		ReceiverID *uuid.UUID      `json:"receiver_id"`
+		GroupID    *uuid.UUID      `json:"group_id"`
+		Content    string          `json:"content"`
+		IsRead     bool            `json:"is_read"`
+		CreatedAt  time.Time       `json:"created_at"`
+		ReadAt     sql.NullTime    `json:"read_at"`
+		ExpiresAt  sql.NullTime    `json:"expires_at"`
+		MediaUrl   *string         `json:"media_url"`
+		MediaType  *string         `json:"media_type"`
+		Reactions  json.RawMessage `json:"reactions"`
+	}
+
+	var recID *uuid.UUID
+	if msg.ReceiverID.Valid {
+		id := msg.ReceiverID.UUID
+		recID = &id
+	}
+
+	var grpID *uuid.UUID
+	if msg.GroupID.Valid {
+		id := msg.GroupID.UUID
+		grpID = &id
+	}
+
+	respMsg := MessageResponse{
+		ID:         msg.ID,
+		SenderID:   msg.SenderID,
+		ReceiverID: recID,
+		GroupID:    grpID,
+		Content:    msg.Content,
+		IsRead:     msg.IsRead,
+		CreatedAt:  msg.CreatedAt,
+		ReadAt:     msg.ReadAt,
+		ExpiresAt:  msg.ExpiresAt,
+		MediaUrl:   nullStringToStrPtr(msg.MediaUrl),
+		MediaType:  nullStringToStrPtr(msg.MediaType),
+		Reactions:  []byte("[]"),
+	}
+
 	if receiverID.Valid {
 		// Invalidate cache for this conversation (1:1)
 		server.invalidateConversationCache(authPayload.UserID, receiverID.UUID)
@@ -263,9 +306,9 @@ func (server *Server) sendMessage(ctx *gin.Context) {
 			Type:      "new_message",
 			SubType:   "message",
 			Sound:     "chat_pop.wav",
-			Payload:   msg,
+			Payload:   respMsg,
 			SenderID:  authPayload.UserID,
-			CreatedAt: msg.CreatedAt,
+			CreatedAt: respMsg.CreatedAt,
 		}
 		data, _ := json.Marshal(wsMsg)
 		server.hub.SendToUser(receiverID.UUID, data)
@@ -290,9 +333,9 @@ func (server *Server) sendMessage(ctx *gin.Context) {
 				Type:      "new_group_message",
 				SubType:   "message",
 				Sound:     "chat_pop.wav",
-				Payload:   msg,
+				Payload:   respMsg,
 				SenderID:  authPayload.UserID,
-				CreatedAt: msg.CreatedAt,
+				CreatedAt: respMsg.CreatedAt,
 			}
 			wsMsgBytes, _ := json.Marshal(wsMsg)
 			
@@ -330,14 +373,14 @@ func (server *Server) sendMessage(ctx *gin.Context) {
 		Type:      echoType,
 		SubType:   "message",
 		Sound:     "", // No sound for self-echo usually, but keeping struct consistent
-		Payload:   msg,
+		Payload:   respMsg,
 		SenderID:  authPayload.UserID,
-		CreatedAt: msg.CreatedAt,
+		CreatedAt: respMsg.CreatedAt,
 	}
 	wsMsgBytes, _ := json.Marshal(wsMsg)
 	server.hub.SendToUser(authPayload.UserID, wsMsgBytes) // Always echo back?
 
-	ctx.JSON(http.StatusCreated, successResponse(msg))
+	ctx.JSON(http.StatusCreated, successResponse(respMsg))
 }
 
 // deleteMessage allows a user to unsend/delete their own message

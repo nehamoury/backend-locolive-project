@@ -1,17 +1,15 @@
 package api
 
 import (
-	"database/sql"
 	"fmt"
 	"net/http"
 	"time"
 
-	"privacy-social-backend/internal/repository/db"
-	"privacy-social-backend/internal/util"
-
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/sqlc-dev/pqtype"
+	"privacy-social-backend/internal/repository/db"
+	"privacy-social-backend/internal/util"
 )
 
 type changePasswordRequest struct {

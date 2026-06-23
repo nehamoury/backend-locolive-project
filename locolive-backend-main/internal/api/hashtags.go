@@ -1,6 +1,7 @@
 package api
 
 import (
+	"database/sql"
 	"fmt"
 	"net/http"
 	"strconv"
@@ -47,7 +48,7 @@ func (server *Server) searchHashtags(ctx *gin.Context) {
 	}
 
 	hashtags, err := server.store.SearchHashtags(ctx, db.SearchHashtagsParams{
-		Column1: sqlcArgString(query),
+		Column1: sql.NullString{String: query, Valid: true},
 		Limit:   int32(limit),
 	})
 	if err != nil {
@@ -63,9 +64,7 @@ func (server *Server) searchHashtags(ctx *gin.Context) {
 	ctx.JSON(http.StatusOK, successResponse(rsp))
 }
 
-func sqlcArgString(s string) string {
-	return s
-}
+
 
 // getTrendingHashtags returns top trending hashtags
 func (server *Server) getTrendingHashtags(ctx *gin.Context) {

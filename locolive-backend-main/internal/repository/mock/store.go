@@ -58,6 +58,20 @@ func (mr *MockStoreMockRecorder) AddGroupMember(ctx, arg any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddGroupMember", reflect.TypeOf((*MockStore)(nil).AddGroupMember), ctx, arg)
 }
 
+// AddReelHashtag mocks base method.
+func (m *MockStore) AddReelHashtag(ctx context.Context, arg db.AddReelHashtagParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "AddReelHashtag", ctx, arg)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// AddReelHashtag indicates an expected call of AddReelHashtag.
+func (mr *MockStoreMockRecorder) AddReelHashtag(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddReelHashtag", reflect.TypeOf((*MockStore)(nil).AddReelHashtag), ctx, arg)
+}
+
 // AddReservedUsername mocks base method.
 func (m *MockStore) AddReservedUsername(ctx context.Context, arg db.AddReservedUsernameParams) error {
 	m.ctrl.T.Helper()
@@ -2377,6 +2391,21 @@ func (mr *MockStoreMockRecorder) GetTotalReelsCountToday(ctx any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTotalReelsCountToday", reflect.TypeOf((*MockStore)(nil).GetTotalReelsCountToday), ctx)
 }
 
+// GetTrendingHashtags mocks base method.
+func (m *MockStore) GetTrendingHashtags(ctx context.Context, limit int32) ([]db.Hashtag, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetTrendingHashtags", ctx, limit)
+	ret0, _ := ret[0].([]db.Hashtag)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetTrendingHashtags indicates an expected call of GetTrendingHashtags.
+func (mr *MockStoreMockRecorder) GetTrendingHashtags(ctx, limit any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetTrendingHashtags", reflect.TypeOf((*MockStore)(nil).GetTrendingHashtags), ctx, limit)
+}
+
 // GetUnreadMessageCount mocks base method.
 func (m *MockStore) GetUnreadMessageCount(ctx context.Context, receiverID uuid.NullUUID) (int64, error) {
 	m.ctrl.T.Helper()
@@ -3227,6 +3256,21 @@ func (mr *MockStoreMockRecorder) ListReelComments(ctx, reelID any) *gomock.Call 
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListReelComments", reflect.TypeOf((*MockStore)(nil).ListReelComments), ctx, reelID)
 }
 
+// ListReelsByHashtag mocks base method.
+func (m *MockStore) ListReelsByHashtag(ctx context.Context, arg db.ListReelsByHashtagParams) ([]db.ListReelsByHashtagRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListReelsByHashtag", ctx, arg)
+	ret0, _ := ret[0].([]db.ListReelsByHashtagRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListReelsByHashtag indicates an expected call of ListReelsByHashtag.
+func (mr *MockStoreMockRecorder) ListReelsByHashtag(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListReelsByHashtag", reflect.TypeOf((*MockStore)(nil).ListReelsByHashtag), ctx, arg)
+}
+
 // ListReelsFeed mocks base method.
 func (m *MockStore) ListReelsFeed(ctx context.Context, arg db.ListReelsFeedParams) ([]db.ListReelsFeedRow, error) {
 	m.ctrl.T.Helper()
@@ -3577,6 +3621,21 @@ func (m *MockStore) SaveReelAtomic(ctx context.Context, arg db.SaveReelAtomicPar
 func (mr *MockStoreMockRecorder) SaveReelAtomic(ctx, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SaveReelAtomic", reflect.TypeOf((*MockStore)(nil).SaveReelAtomic), ctx, arg)
+}
+
+// SearchHashtags mocks base method.
+func (m *MockStore) SearchHashtags(ctx context.Context, arg db.SearchHashtagsParams) ([]db.Hashtag, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SearchHashtags", ctx, arg)
+	ret0, _ := ret[0].([]db.Hashtag)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SearchHashtags indicates an expected call of SearchHashtags.
+func (mr *MockStoreMockRecorder) SearchHashtags(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchHashtags", reflect.TypeOf((*MockStore)(nil).SearchHashtags), ctx, arg)
 }
 
 // SearchUsers mocks base method.
@@ -4066,6 +4125,21 @@ func (m *MockStore) UpdateUsername(ctx context.Context, arg db.UpdateUsernamePar
 func (mr *MockStoreMockRecorder) UpdateUsername(ctx, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateUsername", reflect.TypeOf((*MockStore)(nil).UpdateUsername), ctx, arg)
+}
+
+// UpsertHashtag mocks base method.
+func (m *MockStore) UpsertHashtag(ctx context.Context, name string) (db.Hashtag, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpsertHashtag", ctx, name)
+	ret0, _ := ret[0].(db.Hashtag)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpsertHashtag indicates an expected call of UpsertHashtag.
+func (mr *MockStoreMockRecorder) UpsertHashtag(ctx, name any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpsertHashtag", reflect.TypeOf((*MockStore)(nil).UpsertHashtag), ctx, name)
 }
 
 // UpsertNotificationSettings mocks base method.

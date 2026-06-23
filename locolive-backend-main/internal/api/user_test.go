@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -56,6 +57,13 @@ func init() {
 func TestCreateUser(t *testing.T) {
 	user, password := randomUser(t)
 
+	maker := util.NewPreverifyTokenMaker("12345678901234567890123456789012")
+	signupSessionID := uuid.New().String()
+	emailToken, err := maker.CreateToken(util.VerificationKindEmail, signupSessionID, user.Email.String, "", time.Minute*15)
+	require.NoError(t, err)
+	phoneToken, err := maker.CreateToken(util.VerificationKindPhone, signupSessionID, user.Email.String, user.Phone, time.Minute*15)
+	require.NoError(t, err)
+
 	testCases := []struct {
 		name          string
 		body          gin.H
@@ -65,11 +73,14 @@ func TestCreateUser(t *testing.T) {
 		{
 			name: "OK",
 			body: gin.H{
-				"username":  user.Username,
-				"password":  password,
-				"full_name": user.FullName,
-				"phone":     user.Phone,
-				"email":     user.Email.String,
+				"username":                 user.Username,
+				"password":                 password,
+				"full_name":                user.FullName,
+				"phone":                    user.Phone,
+				"email":                    user.Email.String,
+				"signup_session_id":        signupSessionID,
+				"email_verification_token": emailToken,
+				"phone_verification_token": phoneToken,
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				arg := db.CreateUserParams{
@@ -89,9 +100,9 @@ func TestCreateUser(t *testing.T) {
 					Return(user, nil)
 
 				store.EXPECT().
-					CreateEmailVerification(gomock.Any(), gomock.Any()).
+					VerifyEmailWithOTP(gomock.Any(), gomock.Any()).
 					Times(1).
-					Return(db.EmailVerification{}, nil)
+					Return(user, nil)
 
 				store.EXPECT().
 					CreateSession(gomock.Any(), gomock.Any()).
@@ -106,11 +117,14 @@ func TestCreateUser(t *testing.T) {
 		{
 			name: "InvalidUsername",
 			body: gin.H{
-				"username":  "invalid#user",
-				"password":  password,
-				"full_name": user.FullName,
-				"phone":     user.Phone,
-				"email":     user.Email.String,
+				"username":                 "invalid#user",
+				"password":                 password,
+				"full_name":                user.FullName,
+				"phone":                    user.Phone,
+				"email":                    user.Email.String,
+				"signup_session_id":        signupSessionID,
+				"email_verification_token": emailToken,
+				"phone_verification_token": phoneToken,
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
@@ -124,11 +138,14 @@ func TestCreateUser(t *testing.T) {
 		{
 			name: "DuplicateUsername",
 			body: gin.H{
-				"username":  user.Username,
-				"password":  password,
-				"full_name": user.FullName,
-				"phone":     user.Phone,
-				"email":     user.Email.String,
+				"username":                 user.Username,
+				"password":                 password,
+				"full_name":                user.FullName,
+				"phone":                    user.Phone,
+				"email":                    user.Email.String,
+				"signup_session_id":        signupSessionID,
+				"email_verification_token": emailToken,
+				"phone_verification_token": phoneToken,
 			},
 			buildStubs: func(store *mockdb.MockStore) {
 				store.EXPECT().
@@ -186,7 +203,7 @@ func TestCreateUser(t *testing.T) {
 }
 
 func randomUser(t *testing.T) (user db.User, password string) {
-	password = util.RandomString(6)
+	password = util.RandomString(8)
 	hashedPassword, err := util.HashPassword(password)
 	require.NoError(t, err)
 

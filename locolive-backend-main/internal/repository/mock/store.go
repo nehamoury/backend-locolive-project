@@ -3906,6 +3906,21 @@ func (mr *MockStoreMockRecorder) UpdatePhoneVerificationAttempts(ctx, id any) *g
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePhoneVerificationAttempts", reflect.TypeOf((*MockStore)(nil).UpdatePhoneVerificationAttempts), ctx, id)
 }
 
+// UpdatePost mocks base method.
+func (m *MockStore) UpdatePost(ctx context.Context, arg db.UpdatePostParams) (db.Post, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdatePost", ctx, arg)
+	ret0, _ := ret[0].(db.Post)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdatePost indicates an expected call of UpdatePost.
+func (mr *MockStoreMockRecorder) UpdatePost(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePost", reflect.TypeOf((*MockStore)(nil).UpdatePost), ctx, arg)
+}
+
 // UpdatePostCommentFlag mocks base method.
 func (m *MockStore) UpdatePostCommentFlag(ctx context.Context, arg db.UpdatePostCommentFlagParams) error {
 	m.ctrl.T.Helper()
@@ -3918,6 +3933,21 @@ func (m *MockStore) UpdatePostCommentFlag(ctx context.Context, arg db.UpdatePost
 func (mr *MockStoreMockRecorder) UpdatePostCommentFlag(ctx, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdatePostCommentFlag", reflect.TypeOf((*MockStore)(nil).UpdatePostCommentFlag), ctx, arg)
+}
+
+// UpdateReel mocks base method.
+func (m *MockStore) UpdateReel(ctx context.Context, arg db.UpdateReelParams) (db.Reel, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateReel", ctx, arg)
+	ret0, _ := ret[0].(db.Reel)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateReel indicates an expected call of UpdateReel.
+func (mr *MockStoreMockRecorder) UpdateReel(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateReel", reflect.TypeOf((*MockStore)(nil).UpdateReel), ctx, arg)
 }
 
 // UpdateReelCommentFlag mocks base method.

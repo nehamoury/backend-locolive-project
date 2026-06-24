@@ -15,6 +15,7 @@ import (
 
 	"privacy-social-backend/internal/repository/db"
 	"privacy-social-backend/internal/token"
+	"privacy-social-backend/internal/util"
 )
 
 // ─── Request / Response DTOs ────────────────────────────────────────────────
@@ -29,6 +30,7 @@ type createPostRequest struct {
 	Longitude    float64         `json:"longitude"`
 	HasLocation  bool            `json:"has_location"`
 	CropSettings json.RawMessage `json:"crop_settings"`
+	CategoryID   string          `json:"category_id"`
 }
 
 type postResponse struct {
@@ -48,6 +50,7 @@ type postResponse struct {
 	AvatarUrl     string          `json:"avatar_url,omitempty"`
 	LikedByViewer bool            `json:"liked_by_viewer"`
 	IsSaved       bool            `json:"is_saved"`
+	CategoryID    *uuid.UUID      `json:"category_id,omitempty"`
 	CropSettings  json.RawMessage `json:"crop_settings,omitempty"`
 }
 
@@ -64,7 +67,7 @@ type postCommentResponse struct {
 }
 
 func toPostResponse(p db.CreatePostRow) postResponse {
-	return postResponse{
+	rsp := postResponse{
 		ID:            p.ID,
 		UserID:        p.UserID,
 		MediaUrl:      p.MediaUrl,
@@ -78,6 +81,11 @@ func toPostResponse(p db.CreatePostRow) postResponse {
 		CreatedAt:     p.CreatedAt,
 		CropSettings:  p.CropSettings.RawMessage,
 	}
+	if p.CategoryID.Valid {
+		catID := p.CategoryID.UUID
+		rsp.CategoryID = &catID
+	}
+	return rsp
 }
 
 func toPostResponseFromList(p db.ListPostsByUserIDRow) postResponse {
@@ -168,6 +176,13 @@ func (server *Server) createPost(ctx *gin.Context) {
 		return
 	}
 
+	var catID uuid.NullUUID
+	if req.CategoryID != "" {
+		if id, err := uuid.Parse(req.CategoryID); err == nil {
+			catID = uuid.NullUUID{UUID: id, Valid: true}
+		}
+	}
+
 	post, err := server.store.CreatePost(ctx, db.CreatePostParams{
 		UserID:       authPayload.UserID,
 		MediaUrl:     req.MediaURL,
@@ -180,10 +195,29 @@ func (server *Server) createPost(ctx *gin.Context) {
 		Lat:          req.Latitude,
 		Lng:          req.Longitude,
 		CropSettings: pqtype.NullRawMessage{RawMessage: req.CropSettings, Valid: len(req.CropSettings) > 0},
+		CategoryID:   catID,
 	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
+	}
+
+	// Extract and save hashtags
+	if req.Caption != "" || req.BodyText != "" {
+		textToParse := req.Caption + " " + req.BodyText
+		tags := util.ExtractHashtags(textToParse)
+		for _, tagName := range tags {
+			hashtag, err := server.store.UpsertHashtag(ctx, db.UpsertHashtagParams{
+				Name: tagName,
+				Slug: sql.NullString{String: tagName, Valid: true},
+			})
+			if err == nil {
+				_ = server.store.AddPostHashtag(ctx, db.AddPostHashtagParams{
+					PostID:    post.ID,
+					HashtagID: hashtag.ID,
+				})
+			}
+		}
 	}
 
 	ctx.JSON(http.StatusCreated, toPostResponse(post))

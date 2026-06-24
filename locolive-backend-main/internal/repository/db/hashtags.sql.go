@@ -13,6 +13,22 @@ import (
 	"github.com/google/uuid"
 )
 
+const addPostHashtag = `-- name: AddPostHashtag :exec
+INSERT INTO post_hashtags (post_id, hashtag_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING
+`
+
+type AddPostHashtagParams struct {
+	PostID    uuid.UUID `json:"post_id"`
+	HashtagID uuid.UUID `json:"hashtag_id"`
+}
+
+func (q *Queries) AddPostHashtag(ctx context.Context, arg AddPostHashtagParams) error {
+	_, err := q.db.ExecContext(ctx, addPostHashtag, arg.PostID, arg.HashtagID)
+	return err
+}
+
 const addReelHashtag = `-- name: AddReelHashtag :exec
 INSERT INTO reel_hashtags (reel_id, hashtag_id)
 VALUES ($1, $2)
@@ -30,7 +46,7 @@ func (q *Queries) AddReelHashtag(ctx context.Context, arg AddReelHashtagParams) 
 }
 
 const getTrendingHashtags = `-- name: GetTrendingHashtags :many
-SELECT id, name, usage_count, reels_count, last_used_at, created_at FROM hashtags
+SELECT id, name, usage_count, reels_count, last_used_at, created_at, slug FROM hashtags
 ORDER BY 
     (usage_count + 
      (CASE WHEN last_used_at >= now() - interval '24 hours' THEN 3 ELSE 0 END) +
@@ -55,6 +71,7 @@ func (q *Queries) GetTrendingHashtags(ctx context.Context, limit int32) ([]Hasht
 			&i.ReelsCount,
 			&i.LastUsedAt,
 			&i.CreatedAt,
+			&i.Slug,
 		); err != nil {
 			return nil, err
 		}
@@ -71,7 +88,7 @@ func (q *Queries) GetTrendingHashtags(ctx context.Context, limit int32) ([]Hasht
 
 const listReelsByHashtag = `-- name: ListReelsByHashtag :many
 SELECT 
-    r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash,
+    r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.category_id,
     COALESCE(ST_Y(r.geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(r.geom::geometry)::float8, 0.0)::float8 AS lng,
     r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
     u.username, u.avatar_url,
@@ -102,6 +119,7 @@ type ListReelsByHashtagRow struct {
 	IsAiGenerated    bool           `json:"is_ai_generated"`
 	LocationName     sql.NullString `json:"location_name"`
 	Geohash          sql.NullString `json:"geohash"`
+	CategoryID       uuid.NullUUID  `json:"category_id"`
 	Lat              float64        `json:"lat"`
 	Lng              float64        `json:"lng"`
 	LikesCount       int32          `json:"likes_count"`
@@ -139,6 +157,7 @@ func (q *Queries) ListReelsByHashtag(ctx context.Context, arg ListReelsByHashtag
 			&i.IsAiGenerated,
 			&i.LocationName,
 			&i.Geohash,
+			&i.CategoryID,
 			&i.Lat,
 			&i.Lng,
 			&i.LikesCount,
@@ -167,7 +186,7 @@ func (q *Queries) ListReelsByHashtag(ctx context.Context, arg ListReelsByHashtag
 }
 
 const searchHashtags = `-- name: SearchHashtags :many
-SELECT id, name, usage_count, reels_count, last_used_at, created_at FROM hashtags
+SELECT id, name, usage_count, reels_count, last_used_at, created_at, slug FROM hashtags
 WHERE name ILIKE $1 || '%'
 ORDER BY usage_count DESC, last_used_at DESC
 LIMIT $2
@@ -194,6 +213,7 @@ func (q *Queries) SearchHashtags(ctx context.Context, arg SearchHashtagsParams) 
 			&i.ReelsCount,
 			&i.LastUsedAt,
 			&i.CreatedAt,
+			&i.Slug,
 		); err != nil {
 			return nil, err
 		}
@@ -209,17 +229,22 @@ func (q *Queries) SearchHashtags(ctx context.Context, arg SearchHashtagsParams) 
 }
 
 const upsertHashtag = `-- name: UpsertHashtag :one
-INSERT INTO hashtags (name, usage_count, reels_count, last_used_at)
-VALUES ($1, 1, 1, now())
+INSERT INTO hashtags (name, slug, usage_count, reels_count, last_used_at)
+VALUES ($1, $2, 1, 1, now())
 ON CONFLICT (name) DO UPDATE 
 SET usage_count = hashtags.usage_count + 1,
     reels_count = hashtags.reels_count + 1,
     last_used_at = now()
-RETURNING id, name, usage_count, reels_count, last_used_at, created_at
+RETURNING id, name, usage_count, reels_count, last_used_at, created_at, slug
 `
 
-func (q *Queries) UpsertHashtag(ctx context.Context, name string) (Hashtag, error) {
-	row := q.db.QueryRowContext(ctx, upsertHashtag, name)
+type UpsertHashtagParams struct {
+	Name string         `json:"name"`
+	Slug sql.NullString `json:"slug"`
+}
+
+func (q *Queries) UpsertHashtag(ctx context.Context, arg UpsertHashtagParams) (Hashtag, error) {
+	row := q.db.QueryRowContext(ctx, upsertHashtag, arg.Name, arg.Slug)
 	var i Hashtag
 	err := row.Scan(
 		&i.ID,
@@ -228,6 +253,7 @@ func (q *Queries) UpsertHashtag(ctx context.Context, name string) (Hashtag, erro
 		&i.ReelsCount,
 		&i.LastUsedAt,
 		&i.CreatedAt,
+		&i.Slug,
 	)
 	return i, err
 }

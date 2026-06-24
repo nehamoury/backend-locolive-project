@@ -1,21 +1,21 @@
 -- name: CreateReel :one
 INSERT INTO reels (
-    user_id, video_url, caption, is_ai_generated, location_name, geohash, geom
+    user_id, video_url, caption, is_ai_generated, location_name, geohash, geom, category_id
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7
-) RETURNING id, user_id, video_url, caption, is_ai_generated, location_name, geohash, 
+    $1, $2, $3, $4, $5, $6, $7, $8
+) RETURNING id, user_id, video_url, caption, is_ai_generated, location_name, geohash, category_id,
     COALESCE(ST_Y(geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(geom::geometry)::float8, 0.0)::float8 AS lng,
     likes_count, comments_count, shares_count, saves_count, created_at, updated_at;
 
 -- name: GetReel :one
-SELECT id, user_id, video_url, caption, is_ai_generated, location_name, geohash, 
+SELECT id, user_id, video_url, caption, is_ai_generated, location_name, geohash, category_id,
     COALESCE(ST_Y(geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(geom::geometry)::float8, 0.0)::float8 AS lng,
     likes_count, comments_count, shares_count, saves_count, created_at, updated_at 
 FROM reels WHERE id = $1 LIMIT 1;
 
 -- name: ListReelsFeed :many
 SELECT 
-    r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash,
+    r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.category_id,
     COALESCE(ST_Y(r.geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(r.geom::geometry)::float8, 0.0)::float8 AS lng,
     r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
     u.username,
@@ -30,7 +30,7 @@ LIMIT $2 OFFSET $3;
 
 -- name: ListNearbyReels :many
 SELECT 
-    r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash,
+    r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.category_id,
     COALESCE(ST_Y(r.geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(r.geom::geometry)::float8, 0.0)::float8 AS lng,
     r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
     u.username,
@@ -47,7 +47,7 @@ LIMIT $1 OFFSET $2;
 
 -- name: ListUserReels :many
 SELECT 
-    r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash,
+    r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.category_id,
     COALESCE(ST_Y(r.geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(r.geom::geometry)::float8, 0.0)::float8 AS lng,
     r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
     u.username,
@@ -157,7 +157,7 @@ DELETE FROM reels WHERE id = $1;
 
 -- name: ListSavedReels :many
 SELECT 
-    r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash,
+    r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.category_id,
     COALESCE(ST_Y(r.geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(r.geom::geometry)::float8, 0.0)::float8 AS lng,
     r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
     u.username,
@@ -186,7 +186,7 @@ SELECT COUNT(*) FROM reel_saves WHERE user_id = sqlc.arg(user_id);
 
 -- name: ListAllReelsAdmin :many
 SELECT 
-    r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash,
+    r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.category_id,
     r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
     u.username, u.avatar_url
 FROM reels r

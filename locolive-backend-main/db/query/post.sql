@@ -1,5 +1,5 @@
 -- name: CreatePost :one
-INSERT INTO posts (user_id, media_url, media_type, caption, body_text, location_name, geohash, geom, crop_settings)
+INSERT INTO posts (user_id, media_url, media_type, caption, body_text, location_name, geohash, geom, crop_settings, category_id)
 VALUES (
     sqlc.arg(user_id), sqlc.arg(media_url), sqlc.arg(media_type),
     sqlc.narg(caption), sqlc.narg(body_text), sqlc.narg(location_name), sqlc.narg(geohash),
@@ -7,14 +7,15 @@ VALUES (
     CASE WHEN sqlc.arg(has_location)::boolean
          THEN ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float8, sqlc.arg(lat)::float8), 4326)
          ELSE NULL END,
-    sqlc.narg(crop_settings)
+    sqlc.narg(crop_settings),
+    sqlc.narg(category_id)
 )
 RETURNING *,
     CASE WHEN geom IS NOT NULL THEN ST_Y(geom::geometry) ELSE NULL END as lat_out,
     CASE WHEN geom IS NOT NULL THEN ST_X(geom::geometry) ELSE NULL END as lng_out;
 
 -- name: ListPostsByUserID :many
-SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings,
+SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings, p.category_id,
        p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
 
        u.username, u.full_name, u.avatar_url,
@@ -30,7 +31,7 @@ LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
 
 -- name: ListConnectionsPosts :many
 -- Get posts from connections AND own posts AND nearby discovery (public posts)
-SELECT DISTINCT ON (p.id) p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings,
+SELECT DISTINCT ON (p.id) p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings, p.category_id,
        p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
        u.username, u.full_name, u.avatar_url,
        CASE WHEN p.geom IS NOT NULL THEN ST_Y(p.geom::geometry) ELSE NULL END as lat_out,
@@ -160,7 +161,7 @@ WHERE p.id = d.post_id
 RETURNING p.saves_count;
 
 -- name: ListSavedPosts :many
-SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings,
+SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings, p.category_id,
        p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
        u.username, u.full_name, u.avatar_url,
        TRUE as is_saved,
@@ -177,7 +178,7 @@ SELECT COUNT(*) FROM post_saves WHERE user_id = sqlc.arg(user_id);
 
 -- name: ListAllPostsAdmin :many
 SELECT 
-    p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name,
+    p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.category_id,
     p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
     u.username, u.avatar_url
 FROM posts p

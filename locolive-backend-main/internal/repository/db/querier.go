@@ -13,6 +13,7 @@ import (
 
 type Querier interface {
 	AddGroupMember(ctx context.Context, arg AddGroupMemberParams) (GroupMember, error)
+	AddPostHashtag(ctx context.Context, arg AddPostHashtagParams) error
 	AddReelHashtag(ctx context.Context, arg AddReelHashtagParams) error
 	// Add a new reserved username (admin only)
 	AddReservedUsername(ctx context.Context, arg AddReservedUsernameParams) error
@@ -53,6 +54,7 @@ type Querier interface {
 	CountUsers(ctx context.Context) (int64, error)
 	CreateActivityLog(ctx context.Context, arg CreateActivityLogParams) (ActivityLog, error)
 	CreateBadge(ctx context.Context, arg CreateBadgeParams) (Badge, error)
+	CreateCategory(ctx context.Context, arg CreateCategoryParams) (Category, error)
 	CreateConnectionRequest(ctx context.Context, arg CreateConnectionRequestParams) (Connection, error)
 	CreateCrossing(ctx context.Context, arg CreateCrossingParams) (Crossing, error)
 	CreateDataExportJob(ctx context.Context, userID uuid.UUID) (DataExportJob, error)
@@ -89,6 +91,7 @@ type Querier interface {
 	// Used for panic mode - deletes all user data
 	DeleteAllUserData(ctx context.Context, id uuid.UUID) error
 	DeleteArchivedStory(ctx context.Context, arg DeleteArchivedStoryParams) error
+	DeleteCategory(ctx context.Context, id uuid.UUID) error
 	DeleteConnection(ctx context.Context, arg DeleteConnectionParams) error
 	DeleteConnectionRequestNotifications(ctx context.Context, arg DeleteConnectionRequestNotificationsParams) error
 	DeleteConversation(ctx context.Context, arg DeleteConversationParams) error
@@ -130,6 +133,8 @@ type Querier interface {
 	GetBadge(ctx context.Context, id string) (Badge, error)
 	GetBlockedUsers(ctx context.Context, blockerID uuid.UUID) ([]GetBlockedUsersRow, error)
 	GetBlocksForUser(ctx context.Context, blockerID uuid.UUID) ([]GetBlocksForUserRow, error)
+	GetCategory(ctx context.Context, id uuid.UUID) (Category, error)
+	GetCategoryBySlug(ctx context.Context, slug string) (Category, error)
 	GetConnection(ctx context.Context, arg GetConnectionParams) (Connection, error)
 	GetConnectionSpecific(ctx context.Context, arg GetConnectionSpecificParams) (Connection, error)
 	// Get stories from connected users (not limited by radius)
@@ -218,6 +223,7 @@ type Querier interface {
 	// Get username change history for a user
 	GetUsernameHistory(ctx context.Context, userID uuid.UUID) ([]UsernameHistory, error)
 	HasValidStory(ctx context.Context, userID uuid.UUID) (bool, error)
+	IncrementCategoryStats(ctx context.Context, arg IncrementCategoryStatsParams) error
 	IncrementDailyStats(ctx context.Context, arg IncrementDailyStatsParams) (DailyStat, error)
 	IncrementPostComments(ctx context.Context, id uuid.UUID) error
 	IncrementPostShares(ctx context.Context, id uuid.UUID) error
@@ -241,6 +247,7 @@ type Querier interface {
 	ListAllReelsAdmin(ctx context.Context, arg ListAllReelsAdminParams) ([]ListAllReelsAdminRow, error)
 	// Admin: List all stories
 	ListAllStories(ctx context.Context, arg ListAllStoriesParams) ([]ListAllStoriesRow, error)
+	ListCategories(ctx context.Context) ([]Category, error)
 	ListConnections(ctx context.Context, requesterID uuid.UUID) ([]ListConnectionsRow, error)
 	// Get posts from connections AND own posts AND nearby discovery (public posts)
 	ListConnectionsPosts(ctx context.Context, arg ListConnectionsPostsParams) ([]ListConnectionsPostsRow, error)
@@ -263,6 +270,7 @@ type Querier interface {
 	ListSavedPosts(ctx context.Context, arg ListSavedPostsParams) ([]ListSavedPostsRow, error)
 	ListSavedReels(ctx context.Context, arg ListSavedReelsParams) ([]ListSavedReelsRow, error)
 	ListSentConnectionRequests(ctx context.Context, requesterID uuid.UUID) ([]ListSentConnectionRequestsRow, error)
+	ListTrendingCategories(ctx context.Context, arg ListTrendingCategoriesParams) ([]ListTrendingCategoriesRow, error)
 	ListUserReels(ctx context.Context, arg ListUserReelsParams) ([]ListUserReelsRow, error)
 	// Admin Queries
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
@@ -301,6 +309,7 @@ type Querier interface {
 	UnsavePostAtomic(ctx context.Context, arg UnsavePostAtomicParams) (int32, error)
 	UnsaveReelAtomic(ctx context.Context, arg UnsaveReelAtomicParams) (int32, error)
 	UpdateAccountPrivacy(ctx context.Context, arg UpdateAccountPrivacyParams) (User, error)
+	UpdateCategory(ctx context.Context, arg UpdateCategoryParams) (Category, error)
 	UpdateConnectionStatus(ctx context.Context, arg UpdateConnectionStatusParams) (Connection, error)
 	UpdateDataExportJob(ctx context.Context, arg UpdateDataExportJobParams) (DataExportJob, error)
 	UpdateHighlightCover(ctx context.Context, arg UpdateHighlightCoverParams) (HighlightGroup, error)
@@ -327,7 +336,7 @@ type Querier interface {
 	// Update user username with history tracking
 	// Note: This should be called within a transaction that also records history
 	UpdateUsername(ctx context.Context, arg UpdateUsernameParams) (User, error)
-	UpsertHashtag(ctx context.Context, name string) (Hashtag, error)
+	UpsertHashtag(ctx context.Context, arg UpsertHashtagParams) (Hashtag, error)
 	UpsertNotificationSettings(ctx context.Context, arg UpsertNotificationSettingsParams) (NotificationSetting, error)
 	UpsertPrivacySettings(ctx context.Context, arg UpsertPrivacySettingsParams) (PrivacySetting, error)
 	UpsertUserPreferences(ctx context.Context, arg UpsertUserPreferencesParams) (UserPreference, error)

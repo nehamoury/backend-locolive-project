@@ -127,8 +127,15 @@ func (server *Server) getStoryViewers(ctx *gin.Context) {
 		return
 	}
 
-	// Viewers are now filtered by the SQL query to exclude the owner
-	ctx.JSON(http.StatusOK, viewers)
+	if viewers == nil {
+		// Initialize empty array if no viewers to ensure JSON returns [] instead of null
+		viewers = []db.GetStoryViewersRow{}
+	}
+
+	ctx.JSON(http.StatusOK, gin.H{
+		"count":   len(viewers),
+		"viewers": viewers,
+	})
 }
 
 type createReactionRequest struct {

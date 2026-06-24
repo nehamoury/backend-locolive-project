@@ -4,7 +4,6 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
-	"regexp"
 	"strconv"
 	"time"
 
@@ -13,9 +12,8 @@ import (
 
 	"privacy-social-backend/internal/repository/db"
 	"privacy-social-backend/internal/token"
+	"privacy-social-backend/internal/util"
 )
-
-var hashtagRegex = regexp.MustCompile(`#([a-zA-Z0-9_]+)`)
 
 // ─── Request / Response DTOs ──────────────────────────────────────────────────
 
@@ -298,17 +296,17 @@ func (server *Server) createReel(ctx *gin.Context) {
 
 	// Extract and save hashtags
 	if req.Caption != "" {
-		matches := hashtagRegex.FindAllStringSubmatch(req.Caption, -1)
-		for _, match := range matches {
-			if len(match) > 1 {
-				tagName := match[1]
-				hashtag, err := server.store.UpsertHashtag(ctx, tagName)
-				if err == nil {
-					_ = server.store.AddReelHashtag(ctx, db.AddReelHashtagParams{
-						ReelID:    reel.ID,
-						HashtagID: hashtag.ID,
-					})
-				}
+		tags := util.ExtractHashtags(req.Caption)
+		for _, tagName := range tags {
+			hashtag, err := server.store.UpsertHashtag(ctx, db.UpsertHashtagParams{
+				Name: tagName,
+				Slug: sql.NullString{String: tagName, Valid: true},
+			})
+			if err == nil {
+				_ = server.store.AddReelHashtag(ctx, db.AddReelHashtagParams{
+					ReelID:    reel.ID,
+					HashtagID: hashtag.ID,
+				})
 			}
 		}
 	}

@@ -1,6 +1,6 @@
 -- name: UpsertHashtag :one
-INSERT INTO hashtags (name, usage_count, reels_count, last_used_at)
-VALUES ($1, 1, 1, now())
+INSERT INTO hashtags (name, slug, usage_count, reels_count, last_used_at)
+VALUES ($1, $2, 1, 1, now())
 ON CONFLICT (name) DO UPDATE 
 SET usage_count = hashtags.usage_count + 1,
     reels_count = hashtags.reels_count + 1,
@@ -9,6 +9,11 @@ RETURNING *;
 
 -- name: AddReelHashtag :exec
 INSERT INTO reel_hashtags (reel_id, hashtag_id)
+VALUES ($1, $2)
+ON CONFLICT DO NOTHING;
+
+-- name: AddPostHashtag :exec
+INSERT INTO post_hashtags (post_id, hashtag_id)
 VALUES ($1, $2)
 ON CONFLICT DO NOTHING;
 
@@ -29,7 +34,7 @@ LIMIT $1;
 
 -- name: ListReelsByHashtag :many
 SELECT 
-    r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash,
+    r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.category_id,
     COALESCE(ST_Y(r.geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(r.geom::geometry)::float8, 0.0)::float8 AS lng,
     r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
     u.username, u.avatar_url,

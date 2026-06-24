@@ -266,6 +266,10 @@ func (server *Server) setupRouter() {
 	activeRoutes.GET("/hashtags/search", server.searchHashtags)
 	activeRoutes.GET("/hashtags/:name/reels", server.getReelsByHashtag)
 
+	// Categories
+	activeRoutes.GET("/categories", server.listCategories)
+	activeRoutes.GET("/categories/trending", server.listTrendingCategories)
+
 	// Highlights
 	activeRoutes.POST("/highlights", server.createHighlight)
 	activeRoutes.GET("/highlights/me", server.getMyHighlights)
@@ -319,6 +323,12 @@ func (server *Server) setupRouter() {
 
 	// H. System Monitor
 	adminRoutes.GET("/system", server.getSystemMonitor)
+
+	// I. Categories Management
+	adminRoutes.GET("/categories", server.adminListCategories)
+	adminRoutes.POST("/categories", server.adminCreateCategory)
+	adminRoutes.PATCH("/categories/:id", server.adminUpdateCategory)
+	adminRoutes.DELETE("/categories/:id", server.adminDeleteCategory)
 
 	// Existing Admin Tools (Keep or adapt)
 	adminRoutes.GET("/activity", server.activityWebSocket)

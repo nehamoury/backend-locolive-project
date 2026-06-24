@@ -69,10 +69,10 @@ func (q *Queries) CountSavedReels(ctx context.Context, userID uuid.UUID) (int64,
 
 const createReel = `-- name: CreateReel :one
 INSERT INTO reels (
-    user_id, video_url, caption, is_ai_generated, location_name, geohash, geom
+    user_id, video_url, caption, is_ai_generated, location_name, geohash, geom, category_id
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7
-) RETURNING id, user_id, video_url, caption, is_ai_generated, location_name, geohash, 
+    $1, $2, $3, $4, $5, $6, $7, $8
+) RETURNING id, user_id, video_url, caption, is_ai_generated, location_name, geohash, category_id,
     COALESCE(ST_Y(geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(geom::geometry)::float8, 0.0)::float8 AS lng,
     likes_count, comments_count, shares_count, saves_count, created_at, updated_at
 `
@@ -85,6 +85,7 @@ type CreateReelParams struct {
 	LocationName  sql.NullString `json:"location_name"`
 	Geohash       sql.NullString `json:"geohash"`
 	Geom          interface{}    `json:"geom"`
+	CategoryID    uuid.NullUUID  `json:"category_id"`
 }
 
 type CreateReelRow struct {
@@ -95,6 +96,7 @@ type CreateReelRow struct {
 	IsAiGenerated bool           `json:"is_ai_generated"`
 	LocationName  sql.NullString `json:"location_name"`
 	Geohash       sql.NullString `json:"geohash"`
+	CategoryID    uuid.NullUUID  `json:"category_id"`
 	Lat           float64        `json:"lat"`
 	Lng           float64        `json:"lng"`
 	LikesCount    int32          `json:"likes_count"`
@@ -114,6 +116,7 @@ func (q *Queries) CreateReel(ctx context.Context, arg CreateReelParams) (CreateR
 		arg.LocationName,
 		arg.Geohash,
 		arg.Geom,
+		arg.CategoryID,
 	)
 	var i CreateReelRow
 	err := row.Scan(
@@ -124,6 +127,7 @@ func (q *Queries) CreateReel(ctx context.Context, arg CreateReelParams) (CreateR
 		&i.IsAiGenerated,
 		&i.LocationName,
 		&i.Geohash,
+		&i.CategoryID,
 		&i.Lat,
 		&i.Lng,
 		&i.LikesCount,
@@ -209,7 +213,7 @@ func (q *Queries) DeleteReelComment(ctx context.Context, arg DeleteReelCommentPa
 }
 
 const getReel = `-- name: GetReel :one
-SELECT id, user_id, video_url, caption, is_ai_generated, location_name, geohash, 
+SELECT id, user_id, video_url, caption, is_ai_generated, location_name, geohash, category_id,
     COALESCE(ST_Y(geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(geom::geometry)::float8, 0.0)::float8 AS lng,
     likes_count, comments_count, shares_count, saves_count, created_at, updated_at 
 FROM reels WHERE id = $1 LIMIT 1
@@ -223,6 +227,7 @@ type GetReelRow struct {
 	IsAiGenerated bool           `json:"is_ai_generated"`
 	LocationName  sql.NullString `json:"location_name"`
 	Geohash       sql.NullString `json:"geohash"`
+	CategoryID    uuid.NullUUID  `json:"category_id"`
 	Lat           float64        `json:"lat"`
 	Lng           float64        `json:"lng"`
 	LikesCount    int32          `json:"likes_count"`
@@ -244,6 +249,7 @@ func (q *Queries) GetReel(ctx context.Context, id uuid.UUID) (GetReelRow, error)
 		&i.IsAiGenerated,
 		&i.LocationName,
 		&i.Geohash,
+		&i.CategoryID,
 		&i.Lat,
 		&i.Lng,
 		&i.LikesCount,
@@ -331,7 +337,7 @@ func (q *Queries) LikeReelAtomic(ctx context.Context, arg LikeReelAtomicParams) 
 
 const listAllReelsAdmin = `-- name: ListAllReelsAdmin :many
 SELECT 
-    r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash,
+    r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.category_id,
     r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
     u.username, u.avatar_url
 FROM reels r
@@ -353,6 +359,7 @@ type ListAllReelsAdminRow struct {
 	IsAiGenerated bool           `json:"is_ai_generated"`
 	LocationName  sql.NullString `json:"location_name"`
 	Geohash       sql.NullString `json:"geohash"`
+	CategoryID    uuid.NullUUID  `json:"category_id"`
 	LikesCount    int32          `json:"likes_count"`
 	CommentsCount int32          `json:"comments_count"`
 	SharesCount   int32          `json:"shares_count"`
@@ -380,6 +387,7 @@ func (q *Queries) ListAllReelsAdmin(ctx context.Context, arg ListAllReelsAdminPa
 			&i.IsAiGenerated,
 			&i.LocationName,
 			&i.Geohash,
+			&i.CategoryID,
 			&i.LikesCount,
 			&i.CommentsCount,
 			&i.SharesCount,
@@ -403,7 +411,7 @@ func (q *Queries) ListAllReelsAdmin(ctx context.Context, arg ListAllReelsAdminPa
 }
 
 const listLikedReelsByUserID = `-- name: ListLikedReelsByUserID :many
-SELECT r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.geom, r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at FROM reels r
+SELECT r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.geom, r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at, r.category_id FROM reels r
 JOIN reel_likes rl ON r.id = rl.reel_id
 WHERE rl.user_id = $1
 ORDER BY rl.created_at DESC
@@ -433,6 +441,7 @@ func (q *Queries) ListLikedReelsByUserID(ctx context.Context, userID uuid.UUID) 
 			&i.SavesCount,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.CategoryID,
 		); err != nil {
 			return nil, err
 		}
@@ -449,7 +458,7 @@ func (q *Queries) ListLikedReelsByUserID(ctx context.Context, userID uuid.UUID) 
 
 const listNearbyReels = `-- name: ListNearbyReels :many
 SELECT 
-    r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash,
+    r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.category_id,
     COALESCE(ST_Y(r.geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(r.geom::geometry)::float8, 0.0)::float8 AS lng,
     r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
     u.username,
@@ -482,6 +491,7 @@ type ListNearbyReelsRow struct {
 	IsAiGenerated    bool           `json:"is_ai_generated"`
 	LocationName     sql.NullString `json:"location_name"`
 	Geohash          sql.NullString `json:"geohash"`
+	CategoryID       uuid.NullUUID  `json:"category_id"`
 	Lat              float64        `json:"lat"`
 	Lng              float64        `json:"lng"`
 	LikesCount       int32          `json:"likes_count"`
@@ -522,6 +532,7 @@ func (q *Queries) ListNearbyReels(ctx context.Context, arg ListNearbyReelsParams
 			&i.IsAiGenerated,
 			&i.LocationName,
 			&i.Geohash,
+			&i.CategoryID,
 			&i.Lat,
 			&i.Lng,
 			&i.LikesCount,
@@ -606,7 +617,7 @@ func (q *Queries) ListReelComments(ctx context.Context, reelID uuid.UUID) ([]Lis
 
 const listReelsFeed = `-- name: ListReelsFeed :many
 SELECT 
-    r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash,
+    r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.category_id,
     COALESCE(ST_Y(r.geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(r.geom::geometry)::float8, 0.0)::float8 AS lng,
     r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
     u.username,
@@ -634,6 +645,7 @@ type ListReelsFeedRow struct {
 	IsAiGenerated    bool           `json:"is_ai_generated"`
 	LocationName     sql.NullString `json:"location_name"`
 	Geohash          sql.NullString `json:"geohash"`
+	CategoryID       uuid.NullUUID  `json:"category_id"`
 	Lat              float64        `json:"lat"`
 	Lng              float64        `json:"lng"`
 	LikesCount       int32          `json:"likes_count"`
@@ -666,6 +678,7 @@ func (q *Queries) ListReelsFeed(ctx context.Context, arg ListReelsFeedParams) ([
 			&i.IsAiGenerated,
 			&i.LocationName,
 			&i.Geohash,
+			&i.CategoryID,
 			&i.Lat,
 			&i.Lng,
 			&i.LikesCount,
@@ -695,7 +708,7 @@ func (q *Queries) ListReelsFeed(ctx context.Context, arg ListReelsFeedParams) ([
 
 const listSavedReels = `-- name: ListSavedReels :many
 SELECT 
-    r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash,
+    r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.category_id,
     COALESCE(ST_Y(r.geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(r.geom::geometry)::float8, 0.0)::float8 AS lng,
     r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
     u.username,
@@ -725,6 +738,7 @@ type ListSavedReelsRow struct {
 	IsAiGenerated    bool           `json:"is_ai_generated"`
 	LocationName     sql.NullString `json:"location_name"`
 	Geohash          sql.NullString `json:"geohash"`
+	CategoryID       uuid.NullUUID  `json:"category_id"`
 	Lat              float64        `json:"lat"`
 	Lng              float64        `json:"lng"`
 	LikesCount       int32          `json:"likes_count"`
@@ -757,6 +771,7 @@ func (q *Queries) ListSavedReels(ctx context.Context, arg ListSavedReelsParams) 
 			&i.IsAiGenerated,
 			&i.LocationName,
 			&i.Geohash,
+			&i.CategoryID,
 			&i.Lat,
 			&i.Lng,
 			&i.LikesCount,
@@ -786,7 +801,7 @@ func (q *Queries) ListSavedReels(ctx context.Context, arg ListSavedReelsParams) 
 
 const listUserReels = `-- name: ListUserReels :many
 SELECT 
-    r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash,
+    r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.category_id,
     COALESCE(ST_Y(r.geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(r.geom::geometry)::float8, 0.0)::float8 AS lng,
     r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
     u.username,
@@ -816,6 +831,7 @@ type ListUserReelsRow struct {
 	IsAiGenerated    bool           `json:"is_ai_generated"`
 	LocationName     sql.NullString `json:"location_name"`
 	Geohash          sql.NullString `json:"geohash"`
+	CategoryID       uuid.NullUUID  `json:"category_id"`
 	Lat              float64        `json:"lat"`
 	Lng              float64        `json:"lng"`
 	LikesCount       int32          `json:"likes_count"`
@@ -853,6 +869,7 @@ func (q *Queries) ListUserReels(ctx context.Context, arg ListUserReelsParams) ([
 			&i.IsAiGenerated,
 			&i.LocationName,
 			&i.Geohash,
+			&i.CategoryID,
 			&i.Lat,
 			&i.Lng,
 			&i.LikesCount,
@@ -957,7 +974,7 @@ func (q *Queries) UnsaveReelAtomic(ctx context.Context, arg UnsaveReelAtomicPara
 }
 
 const updateReel = `-- name: UpdateReel :one
-UPDATE reels SET caption = $1, updated_at = now() WHERE id = $2 AND user_id = $3 RETURNING id, user_id, video_url, caption, is_ai_generated, location_name, geohash, geom, likes_count, comments_count, shares_count, saves_count, created_at, updated_at
+UPDATE reels SET caption = $1, updated_at = now() WHERE id = $2 AND user_id = $3 RETURNING id, user_id, video_url, caption, is_ai_generated, location_name, geohash, geom, likes_count, comments_count, shares_count, saves_count, created_at, updated_at, category_id
 `
 
 type UpdateReelParams struct {
@@ -984,6 +1001,7 @@ func (q *Queries) UpdateReel(ctx context.Context, arg UpdateReelParams) (Reel, e
 		&i.SavesCount,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.CategoryID,
 	)
 	return i, err
 }

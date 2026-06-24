@@ -292,6 +292,24 @@ type BlockedUser struct {
 	CreatedAt sql.NullTime `json:"created_at"`
 }
 
+type Category struct {
+	ID        uuid.UUID      `json:"id"`
+	Name      string         `json:"name"`
+	Slug      string         `json:"slug"`
+	Icon      sql.NullString `json:"icon"`
+	Color     sql.NullString `json:"color"`
+	IsActive  bool           `json:"is_active"`
+	CreatedAt time.Time      `json:"created_at"`
+}
+
+type CategoryStat struct {
+	CategoryID   uuid.UUID `json:"category_id"`
+	PostsCount   int32     `json:"posts_count"`
+	ReelsCount   int32     `json:"reels_count"`
+	StoriesCount int32     `json:"stories_count"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
 type Connection struct {
 	RequesterID uuid.UUID        `json:"requester_id"`
 	TargetID    uuid.UUID        `json:"target_id"`
@@ -365,12 +383,13 @@ type GroupMember struct {
 }
 
 type Hashtag struct {
-	ID         uuid.UUID `json:"id"`
-	Name       string    `json:"name"`
-	UsageCount int32     `json:"usage_count"`
-	ReelsCount int32     `json:"reels_count"`
-	LastUsedAt time.Time `json:"last_used_at"`
-	CreatedAt  time.Time `json:"created_at"`
+	ID         uuid.UUID      `json:"id"`
+	Name       string         `json:"name"`
+	UsageCount int32          `json:"usage_count"`
+	ReelsCount int32          `json:"reels_count"`
+	LastUsedAt time.Time      `json:"last_used_at"`
+	CreatedAt  time.Time      `json:"created_at"`
+	Slug       sql.NullString `json:"slug"`
 }
 
 type HighlightGroup struct {
@@ -499,6 +518,7 @@ type Post struct {
 	SharesCount   int32                 `json:"shares_count"`
 	CropSettings  pqtype.NullRawMessage `json:"crop_settings"`
 	SavesCount    int32                 `json:"saves_count"`
+	CategoryID    uuid.NullUUID         `json:"category_id"`
 }
 
 type PostComment struct {
@@ -508,6 +528,11 @@ type PostComment struct {
 	Content   string    `json:"content"`
 	CreatedAt time.Time `json:"created_at"`
 	IsFlagged bool      `json:"is_flagged"`
+}
+
+type PostHashtag struct {
+	PostID    uuid.UUID `json:"post_id"`
+	HashtagID uuid.UUID `json:"hashtag_id"`
 }
 
 type PostLike struct {
@@ -563,6 +588,7 @@ type Reel struct {
 	SavesCount    int32          `json:"saves_count"`
 	CreatedAt     time.Time      `json:"created_at"`
 	UpdatedAt     time.Time      `json:"updated_at"`
+	CategoryID    uuid.NullUUID  `json:"category_id"`
 }
 
 type ReelComment struct {

@@ -191,3 +191,23 @@ SELECT COUNT(*) FROM posts;
 
 -- name: UpdatePost :one
 UPDATE posts SET caption = sqlc.arg(caption), updated_at = now() WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id) RETURNING *;
+
+-- name: ListNearbyTrendingPosts :many
+SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings, p.category_id,
+       p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
+       u.username, u.full_name, u.avatar_url,
+       ST_Distance(p.geom, ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float, sqlc.arg(lat)::float), 4326)::geography) AS distance_meters,
+       CASE WHEN p.geom IS NOT NULL THEN ST_Y(p.geom::geometry) ELSE NULL END as lat_out,
+       CASE WHEN p.geom IS NOT NULL THEN ST_X(p.geom::geometry) ELSE NULL END as lng_out,
+       EXISTS(SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = sqlc.arg(viewer_id)) as liked_by_viewer,
+       EXISTS(SELECT 1 FROM post_saves ps WHERE ps.post_id = p.id AND ps.user_id = sqlc.arg(viewer_id)) as is_saved
+FROM posts p
+JOIN users u ON p.user_id = u.id
+WHERE p.geom IS NOT NULL
+  AND ST_DWithin(p.geom, ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float, sqlc.arg(lat)::float), 4326)::geography, sqlc.arg(radius_km)::float * 1000)
+ORDER BY 
+    ((p.likes_count * 1) + (p.comments_count * 2) + (p.shares_count * 3) +
+     (CASE WHEN p.created_at >= now() - interval '24 hours' THEN 10 ELSE 0 END) +
+     (CASE WHEN p.created_at >= now() - interval '7 days' THEN 5 ELSE 0 END)) DESC,
+    p.created_at DESC
+LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);

@@ -1924,6 +1924,21 @@ func (mr *MockStoreMockRecorder) GetGroupMessages(ctx, groupID any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetGroupMessages", reflect.TypeOf((*MockStore)(nil).GetGroupMessages), ctx, groupID)
 }
 
+// GetHashtagByName mocks base method.
+func (m *MockStore) GetHashtagByName(ctx context.Context, name string) (db.Hashtag, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetHashtagByName", ctx, name)
+	ret0, _ := ret[0].(db.Hashtag)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetHashtagByName indicates an expected call of GetHashtagByName.
+func (mr *MockStoreMockRecorder) GetHashtagByName(ctx, name any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHashtagByName", reflect.TypeOf((*MockStore)(nil).GetHashtagByName), ctx, name)
+}
+
 // GetHeatmapByBounds mocks base method.
 func (m *MockStore) GetHeatmapByBounds(ctx context.Context, arg db.GetHeatmapByBoundsParams) ([]db.GetHeatmapByBoundsRow, error) {
 	m.ctrl.T.Helper()
@@ -3268,6 +3283,21 @@ func (mr *MockStoreMockRecorder) ListNearbyReels(ctx, arg any) *gomock.Call {
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListNearbyReels", reflect.TypeOf((*MockStore)(nil).ListNearbyReels), ctx, arg)
 }
 
+// ListNearbyTrendingPosts mocks base method.
+func (m *MockStore) ListNearbyTrendingPosts(ctx context.Context, arg db.ListNearbyTrendingPostsParams) ([]db.ListNearbyTrendingPostsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListNearbyTrendingPosts", ctx, arg)
+	ret0, _ := ret[0].([]db.ListNearbyTrendingPostsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListNearbyTrendingPosts indicates an expected call of ListNearbyTrendingPosts.
+func (mr *MockStoreMockRecorder) ListNearbyTrendingPosts(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListNearbyTrendingPosts", reflect.TypeOf((*MockStore)(nil).ListNearbyTrendingPosts), ctx, arg)
+}
+
 // ListNotifications mocks base method.
 func (m *MockStore) ListNotifications(ctx context.Context, arg db.ListNotificationsParams) ([]db.ListNotificationsRow, error) {
 	m.ctrl.T.Helper()
@@ -3326,6 +3356,21 @@ func (m *MockStore) ListPostComments(ctx context.Context, postID uuid.UUID) ([]d
 func (mr *MockStoreMockRecorder) ListPostComments(ctx, postID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPostComments", reflect.TypeOf((*MockStore)(nil).ListPostComments), ctx, postID)
+}
+
+// ListPostsByHashtag mocks base method.
+func (m *MockStore) ListPostsByHashtag(ctx context.Context, arg db.ListPostsByHashtagParams) ([]db.ListPostsByHashtagRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPostsByHashtag", ctx, arg)
+	ret0, _ := ret[0].([]db.ListPostsByHashtagRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPostsByHashtag indicates an expected call of ListPostsByHashtag.
+func (mr *MockStoreMockRecorder) ListPostsByHashtag(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPostsByHashtag", reflect.TypeOf((*MockStore)(nil).ListPostsByHashtag), ctx, arg)
 }
 
 // ListPostsByUserID mocks base method.

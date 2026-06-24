@@ -727,3 +727,79 @@ func (server *Server) updatePost(ctx *gin.Context) {
 		},
 	}))
 }
+
+// getTrendingNearbyPosts returns trending posts around a location
+func (server *Server) getTrendingNearbyPosts(ctx *gin.Context) {
+	latStr := ctx.Query("lat")
+	lngStr := ctx.Query("lng")
+	
+	if latStr == "" || lngStr == "" {
+		ctx.JSON(http.StatusBadRequest, errorResponse(fmt.Errorf("lat and lng are required")))
+		return
+	}
+	
+	lat, err := strconv.ParseFloat(latStr, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, errorResponse(fmt.Errorf("invalid lat")))
+		return
+	}
+	lng, err := strconv.ParseFloat(lngStr, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, errorResponse(fmt.Errorf("invalid lng")))
+		return
+	}
+
+	radiusStr := ctx.DefaultQuery("radius", "10")
+	radius, err := strconv.ParseFloat(radiusStr, 64)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, errorResponse(fmt.Errorf("invalid radius")))
+		return
+	}
+
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+
+	page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(ctx.DefaultQuery("page_size", "12"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 50 {
+		pageSize = 12
+	}
+
+	posts, err := server.store.ListNearbyTrendingPosts(ctx, db.ListNearbyTrendingPostsParams{
+		Lat:      lat,
+		Lng:      lng,
+		RadiusKm: radius,
+		ViewerID: authPayload.UserID,
+		Lim:      int32(pageSize),
+		Off:      int32((page - 1) * pageSize),
+	})
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	rsp := make([]gin.H, len(posts))
+	for i, p := range posts {
+		rsp[i] = gin.H{
+			"id":             p.ID,
+			"caption":        p.Caption.String,
+			"body_text":      p.BodyText.String,
+			"user_id":        p.UserID,
+			"media_url":      p.MediaUrl,
+			"media_type":     p.MediaType,
+			"likes_count":    p.LikesCount,
+			"comments_count": p.CommentsCount,
+			"shares_count":   p.SharesCount,
+			"created_at":     p.CreatedAt,
+			"username":       p.Username,
+			"avatar_url":     p.AvatarUrl.String,
+			"liked_by_viewer": p.LikedByViewer,
+			"is_saved":       p.IsSaved,
+			"distance_meters": p.DistanceMeters,
+		}
+	}
+
+	ctx.JSON(http.StatusOK, successResponse(gin.H{"posts": rsp, "page": page, "page_size": pageSize}))
+}

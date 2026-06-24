@@ -229,6 +229,7 @@ func (server *Server) setupRouter() {
 	// Posts
 	activeRoutes.POST("/posts", server.createPost)
 	activeRoutes.GET("/posts/feed", server.getConnectionsFeed)
+	activeRoutes.GET("/posts/trending-nearby", server.getTrendingNearbyPosts)
 	activeRoutes.GET("/posts/me", server.getMyPosts)
 	activeRoutes.GET("/posts/saved", server.getSavedPosts)
 	activeRoutes.GET("/users/:id/posts", server.privacyCheckMiddleware(), server.getUserPosts)
@@ -264,6 +265,8 @@ func (server *Server) setupRouter() {
 	// Hashtags
 	activeRoutes.GET("/hashtags/trending", server.getTrendingHashtags)
 	activeRoutes.GET("/hashtags/search", server.searchHashtags)
+	activeRoutes.GET("/hashtags/:name", server.getHashtagByName)
+	activeRoutes.GET("/hashtags/:name/posts", server.getPostsByHashtag)
 	activeRoutes.GET("/hashtags/:name/reels", server.getReelsByHashtag)
 
 	// Categories

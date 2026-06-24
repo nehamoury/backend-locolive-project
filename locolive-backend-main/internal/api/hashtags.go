@@ -79,9 +79,12 @@ func (server *Server) getTrendingHashtags(ctx *gin.Context) {
 		return
 	}
 
-	rsp := make([]hashtagResponse, len(hashtags))
+	rsp := make([]gin.H, len(hashtags))
 	for i, h := range hashtags {
-		rsp[i] = toHashtagResponse(h)
+		rsp[i] = gin.H{
+			"name":  h.Name,
+			"count": h.UsageCount,
+		}
 	}
 
 	ctx.JSON(http.StatusOK, successResponse(rsp))
@@ -146,4 +149,94 @@ func (server *Server) getReelsByHashtag(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, successResponse(gin.H{"reels": rsp, "page": page, "page_size": pageSize}))
+}
+
+// getHashtagByName returns details and counts for a specific hashtag
+func (server *Server) getHashtagByName(ctx *gin.Context) {
+	hashtagName := ctx.Param("name")
+	if hashtagName == "" {
+		ctx.JSON(http.StatusBadRequest, errorResponse(fmt.Errorf("hashtag name is required")))
+		return
+	}
+
+	h, err := server.store.GetHashtagByName(ctx, hashtagName)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			ctx.JSON(http.StatusNotFound, errorResponse(fmt.Errorf("hashtag not found")))
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	ctx.JSON(http.StatusOK, successResponse(gin.H{
+		"name":        h.Name,
+		"posts_count": h.UsageCount - h.ReelsCount,
+		"reels_count": h.ReelsCount,
+		"total_count": h.UsageCount,
+	}))
+}
+
+// getPostsByHashtag returns posts tagged with a specific hashtag
+func (server *Server) getPostsByHashtag(ctx *gin.Context) {
+	hashtagName := ctx.Param("name")
+	if hashtagName == "" {
+		ctx.JSON(http.StatusBadRequest, errorResponse(fmt.Errorf("hashtag name is required")))
+		return
+	}
+
+	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
+
+	page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(ctx.DefaultQuery("page_size", "12"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 50 {
+		pageSize = 12
+	}
+
+	posts, err := server.store.ListPostsByHashtag(ctx, db.ListPostsByHashtagParams{
+		HashtagName: hashtagName,
+		ViewerID:    authPayload.UserID,
+		Lim:         int32(pageSize),
+		Off:         int32((page - 1) * pageSize),
+	})
+	if err != nil {
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	rsp := make([]gin.H, len(posts))
+	for i, p := range posts {
+		var catMap interface{} = nil
+		if p.CategoryID.Valid {
+			catMap = gin.H{
+				"id":   p.CategoryID.UUID.String(),
+				"name": p.CategoryName.String,
+				"icon": p.CategoryIcon.String,
+			}
+		}
+
+		rsp[i] = gin.H{
+			"id":              p.ID,
+			"caption":         p.Caption.String,
+			"body_text":       p.BodyText.String,
+			"hashtags":        p.Hashtags,
+			"category":        catMap,
+			"user_id":         p.UserID,
+			"media_url":       p.MediaUrl,
+			"media_type":      p.MediaType,
+			"likes_count":     p.LikesCount,
+			"comments_count":  p.CommentsCount,
+			"shares_count":    p.SharesCount,
+			"created_at":      p.CreatedAt,
+			"username":        p.Username,
+			"avatar_url":      p.AvatarUrl.String,
+			"liked_by_viewer": p.LikedByViewer,
+			"is_saved":        p.IsSaved,
+		}
+	}
+
+	ctx.JSON(http.StatusOK, successResponse(gin.H{"posts": rsp, "page": page, "page_size": pageSize}))
 }

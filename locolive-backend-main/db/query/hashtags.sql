@@ -48,3 +48,31 @@ JOIN hashtags h ON rh.hashtag_id = h.id
 WHERE h.name = sqlc.arg(hashtag_name)
 ORDER BY r.created_at DESC
 LIMIT $1 OFFSET $2;
+
+-- name: GetHashtagByName :one
+SELECT * FROM hashtags WHERE name = $1 LIMIT 1;
+
+-- name: ListPostsByHashtag :many
+SELECT 
+    p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings, p.category_id,
+    p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
+    u.username, u.full_name, u.avatar_url,
+    c.name as category_name, c.icon as category_icon,
+    COALESCE((
+        SELECT array_agg(h2.name)::text[] 
+        FROM post_hashtags ph2 
+        JOIN hashtags h2 ON ph2.hashtag_id = h2.id 
+        WHERE ph2.post_id = p.id
+    ), '{}')::text[] as hashtags,
+    CASE WHEN p.geom IS NOT NULL THEN ST_Y(p.geom::geometry) ELSE NULL END as lat_out,
+    CASE WHEN p.geom IS NOT NULL THEN ST_X(p.geom::geometry) ELSE NULL END as lng_out,
+    EXISTS(SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = sqlc.arg(viewer_id)) as liked_by_viewer,
+    EXISTS(SELECT 1 FROM post_saves ps WHERE ps.post_id = p.id AND ps.user_id = sqlc.arg(viewer_id)) as is_saved
+FROM posts p
+JOIN users u ON p.user_id = u.id
+JOIN post_hashtags ph ON p.id = ph.post_id
+JOIN hashtags h ON ph.hashtag_id = h.id
+LEFT JOIN categories c ON p.category_id = c.id
+WHERE h.name = sqlc.arg(hashtag_name)
+ORDER BY p.created_at DESC
+LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);

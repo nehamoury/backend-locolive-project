@@ -549,6 +549,114 @@ func (q *Queries) ListLikedPostsByUserID(ctx context.Context, userID uuid.UUID) 
 	return items, nil
 }
 
+const listNearbyTrendingPosts = `-- name: ListNearbyTrendingPosts :many
+SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings, p.category_id,
+       p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
+       u.username, u.full_name, u.avatar_url,
+       ST_Distance(p.geom, ST_SetSRID(ST_MakePoint($1::float, $2::float), 4326)::geography) AS distance_meters,
+       CASE WHEN p.geom IS NOT NULL THEN ST_Y(p.geom::geometry) ELSE NULL END as lat_out,
+       CASE WHEN p.geom IS NOT NULL THEN ST_X(p.geom::geometry) ELSE NULL END as lng_out,
+       EXISTS(SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = $3) as liked_by_viewer,
+       EXISTS(SELECT 1 FROM post_saves ps WHERE ps.post_id = p.id AND ps.user_id = $3) as is_saved
+FROM posts p
+JOIN users u ON p.user_id = u.id
+WHERE p.geom IS NOT NULL
+  AND ST_DWithin(p.geom, ST_SetSRID(ST_MakePoint($1::float, $2::float), 4326)::geography, $4::float * 1000)
+ORDER BY 
+    ((p.likes_count * 1) + (p.comments_count * 2) + (p.shares_count * 3) +
+     (CASE WHEN p.created_at >= now() - interval '24 hours' THEN 10 ELSE 0 END) +
+     (CASE WHEN p.created_at >= now() - interval '7 days' THEN 5 ELSE 0 END)) DESC,
+    p.created_at DESC
+LIMIT $6 OFFSET $5
+`
+
+type ListNearbyTrendingPostsParams struct {
+	Lng      float64   `json:"lng"`
+	Lat      float64   `json:"lat"`
+	ViewerID uuid.UUID `json:"viewer_id"`
+	RadiusKm float64   `json:"radius_km"`
+	Off      int32     `json:"off"`
+	Lim      int32     `json:"lim"`
+}
+
+type ListNearbyTrendingPostsRow struct {
+	ID             uuid.UUID             `json:"id"`
+	UserID         uuid.UUID             `json:"user_id"`
+	MediaUrl       string                `json:"media_url"`
+	MediaType      string                `json:"media_type"`
+	Caption        sql.NullString        `json:"caption"`
+	BodyText       sql.NullString        `json:"body_text"`
+	LocationName   sql.NullString        `json:"location_name"`
+	CropSettings   pqtype.NullRawMessage `json:"crop_settings"`
+	CategoryID     uuid.NullUUID         `json:"category_id"`
+	LikesCount     int32                 `json:"likes_count"`
+	CommentsCount  int32                 `json:"comments_count"`
+	SharesCount    int32                 `json:"shares_count"`
+	CreatedAt      time.Time             `json:"created_at"`
+	UpdatedAt      time.Time             `json:"updated_at"`
+	Username       string                `json:"username"`
+	FullName       string                `json:"full_name"`
+	AvatarUrl      sql.NullString        `json:"avatar_url"`
+	DistanceMeters interface{}           `json:"distance_meters"`
+	LatOut         interface{}           `json:"lat_out"`
+	LngOut         interface{}           `json:"lng_out"`
+	LikedByViewer  bool                  `json:"liked_by_viewer"`
+	IsSaved        bool                  `json:"is_saved"`
+}
+
+func (q *Queries) ListNearbyTrendingPosts(ctx context.Context, arg ListNearbyTrendingPostsParams) ([]ListNearbyTrendingPostsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listNearbyTrendingPosts,
+		arg.Lng,
+		arg.Lat,
+		arg.ViewerID,
+		arg.RadiusKm,
+		arg.Off,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListNearbyTrendingPostsRow
+	for rows.Next() {
+		var i ListNearbyTrendingPostsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.MediaUrl,
+			&i.MediaType,
+			&i.Caption,
+			&i.BodyText,
+			&i.LocationName,
+			&i.CropSettings,
+			&i.CategoryID,
+			&i.LikesCount,
+			&i.CommentsCount,
+			&i.SharesCount,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Username,
+			&i.FullName,
+			&i.AvatarUrl,
+			&i.DistanceMeters,
+			&i.LatOut,
+			&i.LngOut,
+			&i.LikedByViewer,
+			&i.IsSaved,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPostComments = `-- name: ListPostComments :many
 SELECT pc.id, pc.post_id, pc.user_id, pc.content, pc.created_at,
        u.username, u.full_name, u.avatar_url

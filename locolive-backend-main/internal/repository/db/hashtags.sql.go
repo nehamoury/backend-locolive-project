@@ -11,6 +11,8 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
+	"github.com/sqlc-dev/pqtype"
 )
 
 const addPostHashtag = `-- name: AddPostHashtag :exec
@@ -45,6 +47,25 @@ func (q *Queries) AddReelHashtag(ctx context.Context, arg AddReelHashtagParams) 
 	return err
 }
 
+const getHashtagByName = `-- name: GetHashtagByName :one
+SELECT id, name, usage_count, reels_count, last_used_at, created_at, slug FROM hashtags WHERE name = $1 LIMIT 1
+`
+
+func (q *Queries) GetHashtagByName(ctx context.Context, name string) (Hashtag, error) {
+	row := q.db.QueryRowContext(ctx, getHashtagByName, name)
+	var i Hashtag
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.UsageCount,
+		&i.ReelsCount,
+		&i.LastUsedAt,
+		&i.CreatedAt,
+		&i.Slug,
+	)
+	return i, err
+}
+
 const getTrendingHashtags = `-- name: GetTrendingHashtags :many
 SELECT id, name, usage_count, reels_count, last_used_at, created_at, slug FROM hashtags
 ORDER BY 
@@ -72,6 +93,119 @@ func (q *Queries) GetTrendingHashtags(ctx context.Context, limit int32) ([]Hasht
 			&i.LastUsedAt,
 			&i.CreatedAt,
 			&i.Slug,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listPostsByHashtag = `-- name: ListPostsByHashtag :many
+SELECT 
+    p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings, p.category_id,
+    p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
+    u.username, u.full_name, u.avatar_url,
+    c.name as category_name, c.icon as category_icon,
+    COALESCE((
+        SELECT array_agg(h2.name)::text[] 
+        FROM post_hashtags ph2 
+        JOIN hashtags h2 ON ph2.hashtag_id = h2.id 
+        WHERE ph2.post_id = p.id
+    ), '{}')::text[] as hashtags,
+    CASE WHEN p.geom IS NOT NULL THEN ST_Y(p.geom::geometry) ELSE NULL END as lat_out,
+    CASE WHEN p.geom IS NOT NULL THEN ST_X(p.geom::geometry) ELSE NULL END as lng_out,
+    EXISTS(SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = $1) as liked_by_viewer,
+    EXISTS(SELECT 1 FROM post_saves ps WHERE ps.post_id = p.id AND ps.user_id = $1) as is_saved
+FROM posts p
+JOIN users u ON p.user_id = u.id
+JOIN post_hashtags ph ON p.id = ph.post_id
+JOIN hashtags h ON ph.hashtag_id = h.id
+LEFT JOIN categories c ON p.category_id = c.id
+WHERE h.name = $2
+ORDER BY p.created_at DESC
+LIMIT $4 OFFSET $3
+`
+
+type ListPostsByHashtagParams struct {
+	ViewerID    uuid.UUID `json:"viewer_id"`
+	HashtagName string    `json:"hashtag_name"`
+	Off         int32     `json:"off"`
+	Lim         int32     `json:"lim"`
+}
+
+type ListPostsByHashtagRow struct {
+	ID            uuid.UUID             `json:"id"`
+	UserID        uuid.UUID             `json:"user_id"`
+	MediaUrl      string                `json:"media_url"`
+	MediaType     string                `json:"media_type"`
+	Caption       sql.NullString        `json:"caption"`
+	BodyText      sql.NullString        `json:"body_text"`
+	LocationName  sql.NullString        `json:"location_name"`
+	CropSettings  pqtype.NullRawMessage `json:"crop_settings"`
+	CategoryID    uuid.NullUUID         `json:"category_id"`
+	LikesCount    int32                 `json:"likes_count"`
+	CommentsCount int32                 `json:"comments_count"`
+	SharesCount   int32                 `json:"shares_count"`
+	CreatedAt     time.Time             `json:"created_at"`
+	UpdatedAt     time.Time             `json:"updated_at"`
+	Username      string                `json:"username"`
+	FullName      string                `json:"full_name"`
+	AvatarUrl     sql.NullString        `json:"avatar_url"`
+	CategoryName  sql.NullString        `json:"category_name"`
+	CategoryIcon  sql.NullString        `json:"category_icon"`
+	Hashtags      []string              `json:"hashtags"`
+	LatOut        interface{}           `json:"lat_out"`
+	LngOut        interface{}           `json:"lng_out"`
+	LikedByViewer bool                  `json:"liked_by_viewer"`
+	IsSaved       bool                  `json:"is_saved"`
+}
+
+func (q *Queries) ListPostsByHashtag(ctx context.Context, arg ListPostsByHashtagParams) ([]ListPostsByHashtagRow, error) {
+	rows, err := q.db.QueryContext(ctx, listPostsByHashtag,
+		arg.ViewerID,
+		arg.HashtagName,
+		arg.Off,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListPostsByHashtagRow
+	for rows.Next() {
+		var i ListPostsByHashtagRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.MediaUrl,
+			&i.MediaType,
+			&i.Caption,
+			&i.BodyText,
+			&i.LocationName,
+			&i.CropSettings,
+			&i.CategoryID,
+			&i.LikesCount,
+			&i.CommentsCount,
+			&i.SharesCount,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Username,
+			&i.FullName,
+			&i.AvatarUrl,
+			&i.CategoryName,
+			&i.CategoryIcon,
+			pq.Array(&i.Hashtags),
+			&i.LatOut,
+			&i.LngOut,
+			&i.LikedByViewer,
+			&i.IsSaved,
 		); err != nil {
 			return nil, err
 		}

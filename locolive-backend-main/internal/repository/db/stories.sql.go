@@ -420,10 +420,10 @@ FROM stories s
 JOIN users u ON s.user_id = u.id
 WHERE 
     ((ST_DWithin(
-    s.geom::geography,
-    ST_MakePoint($1::float8, $2::float8)::geography,
-    $3
-  ) AND u.is_ghost_mode = false) OR s.user_id = $4)
+    s.geom,
+    ST_SetSRID(ST_MakePoint($1::float8, $2::float8), 4326),
+    ($3::float / 111000.0)
+  ) AND ST_Distance(s.geom::geography, ST_MakePoint($1::float8, $2::float8)::geography) <= $3 AND u.is_ghost_mode = false) OR s.user_id = $4)
   AND s.expires_at > now()
   AND (u.is_shadow_banned = false OR s.user_id = $4)
   -- Strict Streak Rule (DISABLED)
@@ -467,10 +467,10 @@ LIMIT 50
 `
 
 type GetStoriesWithinRadiusParams struct {
-	Lng          float64     `json:"lng"`
-	Lat          float64     `json:"lat"`
-	RadiusMeters interface{} `json:"radius_meters"`
-	UserID       uuid.UUID   `json:"user_id"`
+	Lng          float64   `json:"lng"`
+	Lat          float64   `json:"lat"`
+	RadiusMeters float64   `json:"radius_meters"`
+	UserID       uuid.UUID `json:"user_id"`
 }
 
 type GetStoriesWithinRadiusRow struct {

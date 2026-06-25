@@ -132,10 +132,11 @@ WITH recent_locations AS (
   WHERE l.expires_at > NOW()
     AND l.user_id != $3
     AND ST_DWithin(
-      l.geom::geography,
-      ST_SetSRID(ST_MakePoint($1::float8, $2::float8), 4326)::geography,
-      $4* 1000
+      l.geom,
+      ST_SetSRID(ST_MakePoint($1::float8, $2::float8), 4326),
+      $4/ 111.0
     )
+    AND ST_Distance(l.geom::geography, ST_SetSRID(ST_MakePoint($1::float8, $2::float8), 4326)::geography) <= $5* 1000
   ORDER BY l.user_id, l.time_bucket DESC
 )
 SELECT 
@@ -162,7 +163,7 @@ type GetNearbyUsersFromDBParams struct {
 	Lng           float64     `json:"lng"`
 	Lat           float64     `json:"lat"`
 	ExcludeUserID uuid.UUID   `json:"exclude_user_id"`
-	RadiusKm      interface{} `json:"*radius_km"`
+	RadiusKm      interface{} `json:"/radius_km"`
 }
 
 type GetNearbyUsersFromDBRow struct {
@@ -184,6 +185,7 @@ func (q *Queries) GetNearbyUsersFromDB(ctx context.Context, arg GetNearbyUsersFr
 		arg.Lng,
 		arg.Lat,
 		arg.ExcludeUserID,
+		arg.RadiusKm,
 		arg.RadiusKm,
 	)
 	if err != nil {

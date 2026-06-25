@@ -228,6 +228,9 @@ func (server *Server) setupRouter() {
 
 	// Posts
 	activeRoutes.POST("/posts", server.createPost)
+	activeRoutes.GET("/posts/:id", server.getPost)
+	activeRoutes.GET("/posts/:id/related", server.getRelatedPosts)
+	activeRoutes.POST("/posts/:id/view", server.viewPost)
 	activeRoutes.GET("/posts/feed", server.getConnectionsFeed)
 	activeRoutes.GET("/posts/trending-nearby", server.getTrendingNearbyPosts)
 	activeRoutes.GET("/posts/me", server.getMyPosts)
@@ -246,6 +249,9 @@ func (server *Server) setupRouter() {
 
 	// Reels
 	activeRoutes.POST("/reels", server.createReel)
+	activeRoutes.GET("/reels/:id", server.getReel)
+	activeRoutes.GET("/reels/:id/related", server.getRelatedReels)
+	activeRoutes.POST("/reels/:id/view", server.viewReel)
 	activeRoutes.GET("/reels/feed", server.getReelsFeed)
 	activeRoutes.GET("/reels/me", server.getMyReels)
 	activeRoutes.GET("/reels/nearby", server.getNearbyReels)
@@ -262,6 +268,12 @@ func (server *Server) setupRouter() {
 	activeRoutes.DELETE("/reels/:id/save", server.engagementRateLimiter(), server.unsaveReel)
 	activeRoutes.DELETE("/reels/:id/comments/:commentId", server.deleteReelComment)
 
+	// Search
+	activeRoutes.GET("/search", server.searchRateLimiter(), server.unifiedSearch)
+	activeRoutes.GET("/search/posts", server.searchRateLimiter(), server.searchPosts)
+	activeRoutes.GET("/search/reels", server.searchRateLimiter(), server.searchReels)
+	activeRoutes.GET("/search/places", server.searchRateLimiter(), server.searchPlaces)
+
 	// Hashtags
 	activeRoutes.GET("/hashtags/trending", server.getTrendingHashtags)
 	activeRoutes.GET("/hashtags/search", server.searchHashtags)
@@ -272,6 +284,10 @@ func (server *Server) setupRouter() {
 	// Categories
 	activeRoutes.GET("/categories", server.listCategories)
 	activeRoutes.GET("/categories/trending", server.listTrendingCategories)
+	activeRoutes.GET("/categories/:id", server.getCategoryByID)
+	activeRoutes.GET("/categories/:id/posts", server.getCategoryPosts)
+	activeRoutes.GET("/categories/:id/reels", server.getCategoryReels)
+	activeRoutes.GET("/categories/:id/creators", server.getCategoryCreators)
 
 	// Highlights
 	activeRoutes.POST("/highlights", server.createHighlight)

@@ -504,7 +504,9 @@ func (server *Server) renewAccessToken(ctx *gin.Context) {
 // logoutUser is now handled in security.go
 
 type searchUsersRequest struct {
-	Query string `form:"q"`
+	Query    string `form:"q"`
+	Page     int    `form:"page"`
+	PageSize int    `form:"page_size"`
 }
 
 func (server *Server) searchUsers(ctx *gin.Context) {
@@ -522,13 +524,19 @@ func (server *Server) searchUsers(ctx *gin.Context) {
 		return
 	}
 
+	page, pageSize := parsePageParams(req.Page, req.PageSize, 10)
+
 	var currentUserID uuid.UUID
 	authPayload, authExists := ctx.Get(authorizationPayloadKey)
 	if authExists && authPayload != nil {
 		currentUserID = authPayload.(*token.Payload).UserID
 	}
 
-	users, err := server.user.SearchUsers(ctx, query)
+	users, err := server.store.SearchUsers(ctx, db.SearchUsersParams{
+		Query: query,
+		Off:   int32((page - 1) * pageSize),
+		Lim:   int32(pageSize),
+	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
@@ -591,7 +599,7 @@ func (server *Server) searchUsers(ctx *gin.Context) {
 		})
 	}
 
-	ctx.JSON(http.StatusOK, successResponse(rsp))
+	ctx.JSON(http.StatusOK, successResponse(gin.H{"users": rsp, "page": page, "page_size": pageSize}))
 }
 
 // completeProfileRequest handles profile completion for Google OAuth users

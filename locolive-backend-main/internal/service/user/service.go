@@ -54,7 +54,7 @@ type Service interface {
 	UpdateEmail(ctx context.Context, params UpdateEmailParams) (db.User, error)
 	GetUserByID(ctx context.Context, id uuid.UUID) (db.User, error)
 	UpdatePassword(ctx context.Context, userID uuid.UUID, currentPassword, newPassword string) error
-	SearchUsers(ctx context.Context, query string) ([]db.SearchUsersRow, error)
+	SearchUsers(ctx context.Context, query string, page, pageSize int) ([]db.SearchUsersRow, error)
 	UpdateTrustScore(ctx context.Context, userID uuid.UUID) (int32, error)
 
 	// Verification
@@ -260,8 +260,18 @@ func (s *ServiceImpl) UpdatePassword(ctx context.Context, userID uuid.UUID, curr
 	return err
 }
 
-func (s *ServiceImpl) SearchUsers(ctx context.Context, query string) ([]db.SearchUsersRow, error) {
-	return s.store.SearchUsers(ctx, query)
+func (s *ServiceImpl) SearchUsers(ctx context.Context, query string, page, pageSize int) ([]db.SearchUsersRow, error) {
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 50 {
+		pageSize = 10
+	}
+	return s.store.SearchUsers(ctx, db.SearchUsersParams{
+		Query: query,
+		Off:   int32((page - 1) * pageSize),
+		Lim:   int32(pageSize),
+	})
 }
 
 func (s *ServiceImpl) UpdateTrustScore(ctx context.Context, userID uuid.UUID) (int32, error) {

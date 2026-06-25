@@ -319,20 +319,67 @@ func (q *Queries) ListReelsByHashtag(ctx context.Context, arg ListReelsByHashtag
 	return items, nil
 }
 
+const listTrendingHashtagsPaginated = `-- name: ListTrendingHashtagsPaginated :many
+SELECT id, name, usage_count, reels_count, last_used_at, created_at, slug FROM hashtags
+ORDER BY 
+    (usage_count + 
+     (CASE WHEN last_used_at >= now() - interval '24 hours' THEN 3 ELSE 0 END) +
+     (CASE WHEN last_used_at >= now() - interval '7 days' THEN 2 ELSE 0 END)) DESC,
+    last_used_at DESC
+LIMIT $1 OFFSET $2
+`
+
+type ListTrendingHashtagsPaginatedParams struct {
+	Limit  int32 `json:"limit"`
+	Offset int32 `json:"offset"`
+}
+
+func (q *Queries) ListTrendingHashtagsPaginated(ctx context.Context, arg ListTrendingHashtagsPaginatedParams) ([]Hashtag, error) {
+	rows, err := q.db.QueryContext(ctx, listTrendingHashtagsPaginated, arg.Limit, arg.Offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []Hashtag
+	for rows.Next() {
+		var i Hashtag
+		if err := rows.Scan(
+			&i.ID,
+			&i.Name,
+			&i.UsageCount,
+			&i.ReelsCount,
+			&i.LastUsedAt,
+			&i.CreatedAt,
+			&i.Slug,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const searchHashtags = `-- name: SearchHashtags :many
 SELECT id, name, usage_count, reels_count, last_used_at, created_at, slug FROM hashtags
 WHERE name ILIKE $1 || '%'
 ORDER BY usage_count DESC, last_used_at DESC
-LIMIT $2
+LIMIT $2 OFFSET $3
 `
 
 type SearchHashtagsParams struct {
 	Column1 sql.NullString `json:"column_1"`
 	Limit   int32          `json:"limit"`
+	Offset  int32          `json:"offset"`
 }
 
 func (q *Queries) SearchHashtags(ctx context.Context, arg SearchHashtagsParams) ([]Hashtag, error) {
-	rows, err := q.db.QueryContext(ctx, searchHashtags, arg.Column1, arg.Limit)
+	rows, err := q.db.QueryContext(ctx, searchHashtags, arg.Column1, arg.Limit, arg.Offset)
 	if err != nil {
 		return nil, err
 	}
@@ -379,6 +426,35 @@ type UpsertHashtagParams struct {
 
 func (q *Queries) UpsertHashtag(ctx context.Context, arg UpsertHashtagParams) (Hashtag, error) {
 	row := q.db.QueryRowContext(ctx, upsertHashtag, arg.Name, arg.Slug)
+	var i Hashtag
+	err := row.Scan(
+		&i.ID,
+		&i.Name,
+		&i.UsageCount,
+		&i.ReelsCount,
+		&i.LastUsedAt,
+		&i.CreatedAt,
+		&i.Slug,
+	)
+	return i, err
+}
+
+const upsertHashtagForPost = `-- name: UpsertHashtagForPost :one
+INSERT INTO hashtags (name, slug, usage_count, reels_count, last_used_at)
+VALUES ($1, $2, 1, 0, now())
+ON CONFLICT (name) DO UPDATE 
+SET usage_count = hashtags.usage_count + 1,
+    last_used_at = now()
+RETURNING id, name, usage_count, reels_count, last_used_at, created_at, slug
+`
+
+type UpsertHashtagForPostParams struct {
+	Name string         `json:"name"`
+	Slug sql.NullString `json:"slug"`
+}
+
+func (q *Queries) UpsertHashtagForPost(ctx context.Context, arg UpsertHashtagForPostParams) (Hashtag, error) {
+	row := q.db.QueryRowContext(ctx, upsertHashtagForPost, arg.Name, arg.Slug)
 	var i Hashtag
 	err := row.Scan(
 		&i.ID,

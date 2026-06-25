@@ -469,7 +469,8 @@ SELECT
     COALESCE((SELECT status FROM connections c WHERE (c.requester_id = $5 AND c.target_id = r.user_id) OR (c.requester_id = r.user_id AND c.target_id = $5) LIMIT 1)::text, 'none') AS connection_status
 FROM reels r
 JOIN users u ON r.user_id = u.id
-WHERE ST_DWithin(r.geom, ST_SetSRID(ST_MakePoint($3::float, $4::float), 4326)::geography, $6::float)
+WHERE ST_DWithin(r.geom, ST_SetSRID(ST_MakePoint($3::float, $4::float), 4326), ($6::float / 111.0) / 1000.0)
+  AND ST_Distance(r.geom::geography, ST_SetSRID(ST_MakePoint($3::float, $4::float), 4326)::geography) <= $6::float
 ORDER BY distance_meters ASC
 LIMIT $1 OFFSET $2
 `
@@ -921,6 +922,104 @@ func (q *Queries) SaveReelAtomic(ctx context.Context, arg SaveReelAtomicParams) 
 	var saves_count int32
 	err := row.Scan(&saves_count)
 	return saves_count, err
+}
+
+const searchReels = `-- name: SearchReels :many
+SELECT r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.category_id,
+       COALESCE(ST_Y(r.geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(r.geom::geometry)::float8, 0.0)::float8 AS lng,
+       r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
+       u.username, u.avatar_url,
+       EXISTS (SELECT 1 FROM reel_likes rl WHERE rl.reel_id = r.id AND rl.user_id = $3) AS is_liked,
+       EXISTS (SELECT 1 FROM reel_saves rs WHERE rs.reel_id = r.id AND rs.user_id = $3) AS is_saved,
+       COALESCE((SELECT status FROM connections c WHERE (c.requester_id = $3 AND c.target_id = r.user_id) OR (c.requester_id = r.user_id AND c.target_id = $3) LIMIT 1)::text, 'none') AS connection_status
+FROM reels r
+JOIN users u ON r.user_id = u.id
+WHERE (r.caption ILIKE '%' || $4::text || '%'
+    OR r.location_name ILIKE '%' || $4::text || '%')
+  AND u.is_shadow_banned = false
+ORDER BY r.likes_count DESC, r.created_at DESC
+LIMIT $1 OFFSET $2
+`
+
+type SearchReelsParams struct {
+	Limit    int32     `json:"limit"`
+	Offset   int32     `json:"offset"`
+	ViewerID uuid.UUID `json:"viewer_id"`
+	Query    string    `json:"query"`
+}
+
+type SearchReelsRow struct {
+	ID               uuid.UUID      `json:"id"`
+	UserID           uuid.UUID      `json:"user_id"`
+	VideoUrl         string         `json:"video_url"`
+	Caption          sql.NullString `json:"caption"`
+	IsAiGenerated    bool           `json:"is_ai_generated"`
+	LocationName     sql.NullString `json:"location_name"`
+	Geohash          sql.NullString `json:"geohash"`
+	CategoryID       uuid.NullUUID  `json:"category_id"`
+	Lat              float64        `json:"lat"`
+	Lng              float64        `json:"lng"`
+	LikesCount       int32          `json:"likes_count"`
+	CommentsCount    int32          `json:"comments_count"`
+	SharesCount      int32          `json:"shares_count"`
+	SavesCount       int32          `json:"saves_count"`
+	CreatedAt        time.Time      `json:"created_at"`
+	UpdatedAt        time.Time      `json:"updated_at"`
+	Username         string         `json:"username"`
+	AvatarUrl        sql.NullString `json:"avatar_url"`
+	IsLiked          bool           `json:"is_liked"`
+	IsSaved          bool           `json:"is_saved"`
+	ConnectionStatus interface{}    `json:"connection_status"`
+}
+
+func (q *Queries) SearchReels(ctx context.Context, arg SearchReelsParams) ([]SearchReelsRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchReels,
+		arg.Limit,
+		arg.Offset,
+		arg.ViewerID,
+		arg.Query,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchReelsRow
+	for rows.Next() {
+		var i SearchReelsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.VideoUrl,
+			&i.Caption,
+			&i.IsAiGenerated,
+			&i.LocationName,
+			&i.Geohash,
+			&i.CategoryID,
+			&i.Lat,
+			&i.Lng,
+			&i.LikesCount,
+			&i.CommentsCount,
+			&i.SharesCount,
+			&i.SavesCount,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Username,
+			&i.AvatarUrl,
+			&i.IsLiked,
+			&i.IsSaved,
+			&i.ConnectionStatus,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const unlikeReelAtomic = `-- name: UnlikeReelAtomic :one

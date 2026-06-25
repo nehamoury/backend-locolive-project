@@ -501,6 +501,16 @@ type PhoneVerification struct {
 	Attempts  int32     `json:"attempts"`
 }
 
+type Place struct {
+	ID        uuid.UUID      `json:"id"`
+	Name      string         `json:"name"`
+	Slug      string         `json:"slug"`
+	Address   sql.NullString `json:"address"`
+	Geom      interface{}    `json:"geom"`
+	PostCount int32          `json:"post_count"`
+	CreatedAt time.Time      `json:"created_at"`
+}
+
 type Post struct {
 	ID            uuid.UUID             `json:"id"`
 	UserID        uuid.UUID             `json:"user_id"`

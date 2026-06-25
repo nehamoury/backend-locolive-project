@@ -207,7 +207,7 @@ func (server *Server) createPost(ctx *gin.Context) {
 		textToParse := req.Caption + " " + req.BodyText
 		tags := util.ExtractHashtags(textToParse)
 		for _, tagName := range tags {
-			hashtag, err := server.store.UpsertHashtag(ctx, db.UpsertHashtagParams{
+			hashtag, err := server.store.UpsertHashtagForPost(ctx, db.UpsertHashtagForPostParams{
 				Name: tagName,
 				Slug: sql.NullString{String: tagName, Valid: true},
 			})
@@ -767,13 +767,21 @@ func (server *Server) getTrendingNearbyPosts(ctx *gin.Context) {
 		pageSize = 12
 	}
 
-	posts, err := server.store.ListNearbyTrendingPosts(ctx, db.ListNearbyTrendingPostsParams{
-		Lat:      lat,
-		Lng:      lng,
-		RadiusKm: radius,
-		ViewerID: authPayload.UserID,
-		Lim:      int32(pageSize),
-		Off:      int32((page - 1) * pageSize),
+	timeFilter := ctx.DefaultQuery("time", "")
+	categoryID := ctx.DefaultQuery("category", "")
+	if categoryID == "" {
+		categoryID = "00000000-0000-0000-0000-000000000000"
+	}
+
+	posts, err := server.store.ListTrendingNearbyPosts(ctx, db.ListTrendingNearbyPostsParams{
+		Lat:        lat,
+		Lng:        lng,
+		ViewerID:   authPayload.UserID,
+		RadiusKm:   radius,
+		TimeFilter: timeFilter,
+		CategoryID: categoryID,
+		Off:        int32((page - 1) * pageSize),
+		Lim:        int32(pageSize),
 	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
@@ -802,4 +810,102 @@ func (server *Server) getTrendingNearbyPosts(ctx *gin.Context) {
 	}
 
 	ctx.JSON(http.StatusOK, successResponse(gin.H{"posts": rsp, "page": page, "page_size": pageSize}))
+}
+
+func (server *Server) getPost(ctx *gin.Context) {
+	postIDStr := ctx.Param("id")
+	postID, err := uuid.Parse(postIDStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, errorResponse(fmt.Errorf("invalid post ID: %w", err)))
+		return
+	}
+
+	post, err := server.store.GetPost(ctx, postID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			ctx.JSON(http.StatusNotFound, errorResponse(fmt.Errorf("post not found")))
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	// viewer ID can be extracted when we implement real like/save checks
+
+	// Fetch user details
+	user, err := server.store.GetUserProfile(ctx, post.UserID)
+	if err != nil && err != sql.ErrNoRows {
+		log.Error().Err(err).Msg("failed to get user profile for post")
+	}
+
+	// Fetch category if valid
+	var category interface{}
+	if post.CategoryID.Valid {
+		cat, err := server.store.GetCategory(ctx, post.CategoryID.UUID)
+		if err == nil {
+			category = gin.H{
+				"id": cat.ID,
+				"name": cat.Name,
+				"icon": nullStrToPtr(cat.Icon),
+				"color": nullStrToPtr(cat.Color),
+			}
+		}
+	}
+
+	// Fetch hashtags
+	hashtags := []string{}
+	// Note: You would normally call GetHashtagsForPost here.
+	// For now we mock it or use an empty array if not implemented.
+
+	// Construct Unified JSON Response
+	rsp := gin.H{
+		"post": gin.H{
+			"id": post.ID,
+			"caption": post.Caption.String,
+			"body_text": post.BodyText.String,
+			"created_at": post.CreatedAt,
+		},
+		"user": gin.H{
+			"id": user.ID,
+			"username": user.Username,
+			"full_name": user.FullName,
+			"avatar_url": user.AvatarUrl.String,
+		},
+		"category": category,
+		"hashtags": hashtags,
+		"location": gin.H{
+			"name": post.LocationName.String,
+		},
+		"media": []gin.H{
+			{
+				"url": post.MediaUrl,
+				"type": post.MediaType,
+			},
+		},
+		"stats": gin.H{
+			"likes": post.LikesCount,
+			"comments": post.CommentsCount,
+			"shares": post.SharesCount,
+			"views": 0, // Mock for now
+			"saved": post.SavesCount,
+		},
+		"viewer": gin.H{
+			// Would query DB for CheckPostLike / CheckPostSave
+			"liked": false,
+			"saved": false,
+			"following": false,
+		},
+	}
+
+	ctx.JSON(http.StatusOK, successResponse(rsp))
+}
+
+func (server *Server) getRelatedPosts(ctx *gin.Context) {
+	// Mock implementation for Related Posts algorithm
+	// Should implement: +40 Category, +30 Hashtag, +20 Location, +10 Recent
+	ctx.JSON(http.StatusOK, successResponse(gin.H{"posts": []interface{}{}}))
+}
+
+func (server *Server) viewPost(ctx *gin.Context) {
+	ctx.JSON(http.StatusOK, successResponse(gin.H{"success": true}))
 }

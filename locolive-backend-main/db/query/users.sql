@@ -185,7 +185,11 @@ WHERE
   (username ILIKE '%' || sqlc.arg(query)::text || '%'
    OR full_name ILIKE '%' || sqlc.arg(query)::text || '%')
   AND is_shadow_banned = false
-LIMIT 10;
+ORDER BY 
+  CASE WHEN username ILIKE sqlc.arg(query)::text || '%' THEN 0 ELSE 1 END,
+  is_verified DESC,
+  username ASC
+LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
 
 
 -- name: UpdateUserEmail :one

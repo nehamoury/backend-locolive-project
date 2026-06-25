@@ -204,7 +204,60 @@ SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.loc
 FROM posts p
 JOIN users u ON p.user_id = u.id
 WHERE p.geom IS NOT NULL
-  AND ST_DWithin(p.geom, ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float, sqlc.arg(lat)::float), 4326)::geography, sqlc.arg(radius_km)::float * 1000)
+  AND ST_DWithin(p.geom, ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float, sqlc.arg(lat)::float), 4326), (sqlc.arg(radius_km)::float / 111.0))
+  AND ST_Distance(p.geom::geography, ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float, sqlc.arg(lat)::float), 4326)::geography) <= (sqlc.arg(radius_km)::float * 1000)
+ORDER BY 
+    ((p.likes_count * 1) + (p.comments_count * 2) + (p.shares_count * 3) +
+     (CASE WHEN p.created_at >= now() - interval '24 hours' THEN 10 ELSE 0 END) +
+     (CASE WHEN p.created_at >= now() - interval '7 days' THEN 5 ELSE 0 END)) DESC,
+    p.created_at DESC
+LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
+
+-- name: SearchPosts :many
+SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name,
+       p.crop_settings, p.category_id,
+       p.likes_count, p.comments_count, p.shares_count, p.saves_count, p.created_at, p.updated_at,
+       u.username, u.full_name, u.avatar_url,
+       CASE WHEN p.geom IS NOT NULL THEN ST_Y(p.geom::geometry) ELSE NULL END as lat_out,
+       CASE WHEN p.geom IS NOT NULL THEN ST_X(p.geom::geometry) ELSE NULL END as lng_out,
+       c.name as category_name, c.icon as category_icon,
+       COALESCE((
+           SELECT array_agg(h2.name)::text[] 
+           FROM post_hashtags ph2 
+           JOIN hashtags h2 ON ph2.hashtag_id = h2.id 
+           WHERE ph2.post_id = p.id
+       ), '{}')::text[] as hashtags,
+       EXISTS(SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = sqlc.arg(viewer_id)) as liked_by_viewer,
+       EXISTS(SELECT 1 FROM post_saves ps WHERE ps.post_id = p.id AND ps.user_id = sqlc.arg(viewer_id)) as is_saved
+FROM posts p
+JOIN users u ON p.user_id = u.id
+LEFT JOIN categories c ON p.category_id = c.id
+WHERE (p.caption ILIKE '%' || sqlc.arg(query)::text || '%'
+    OR p.body_text ILIKE '%' || sqlc.arg(query)::text || '%'
+    OR p.location_name ILIKE '%' || sqlc.arg(query)::text || '%')
+  AND u.is_shadow_banned = false
+ORDER BY p.likes_count DESC, p.created_at DESC
+LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
+
+-- name: ListTrendingNearbyPosts :many
+SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings, p.category_id,
+       p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
+       u.username, u.full_name, u.avatar_url,
+       ST_Distance(p.geom, ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float, sqlc.arg(lat)::float), 4326)::geography) AS distance_meters,
+       CASE WHEN p.geom IS NOT NULL THEN ST_Y(p.geom::geometry) ELSE NULL END as lat_out,
+       CASE WHEN p.geom IS NOT NULL THEN ST_X(p.geom::geometry) ELSE NULL END as lng_out,
+       EXISTS(SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = sqlc.arg(viewer_id)) as liked_by_viewer,
+       EXISTS(SELECT 1 FROM post_saves ps WHERE ps.post_id = p.id AND ps.user_id = sqlc.arg(viewer_id)) as is_saved
+FROM posts p
+JOIN users u ON p.user_id = u.id
+WHERE p.geom IS NOT NULL
+  AND ST_DWithin(p.geom, ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float, sqlc.arg(lat)::float), 4326), (sqlc.arg(radius_km)::float / 111.0))
+  AND ST_Distance(p.geom::geography, ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float, sqlc.arg(lat)::float), 4326)::geography) <= (sqlc.arg(radius_km)::float * 1000)
+  AND (sqlc.arg(time_filter)::text = '' OR
+       (sqlc.arg(time_filter)::text = 'today' AND p.created_at >= CURRENT_DATE) OR
+       (sqlc.arg(time_filter)::text = 'week' AND p.created_at >= CURRENT_DATE - interval '7 days') OR
+       (sqlc.arg(time_filter)::text = 'month' AND p.created_at >= CURRENT_DATE - interval '30 days'))
+  AND (sqlc.arg(category_id)::text = '00000000-0000-0000-0000-000000000000' OR p.category_id = sqlc.arg(category_id)::uuid)
 ORDER BY 
     ((p.likes_count * 1) + (p.comments_count * 2) + (p.shares_count * 3) +
      (CASE WHEN p.created_at >= now() - interval '24 hours' THEN 10 ELSE 0 END) +

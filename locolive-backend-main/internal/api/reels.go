@@ -820,3 +820,96 @@ func (server *Server) updateReel(ctx *gin.Context) {
 		},
 	}))
 }
+
+func (server *Server) getReel(ctx *gin.Context) {
+	reelIDStr := ctx.Param("id")
+	reelID, err := uuid.Parse(reelIDStr)
+	if err != nil {
+		ctx.JSON(http.StatusBadRequest, errorResponse(fmt.Errorf("invalid reel ID: %w", err)))
+		return
+	}
+
+	reel, err := server.store.GetReel(ctx, reelID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			ctx.JSON(http.StatusNotFound, errorResponse(fmt.Errorf("reel not found")))
+			return
+		}
+		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
+		return
+	}
+
+	// viewer ID can be extracted when we implement real like/save checks
+
+	// Fetch user details
+	user, err := server.store.GetUserProfile(ctx, reel.UserID)
+	if err != nil && err != sql.ErrNoRows {
+		// Log error if logger is available or fmt.Println
+	}
+
+	// Fetch category if valid
+	var category interface{}
+	if reel.CategoryID.Valid {
+		cat, err := server.store.GetCategory(ctx, reel.CategoryID.UUID)
+		if err == nil {
+			category = gin.H{
+				"id": cat.ID,
+				"name": cat.Name,
+				"icon": nullStrToPtr(cat.Icon),
+				"color": nullStrToPtr(cat.Color),
+			}
+		}
+	}
+
+	// Fetch hashtags
+	hashtags := []string{}
+
+	// Construct Unified JSON Response
+	rsp := gin.H{
+		"post": gin.H{ // Keeping "post" key so frontend structure is unified
+			"id": reel.ID,
+			"caption": nullStrToPtr(reel.Caption),
+			"body_text": "",
+			"created_at": reel.CreatedAt,
+		},
+		"user": gin.H{
+			"id": user.ID,
+			"username": user.Username,
+			"full_name": user.FullName,
+			"avatar_url": user.AvatarUrl.String,
+		},
+		"category": category,
+		"hashtags": hashtags,
+		"location": gin.H{
+			"name": nullStrToPtr(reel.LocationName),
+		},
+		"media": []gin.H{
+			{
+				"url": reel.VideoUrl,
+				"type": "video",
+			},
+		},
+		"stats": gin.H{
+			"likes": reel.LikesCount,
+			"comments": reel.CommentsCount,
+			"shares": reel.SharesCount,
+			"views": 0,
+			"saved": reel.SavesCount,
+		},
+		"viewer": gin.H{
+			"liked": false,
+			"saved": false,
+			"following": false,
+		},
+	}
+
+	ctx.JSON(http.StatusOK, successResponse(rsp))
+}
+
+func (server *Server) getRelatedReels(ctx *gin.Context) {
+	ctx.JSON(http.StatusOK, successResponse(gin.H{"reels": []interface{}{}}))
+}
+
+func (server *Server) viewReel(ctx *gin.Context) {
+	ctx.JSON(http.StatusOK, successResponse(gin.H{"success": true}))
+}

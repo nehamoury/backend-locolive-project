@@ -38,10 +38,10 @@ FROM stories s
 JOIN users u ON s.user_id = u.id
 WHERE 
     ((ST_DWithin(
-    s.geom::geography,
-    ST_MakePoint(sqlc.arg(lng)::float8, sqlc.arg(lat)::float8)::geography,
-    sqlc.arg(radius_meters)
-  ) AND u.is_ghost_mode = false) OR s.user_id = sqlc.arg(user_id))
+    s.geom,
+    ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float8, sqlc.arg(lat)::float8), 4326),
+    (sqlc.arg(radius_meters)::float / 111000.0)
+  ) AND ST_Distance(s.geom::geography, ST_MakePoint(sqlc.arg(lng)::float8, sqlc.arg(lat)::float8)::geography) <= sqlc.arg(radius_meters) AND u.is_ghost_mode = false) OR s.user_id = sqlc.arg(user_id))
   AND s.expires_at > now()
   AND (u.is_shadow_banned = false OR s.user_id = sqlc.arg(user_id))
   -- Strict Streak Rule (DISABLED)

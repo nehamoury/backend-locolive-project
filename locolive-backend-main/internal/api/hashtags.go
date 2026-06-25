@@ -68,12 +68,26 @@ func (server *Server) searchHashtags(ctx *gin.Context) {
 
 // getTrendingHashtags returns top trending hashtags
 func (server *Server) getTrendingHashtags(ctx *gin.Context) {
-	limit, _ := strconv.Atoi(ctx.DefaultQuery("limit", "10"))
-	if limit < 1 || limit > 50 {
-		limit = 10
+	page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
+	pageSize, _ := strconv.Atoi(ctx.DefaultQuery("page_size", "10"))
+	if page < 1 {
+		page = 1
+	}
+	if pageSize < 1 || pageSize > 50 {
+		pageSize = 10
 	}
 
-	hashtags, err := server.store.GetTrendingHashtags(ctx, int32(limit))
+	var hashtags []db.Hashtag
+	var err error
+
+	if page == 1 && pageSize <= 10 {
+		hashtags, err = server.store.GetTrendingHashtags(ctx, int32(pageSize))
+	} else {
+		hashtags, err = server.store.ListTrendingHashtagsPaginated(ctx, db.ListTrendingHashtagsPaginatedParams{
+			Limit:  int32(pageSize),
+			Offset: int32((page - 1) * pageSize),
+		})
+	}
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
@@ -87,7 +101,7 @@ func (server *Server) getTrendingHashtags(ctx *gin.Context) {
 		}
 	}
 
-	ctx.JSON(http.StatusOK, successResponse(rsp))
+	ctx.JSON(http.StatusOK, successResponse(gin.H{"hashtags": rsp, "page": page, "page_size": pageSize}))
 }
 
 // getReelsByHashtag returns reels tagged with a specific hashtag

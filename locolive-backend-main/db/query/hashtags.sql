@@ -21,7 +21,7 @@ ON CONFLICT DO NOTHING;
 SELECT * FROM hashtags
 WHERE name ILIKE $1 || '%'
 ORDER BY usage_count DESC, last_used_at DESC
-LIMIT $2;
+LIMIT $2 OFFSET $3;
 
 -- name: GetTrendingHashtags :many
 SELECT * FROM hashtags
@@ -51,6 +51,23 @@ LIMIT $1 OFFSET $2;
 
 -- name: GetHashtagByName :one
 SELECT * FROM hashtags WHERE name = $1 LIMIT 1;
+
+-- name: ListTrendingHashtagsPaginated :many
+SELECT * FROM hashtags
+ORDER BY 
+    (usage_count + 
+     (CASE WHEN last_used_at >= now() - interval '24 hours' THEN 3 ELSE 0 END) +
+     (CASE WHEN last_used_at >= now() - interval '7 days' THEN 2 ELSE 0 END)) DESC,
+    last_used_at DESC
+LIMIT $1 OFFSET $2;
+
+-- name: UpsertHashtagForPost :one
+INSERT INTO hashtags (name, slug, usage_count, reels_count, last_used_at)
+VALUES ($1, $2, 1, 0, now())
+ON CONFLICT (name) DO UPDATE 
+SET usage_count = hashtags.usage_count + 1,
+    last_used_at = now()
+RETURNING *;
 
 -- name: ListPostsByHashtag :many
 SELECT 

@@ -41,7 +41,8 @@ SELECT
     COALESCE((SELECT status FROM connections c WHERE (c.requester_id = sqlc.arg(viewer_id) AND c.target_id = r.user_id) OR (c.requester_id = r.user_id AND c.target_id = sqlc.arg(viewer_id)) LIMIT 1)::text, 'none') AS connection_status
 FROM reels r
 JOIN users u ON r.user_id = u.id
-WHERE ST_DWithin(r.geom, ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float, sqlc.arg(lat)::float), 4326)::geography, sqlc.arg(radius)::float)
+WHERE ST_DWithin(r.geom, ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float, sqlc.arg(lat)::float), 4326), (sqlc.arg(radius)::float / 111.0) / 1000.0)
+  AND ST_Distance(r.geom::geography, ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float, sqlc.arg(lat)::float), 4326)::geography) <= sqlc.arg(radius)::float
 ORDER BY distance_meters ASC
 LIMIT $1 OFFSET $2;
 
@@ -199,3 +200,19 @@ SELECT COUNT(*) FROM reels;
 
 -- name: UpdateReel :one
 UPDATE reels SET caption = sqlc.arg(caption), updated_at = now() WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id) RETURNING *;
+
+-- name: SearchReels :many
+SELECT r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.category_id,
+       COALESCE(ST_Y(r.geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(r.geom::geometry)::float8, 0.0)::float8 AS lng,
+       r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
+       u.username, u.avatar_url,
+       EXISTS (SELECT 1 FROM reel_likes rl WHERE rl.reel_id = r.id AND rl.user_id = sqlc.arg(viewer_id)) AS is_liked,
+       EXISTS (SELECT 1 FROM reel_saves rs WHERE rs.reel_id = r.id AND rs.user_id = sqlc.arg(viewer_id)) AS is_saved,
+       COALESCE((SELECT status FROM connections c WHERE (c.requester_id = sqlc.arg(viewer_id) AND c.target_id = r.user_id) OR (c.requester_id = r.user_id AND c.target_id = sqlc.arg(viewer_id)) LIMIT 1)::text, 'none') AS connection_status
+FROM reels r
+JOIN users u ON r.user_id = u.id
+WHERE (r.caption ILIKE '%' || sqlc.arg(query)::text || '%'
+    OR r.location_name ILIKE '%' || sqlc.arg(query)::text || '%')
+  AND u.is_shadow_banned = false
+ORDER BY r.likes_count DESC, r.created_at DESC
+LIMIT $1 OFFSET $2;

@@ -167,6 +167,8 @@ type Querier interface {
 	GetNotificationPreferences(ctx context.Context, userID uuid.UUID) (NotificationPreference, error)
 	GetNotificationSettings(ctx context.Context, userID uuid.UUID) (NotificationSetting, error)
 	GetPasswordResetByToken(ctx context.Context, token string) (PasswordReset, error)
+	GetPlace(ctx context.Context, id uuid.UUID) (Place, error)
+	GetPlaceBySlug(ctx context.Context, slug string) (Place, error)
 	GetPost(ctx context.Context, id uuid.UUID) (Post, error)
 	GetPostComment(ctx context.Context, id uuid.UUID) (PostComment, error)
 	GetPrivacySettings(ctx context.Context, userID uuid.UUID) (PrivacySetting, error)
@@ -226,6 +228,7 @@ type Querier interface {
 	HasValidStory(ctx context.Context, userID uuid.UUID) (bool, error)
 	IncrementCategoryStats(ctx context.Context, arg IncrementCategoryStatsParams) error
 	IncrementDailyStats(ctx context.Context, arg IncrementDailyStatsParams) (DailyStat, error)
+	IncrementPlacePostCount(ctx context.Context, id uuid.UUID) error
 	IncrementPostComments(ctx context.Context, id uuid.UUID) error
 	IncrementPostShares(ctx context.Context, id uuid.UUID) error
 	IncrementReelComments(ctx context.Context, id uuid.UUID) error
@@ -249,6 +252,9 @@ type Querier interface {
 	// Admin: List all stories
 	ListAllStories(ctx context.Context, arg ListAllStoriesParams) ([]ListAllStoriesRow, error)
 	ListCategories(ctx context.Context) ([]Category, error)
+	ListCategoryCreators(ctx context.Context, arg ListCategoryCreatorsParams) ([]ListCategoryCreatorsRow, error)
+	ListCategoryPosts(ctx context.Context, arg ListCategoryPostsParams) ([]ListCategoryPostsRow, error)
+	ListCategoryReels(ctx context.Context, arg ListCategoryReelsParams) ([]ListCategoryReelsRow, error)
 	ListConnections(ctx context.Context, requesterID uuid.UUID) ([]ListConnectionsRow, error)
 	// Get posts from connections AND own posts AND nearby discovery (public posts)
 	ListConnectionsPosts(ctx context.Context, arg ListConnectionsPostsParams) ([]ListConnectionsPostsRow, error)
@@ -274,6 +280,9 @@ type Querier interface {
 	ListSavedReels(ctx context.Context, arg ListSavedReelsParams) ([]ListSavedReelsRow, error)
 	ListSentConnectionRequests(ctx context.Context, requesterID uuid.UUID) ([]ListSentConnectionRequestsRow, error)
 	ListTrendingCategories(ctx context.Context, arg ListTrendingCategoriesParams) ([]ListTrendingCategoriesRow, error)
+	ListTrendingHashtagsPaginated(ctx context.Context, arg ListTrendingHashtagsPaginatedParams) ([]Hashtag, error)
+	ListTrendingNearbyPosts(ctx context.Context, arg ListTrendingNearbyPostsParams) ([]ListTrendingNearbyPostsRow, error)
+	ListTrendingPlaces(ctx context.Context, arg ListTrendingPlacesParams) ([]Place, error)
 	ListUserReels(ctx context.Context, arg ListUserReelsParams) ([]ListUserReelsRow, error)
 	// Admin Queries
 	ListUsers(ctx context.Context, arg ListUsersParams) ([]User, error)
@@ -298,7 +307,10 @@ type Querier interface {
 	SavePostAtomic(ctx context.Context, arg SavePostAtomicParams) (int32, error)
 	SaveReelAtomic(ctx context.Context, arg SaveReelAtomicParams) (int32, error)
 	SearchHashtags(ctx context.Context, arg SearchHashtagsParams) ([]Hashtag, error)
-	SearchUsers(ctx context.Context, query string) ([]SearchUsersRow, error)
+	SearchPlaces(ctx context.Context, arg SearchPlacesParams) ([]Place, error)
+	SearchPosts(ctx context.Context, arg SearchPostsParams) ([]SearchPostsRow, error)
+	SearchReels(ctx context.Context, arg SearchReelsParams) ([]SearchReelsRow, error)
+	SearchUsers(ctx context.Context, arg SearchUsersParams) ([]SearchUsersRow, error)
 	SearchUsersAdmin(ctx context.Context, arg SearchUsersAdminParams) ([]User, error)
 	SoftDeleteUser(ctx context.Context, id uuid.UUID) error
 	// Privacy Features
@@ -340,7 +352,9 @@ type Querier interface {
 	// Note: This should be called within a transaction that also records history
 	UpdateUsername(ctx context.Context, arg UpdateUsernameParams) (User, error)
 	UpsertHashtag(ctx context.Context, arg UpsertHashtagParams) (Hashtag, error)
+	UpsertHashtagForPost(ctx context.Context, arg UpsertHashtagForPostParams) (Hashtag, error)
 	UpsertNotificationSettings(ctx context.Context, arg UpsertNotificationSettingsParams) (NotificationSetting, error)
+	UpsertPlace(ctx context.Context, arg UpsertPlaceParams) (Place, error)
 	UpsertPrivacySettings(ctx context.Context, arg UpsertPrivacySettingsParams) (PrivacySetting, error)
 	UpsertUserPreferences(ctx context.Context, arg UpsertUserPreferencesParams) (UserPreference, error)
 	VerifyEmail(ctx context.Context, id uuid.UUID) (User, error)

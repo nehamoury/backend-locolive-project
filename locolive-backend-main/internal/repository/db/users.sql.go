@@ -1158,8 +1158,18 @@ WHERE
   (username ILIKE '%' || $1::text || '%'
    OR full_name ILIKE '%' || $1::text || '%')
   AND is_shadow_banned = false
-LIMIT 10
+ORDER BY 
+  CASE WHEN username ILIKE $1::text || '%' THEN 0 ELSE 1 END,
+  is_verified DESC,
+  username ASC
+LIMIT $3 OFFSET $2
 `
+
+type SearchUsersParams struct {
+	Query string `json:"query"`
+	Off   int32  `json:"off"`
+	Lim   int32  `json:"lim"`
+}
 
 type SearchUsersRow struct {
 	ID         uuid.UUID      `json:"id"`
@@ -1170,8 +1180,8 @@ type SearchUsersRow struct {
 	IsPrivate  bool           `json:"is_private"`
 }
 
-func (q *Queries) SearchUsers(ctx context.Context, query string) ([]SearchUsersRow, error) {
-	rows, err := q.db.QueryContext(ctx, searchUsers, query)
+func (q *Queries) SearchUsers(ctx context.Context, arg SearchUsersParams) ([]SearchUsersRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchUsers, arg.Query, arg.Off, arg.Lim)
 	if err != nil {
 		return nil, err
 	}

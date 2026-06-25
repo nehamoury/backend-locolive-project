@@ -37,10 +37,11 @@ WITH recent_locations AS (
   WHERE l.expires_at > NOW()
     AND l.user_id != @exclude_user_id
     AND ST_DWithin(
-      l.geom::geography,
-      ST_SetSRID(ST_MakePoint(@lng::float8, @lat::float8), 4326)::geography,
-      @radius_km * 1000
+      l.geom,
+      ST_SetSRID(ST_MakePoint(@lng::float8, @lat::float8), 4326),
+      @radius_km / 111.0
     )
+    AND ST_Distance(l.geom::geography, ST_SetSRID(ST_MakePoint(@lng::float8, @lat::float8), 4326)::geography) <= @radius_km * 1000
   ORDER BY l.user_id, l.time_bucket DESC
 )
 SELECT 

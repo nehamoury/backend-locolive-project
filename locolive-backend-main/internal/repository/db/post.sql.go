@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	"github.com/sqlc-dev/pqtype"
 )
 
@@ -561,7 +562,8 @@ SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.loc
 FROM posts p
 JOIN users u ON p.user_id = u.id
 WHERE p.geom IS NOT NULL
-  AND ST_DWithin(p.geom, ST_SetSRID(ST_MakePoint($1::float, $2::float), 4326)::geography, $4::float * 1000)
+  AND ST_DWithin(p.geom, ST_SetSRID(ST_MakePoint($1::float, $2::float), 4326), ($4::float / 111.0))
+  AND ST_Distance(p.geom::geography, ST_SetSRID(ST_MakePoint($1::float, $2::float), 4326)::geography) <= ($4::float * 1000)
 ORDER BY 
     ((p.likes_count * 1) + (p.comments_count * 2) + (p.shares_count * 3) +
      (CASE WHEN p.created_at >= now() - interval '24 hours' THEN 10 ELSE 0 END) +
@@ -892,6 +894,124 @@ func (q *Queries) ListSavedPosts(ctx context.Context, arg ListSavedPostsParams) 
 	return items, nil
 }
 
+const listTrendingNearbyPosts = `-- name: ListTrendingNearbyPosts :many
+SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings, p.category_id,
+       p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
+       u.username, u.full_name, u.avatar_url,
+       ST_Distance(p.geom, ST_SetSRID(ST_MakePoint($1::float, $2::float), 4326)::geography) AS distance_meters,
+       CASE WHEN p.geom IS NOT NULL THEN ST_Y(p.geom::geometry) ELSE NULL END as lat_out,
+       CASE WHEN p.geom IS NOT NULL THEN ST_X(p.geom::geometry) ELSE NULL END as lng_out,
+       EXISTS(SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = $3) as liked_by_viewer,
+       EXISTS(SELECT 1 FROM post_saves ps WHERE ps.post_id = p.id AND ps.user_id = $3) as is_saved
+FROM posts p
+JOIN users u ON p.user_id = u.id
+WHERE p.geom IS NOT NULL
+  AND ST_DWithin(p.geom, ST_SetSRID(ST_MakePoint($1::float, $2::float), 4326), ($4::float / 111.0))
+  AND ST_Distance(p.geom::geography, ST_SetSRID(ST_MakePoint($1::float, $2::float), 4326)::geography) <= ($4::float * 1000)
+  AND ($5::text = '' OR
+       ($5::text = 'today' AND p.created_at >= CURRENT_DATE) OR
+       ($5::text = 'week' AND p.created_at >= CURRENT_DATE - interval '7 days') OR
+       ($5::text = 'month' AND p.created_at >= CURRENT_DATE - interval '30 days'))
+  AND ($6::text = '00000000-0000-0000-0000-000000000000' OR p.category_id = $6::uuid)
+ORDER BY 
+    ((p.likes_count * 1) + (p.comments_count * 2) + (p.shares_count * 3) +
+     (CASE WHEN p.created_at >= now() - interval '24 hours' THEN 10 ELSE 0 END) +
+     (CASE WHEN p.created_at >= now() - interval '7 days' THEN 5 ELSE 0 END)) DESC,
+    p.created_at DESC
+LIMIT $8 OFFSET $7
+`
+
+type ListTrendingNearbyPostsParams struct {
+	Lng        float64   `json:"lng"`
+	Lat        float64   `json:"lat"`
+	ViewerID   uuid.UUID `json:"viewer_id"`
+	RadiusKm   float64   `json:"radius_km"`
+	TimeFilter string    `json:"time_filter"`
+	CategoryID string    `json:"category_id"`
+	Off        int32     `json:"off"`
+	Lim        int32     `json:"lim"`
+}
+
+type ListTrendingNearbyPostsRow struct {
+	ID             uuid.UUID             `json:"id"`
+	UserID         uuid.UUID             `json:"user_id"`
+	MediaUrl       string                `json:"media_url"`
+	MediaType      string                `json:"media_type"`
+	Caption        sql.NullString        `json:"caption"`
+	BodyText       sql.NullString        `json:"body_text"`
+	LocationName   sql.NullString        `json:"location_name"`
+	CropSettings   pqtype.NullRawMessage `json:"crop_settings"`
+	CategoryID     uuid.NullUUID         `json:"category_id"`
+	LikesCount     int32                 `json:"likes_count"`
+	CommentsCount  int32                 `json:"comments_count"`
+	SharesCount    int32                 `json:"shares_count"`
+	CreatedAt      time.Time             `json:"created_at"`
+	UpdatedAt      time.Time             `json:"updated_at"`
+	Username       string                `json:"username"`
+	FullName       string                `json:"full_name"`
+	AvatarUrl      sql.NullString        `json:"avatar_url"`
+	DistanceMeters interface{}           `json:"distance_meters"`
+	LatOut         interface{}           `json:"lat_out"`
+	LngOut         interface{}           `json:"lng_out"`
+	LikedByViewer  bool                  `json:"liked_by_viewer"`
+	IsSaved        bool                  `json:"is_saved"`
+}
+
+func (q *Queries) ListTrendingNearbyPosts(ctx context.Context, arg ListTrendingNearbyPostsParams) ([]ListTrendingNearbyPostsRow, error) {
+	rows, err := q.db.QueryContext(ctx, listTrendingNearbyPosts,
+		arg.Lng,
+		arg.Lat,
+		arg.ViewerID,
+		arg.RadiusKm,
+		arg.TimeFilter,
+		arg.CategoryID,
+		arg.Off,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []ListTrendingNearbyPostsRow
+	for rows.Next() {
+		var i ListTrendingNearbyPostsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.MediaUrl,
+			&i.MediaType,
+			&i.Caption,
+			&i.BodyText,
+			&i.LocationName,
+			&i.CropSettings,
+			&i.CategoryID,
+			&i.LikesCount,
+			&i.CommentsCount,
+			&i.SharesCount,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Username,
+			&i.FullName,
+			&i.AvatarUrl,
+			&i.DistanceMeters,
+			&i.LatOut,
+			&i.LngOut,
+			&i.LikedByViewer,
+			&i.IsSaved,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const savePostAtomic = `-- name: SavePostAtomic :one
 WITH inserted AS (
     INSERT INTO post_saves (post_id, user_id)
@@ -916,6 +1036,122 @@ func (q *Queries) SavePostAtomic(ctx context.Context, arg SavePostAtomicParams) 
 	var saves_count int32
 	err := row.Scan(&saves_count)
 	return saves_count, err
+}
+
+const searchPosts = `-- name: SearchPosts :many
+SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name,
+       p.crop_settings, p.category_id,
+       p.likes_count, p.comments_count, p.shares_count, p.saves_count, p.created_at, p.updated_at,
+       u.username, u.full_name, u.avatar_url,
+       CASE WHEN p.geom IS NOT NULL THEN ST_Y(p.geom::geometry) ELSE NULL END as lat_out,
+       CASE WHEN p.geom IS NOT NULL THEN ST_X(p.geom::geometry) ELSE NULL END as lng_out,
+       c.name as category_name, c.icon as category_icon,
+       COALESCE((
+           SELECT array_agg(h2.name)::text[] 
+           FROM post_hashtags ph2 
+           JOIN hashtags h2 ON ph2.hashtag_id = h2.id 
+           WHERE ph2.post_id = p.id
+       ), '{}')::text[] as hashtags,
+       EXISTS(SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = $1) as liked_by_viewer,
+       EXISTS(SELECT 1 FROM post_saves ps WHERE ps.post_id = p.id AND ps.user_id = $1) as is_saved
+FROM posts p
+JOIN users u ON p.user_id = u.id
+LEFT JOIN categories c ON p.category_id = c.id
+WHERE (p.caption ILIKE '%' || $2::text || '%'
+    OR p.body_text ILIKE '%' || $2::text || '%'
+    OR p.location_name ILIKE '%' || $2::text || '%')
+  AND u.is_shadow_banned = false
+ORDER BY p.likes_count DESC, p.created_at DESC
+LIMIT $4 OFFSET $3
+`
+
+type SearchPostsParams struct {
+	ViewerID uuid.UUID `json:"viewer_id"`
+	Query    string    `json:"query"`
+	Off      int32     `json:"off"`
+	Lim      int32     `json:"lim"`
+}
+
+type SearchPostsRow struct {
+	ID            uuid.UUID             `json:"id"`
+	UserID        uuid.UUID             `json:"user_id"`
+	MediaUrl      string                `json:"media_url"`
+	MediaType     string                `json:"media_type"`
+	Caption       sql.NullString        `json:"caption"`
+	BodyText      sql.NullString        `json:"body_text"`
+	LocationName  sql.NullString        `json:"location_name"`
+	CropSettings  pqtype.NullRawMessage `json:"crop_settings"`
+	CategoryID    uuid.NullUUID         `json:"category_id"`
+	LikesCount    int32                 `json:"likes_count"`
+	CommentsCount int32                 `json:"comments_count"`
+	SharesCount   int32                 `json:"shares_count"`
+	SavesCount    int32                 `json:"saves_count"`
+	CreatedAt     time.Time             `json:"created_at"`
+	UpdatedAt     time.Time             `json:"updated_at"`
+	Username      string                `json:"username"`
+	FullName      string                `json:"full_name"`
+	AvatarUrl     sql.NullString        `json:"avatar_url"`
+	LatOut        interface{}           `json:"lat_out"`
+	LngOut        interface{}           `json:"lng_out"`
+	CategoryName  sql.NullString        `json:"category_name"`
+	CategoryIcon  sql.NullString        `json:"category_icon"`
+	Hashtags      []string              `json:"hashtags"`
+	LikedByViewer bool                  `json:"liked_by_viewer"`
+	IsSaved       bool                  `json:"is_saved"`
+}
+
+func (q *Queries) SearchPosts(ctx context.Context, arg SearchPostsParams) ([]SearchPostsRow, error) {
+	rows, err := q.db.QueryContext(ctx, searchPosts,
+		arg.ViewerID,
+		arg.Query,
+		arg.Off,
+		arg.Lim,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SearchPostsRow
+	for rows.Next() {
+		var i SearchPostsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.UserID,
+			&i.MediaUrl,
+			&i.MediaType,
+			&i.Caption,
+			&i.BodyText,
+			&i.LocationName,
+			&i.CropSettings,
+			&i.CategoryID,
+			&i.LikesCount,
+			&i.CommentsCount,
+			&i.SharesCount,
+			&i.SavesCount,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Username,
+			&i.FullName,
+			&i.AvatarUrl,
+			&i.LatOut,
+			&i.LngOut,
+			&i.CategoryName,
+			&i.CategoryIcon,
+			pq.Array(&i.Hashtags),
+			&i.LikedByViewer,
+			&i.IsSaved,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const unlikePostAtomic = `-- name: UnlikePostAtomic :one

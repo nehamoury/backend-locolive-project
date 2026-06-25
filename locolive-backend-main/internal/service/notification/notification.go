@@ -1,12 +1,12 @@
 package notification
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/messaging"
@@ -26,17 +26,21 @@ func NewNotificationService(credentialsPath string) (*NotificationService, error
 		return nil, fmt.Errorf("error reading credentials file: %v", err)
 	}
 
-	// Extract project_id
-	var creds struct {
-		ProjectID string `json:"project_id"`
-	}
+	var creds map[string]interface{}
 	if err := json.Unmarshal(data, &creds); err == nil {
-		projectID = creds.ProjectID
+		if pid, ok := creds["project_id"].(string); ok {
+			projectID = pid
+		}
+		if pk, ok := creds["private_key"].(string); ok {
+			// Properly replace literal \n with newlines inside the string
+			creds["private_key"] = strings.ReplaceAll(pk, "\\n", "\n")
+			if fixedData, err := json.Marshal(creds); err == nil {
+				data = fixedData
+			}
+		}
 	}
 
-	// Fix escaped newlines in the private key
-	fixedData := bytes.ReplaceAll(data, []byte("\\n"), []byte("\n"))
-	opt := option.WithCredentialsJSON(fixedData)
+	opt := option.WithCredentialsJSON(data)
 	config := &firebase.Config{
 		ProjectID: projectID,
 	}

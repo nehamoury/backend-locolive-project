@@ -1,11 +1,12 @@
 package util
 
 import (
-	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/auth"
@@ -21,9 +22,17 @@ func InitFirebaseAuth(credentialsPath string) error {
 		return fmt.Errorf("error reading credentials file: %v", err)
 	}
 
-	// Fix escaped newlines in the private key if present (common issue with env variables or copy-paste)
-	fixedData := bytes.ReplaceAll(data, []byte("\\n"), []byte("\n"))
-	opt := option.WithCredentialsJSON(fixedData)
+	var creds map[string]interface{}
+	if err := json.Unmarshal(data, &creds); err == nil {
+		if pk, ok := creds["private_key"].(string); ok {
+			// Properly replace literal \n with newlines inside the string
+			creds["private_key"] = strings.ReplaceAll(pk, "\\n", "\n")
+			if fixedData, err := json.Marshal(creds); err == nil {
+				data = fixedData
+			}
+		}
+	}
+	opt := option.WithCredentialsJSON(data)
 
 	app, err := firebase.NewApp(context.Background(), nil, opt)
 	if err != nil {

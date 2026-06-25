@@ -1,9 +1,11 @@
 package util
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"log"
+	"os"
 
 	firebase "firebase.google.com/go/v4"
 	"firebase.google.com/go/v4/auth"
@@ -14,7 +16,15 @@ var firebaseAuthClient *auth.Client
 
 // InitFirebaseAuth initializes the Firebase Auth client using service account credentials
 func InitFirebaseAuth(credentialsPath string) error {
-	opt := option.WithCredentialsFile(credentialsPath)
+	data, err := os.ReadFile(credentialsPath)
+	if err != nil {
+		return fmt.Errorf("error reading credentials file: %v", err)
+	}
+
+	// Fix escaped newlines in the private key if present (common issue with env variables or copy-paste)
+	fixedData := bytes.ReplaceAll(data, []byte("\\n"), []byte("\n"))
+	opt := option.WithCredentialsJSON(fixedData)
+
 	app, err := firebase.NewApp(context.Background(), nil, opt)
 	if err != nil {
 		return fmt.Errorf("error initializing firebase app: %v", err)

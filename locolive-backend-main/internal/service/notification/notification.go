@@ -1,6 +1,7 @@
 package notification
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -20,16 +21,22 @@ func NewNotificationService(credentialsPath string) (*NotificationService, error
 	// Explicitly extract project_id from the credentials file
 	// This fixes the "project ID is required" error for FCM
 	var projectID string
-	if data, err := os.ReadFile(credentialsPath); err == nil {
-		var creds struct {
-			ProjectID string `json:"project_id"`
-		}
-		if err := json.Unmarshal(data, &creds); err == nil {
-			projectID = creds.ProjectID
-		}
+	data, err := os.ReadFile(credentialsPath)
+	if err != nil {
+		return nil, fmt.Errorf("error reading credentials file: %v", err)
 	}
 
-	opt := option.WithCredentialsFile(credentialsPath)
+	// Extract project_id
+	var creds struct {
+		ProjectID string `json:"project_id"`
+	}
+	if err := json.Unmarshal(data, &creds); err == nil {
+		projectID = creds.ProjectID
+	}
+
+	// Fix escaped newlines in the private key
+	fixedData := bytes.ReplaceAll(data, []byte("\\n"), []byte("\n"))
+	opt := option.WithCredentialsJSON(fixedData)
 	config := &firebase.Config{
 		ProjectID: projectID,
 	}

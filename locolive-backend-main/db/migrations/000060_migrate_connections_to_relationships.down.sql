@@ -1,0 +1,3 @@
+-- Cannot safely undo without losing new relationships, but theoretically:
+-- DELETE FROM relationships WHERE created_at <= (timestamp of migration);
+-- For safety, we leave it empty.

@@ -851,9 +851,9 @@ SELECT
   (SELECT COUNT(*) FROM stories WHERE stories.user_id = u.id) as story_count,
   (SELECT COUNT(*) FROM posts WHERE posts.user_id = u.id) as post_count,
   (SELECT COUNT(*) FROM reels WHERE reels.user_id = u.id) as reels_count,
-  (SELECT COUNT(*) FROM connections WHERE (connections.requester_id = u.id OR connections.target_id = u.id) AND status = 'accepted') as connection_count,
-  (SELECT COUNT(*) FROM connections WHERE connections.requester_id = u.id AND status = 'accepted') as following_count,
-  (SELECT COUNT(*) FROM connections WHERE connections.target_id = u.id AND status = 'accepted') as followers_count,
+  (SELECT COUNT(*) FROM relationships WHERE (relationships.user_id = u.id OR relationships.target_user_id = u.id) AND status = 'active') as connection_count,
+  (SELECT COUNT(*) FROM relationships WHERE relationships.user_id = u.id AND type = 'follow' AND status = 'active') as following_count,
+  (SELECT COUNT(*) FROM relationships WHERE relationships.target_user_id = u.id AND type = 'follow' AND status = 'active') as followers_count,
   (SELECT COUNT(DISTINCT viewer_id) FROM profile_views WHERE viewed_user_id = u.id) as total_views,
   (SELECT COUNT(*) FROM crossings WHERE crossings.user_id_1 = u.id OR crossings.user_id_2 = u.id) as crossings_count,
   CASE

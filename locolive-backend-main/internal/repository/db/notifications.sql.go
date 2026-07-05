@@ -48,10 +48,12 @@ INSERT INTO notifications (
   message,
   related_user_id,
   related_story_id,
-  related_crossing_id
+  related_crossing_id,
+  related_post_id,
+  related_reel_id
 ) VALUES (
-  $1, $2, $3, $4, $5, $6, $7, $8, $9
-) RETURNING id, user_id, type, title, message, related_user_id, related_story_id, related_crossing_id, is_read, created_at, sub_type, sound
+  $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
+) RETURNING id, user_id, type, title, message, related_user_id, related_story_id, related_crossing_id, is_read, created_at, sub_type, sound, read_at, seen_at, related_post_id, related_reel_id
 `
 
 type CreateNotificationParams struct {
@@ -64,6 +66,8 @@ type CreateNotificationParams struct {
 	RelatedUserID     uuid.NullUUID    `json:"related_user_id"`
 	RelatedStoryID    uuid.NullUUID    `json:"related_story_id"`
 	RelatedCrossingID uuid.NullUUID    `json:"related_crossing_id"`
+	RelatedPostID     uuid.NullUUID    `json:"related_post_id"`
+	RelatedReelID     uuid.NullUUID    `json:"related_reel_id"`
 }
 
 func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotificationParams) (Notification, error) {
@@ -77,6 +81,8 @@ func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotification
 		arg.RelatedUserID,
 		arg.RelatedStoryID,
 		arg.RelatedCrossingID,
+		arg.RelatedPostID,
+		arg.RelatedReelID,
 	)
 	var i Notification
 	err := row.Scan(
@@ -92,6 +98,10 @@ func (q *Queries) CreateNotification(ctx context.Context, arg CreateNotification
 		&i.CreatedAt,
 		&i.SubType,
 		&i.Sound,
+		&i.ReadAt,
+		&i.SeenAt,
+		&i.RelatedPostID,
+		&i.RelatedReelID,
 	)
 	return i, err
 }
@@ -151,7 +161,7 @@ func (q *Queries) DeleteOldNotifications(ctx context.Context) error {
 
 const listNotifications = `-- name: ListNotifications :many
 SELECT 
-    n.id, n.user_id, n.type, n.title, n.message, n.related_user_id, n.related_story_id, n.related_crossing_id, n.is_read, n.created_at, n.sub_type, n.sound,
+    n.id, n.user_id, n.type, n.title, n.message, n.related_user_id, n.related_story_id, n.related_crossing_id, n.related_post_id, n.related_reel_id, n.is_read, n.created_at, n.sub_type, n.sound,
     COALESCE(u.username, '')::text as actor_username,
     COALESCE(u.full_name, '')::text as actor_full_name,
     COALESCE(u.avatar_url, '')::text as actor_avatar_url
@@ -177,6 +187,8 @@ type ListNotificationsRow struct {
 	RelatedUserID     uuid.NullUUID    `json:"related_user_id"`
 	RelatedStoryID    uuid.NullUUID    `json:"related_story_id"`
 	RelatedCrossingID uuid.NullUUID    `json:"related_crossing_id"`
+	RelatedPostID     uuid.NullUUID    `json:"related_post_id"`
+	RelatedReelID     uuid.NullUUID    `json:"related_reel_id"`
 	IsRead            bool             `json:"is_read"`
 	CreatedAt         time.Time        `json:"created_at"`
 	SubType           sql.NullString   `json:"sub_type"`
@@ -204,6 +216,8 @@ func (q *Queries) ListNotifications(ctx context.Context, arg ListNotificationsPa
 			&i.RelatedUserID,
 			&i.RelatedStoryID,
 			&i.RelatedCrossingID,
+			&i.RelatedPostID,
+			&i.RelatedReelID,
 			&i.IsRead,
 			&i.CreatedAt,
 			&i.SubType,
@@ -227,7 +241,7 @@ func (q *Queries) ListNotifications(ctx context.Context, arg ListNotificationsPa
 
 const listNotificationsAdmin = `-- name: ListNotificationsAdmin :many
 SELECT 
-    n.id, n.user_id, n.type, n.title, n.message, n.related_user_id, n.related_story_id, n.related_crossing_id, n.is_read, n.created_at, n.sub_type, n.sound,
+    n.id, n.user_id, n.type, n.title, n.message, n.related_user_id, n.related_story_id, n.related_crossing_id, n.related_post_id, n.related_reel_id, n.is_read, n.created_at, n.sub_type, n.sound,
     COALESCE(u.username, '')::text as actor_username,
     COALESCE(u.full_name, '')::text as actor_full_name,
     COALESCE(u.avatar_url, '')::text as actor_avatar_url
@@ -252,6 +266,8 @@ type ListNotificationsAdminRow struct {
 	RelatedUserID     uuid.NullUUID    `json:"related_user_id"`
 	RelatedStoryID    uuid.NullUUID    `json:"related_story_id"`
 	RelatedCrossingID uuid.NullUUID    `json:"related_crossing_id"`
+	RelatedPostID     uuid.NullUUID    `json:"related_post_id"`
+	RelatedReelID     uuid.NullUUID    `json:"related_reel_id"`
 	IsRead            bool             `json:"is_read"`
 	CreatedAt         time.Time        `json:"created_at"`
 	SubType           sql.NullString   `json:"sub_type"`
@@ -280,6 +296,8 @@ func (q *Queries) ListNotificationsAdmin(ctx context.Context, arg ListNotificati
 			&i.RelatedUserID,
 			&i.RelatedStoryID,
 			&i.RelatedCrossingID,
+			&i.RelatedPostID,
+			&i.RelatedReelID,
 			&i.IsRead,
 			&i.CreatedAt,
 			&i.SubType,
@@ -316,7 +334,7 @@ const markNotificationAsRead = `-- name: MarkNotificationAsRead :one
 UPDATE notifications
 SET is_read = true
 WHERE id = $1 AND user_id = $2
-RETURNING id, user_id, type, title, message, related_user_id, related_story_id, related_crossing_id, is_read, created_at, sub_type, sound
+RETURNING id, user_id, type, title, message, related_user_id, related_story_id, related_crossing_id, is_read, created_at, sub_type, sound, read_at, seen_at, related_post_id, related_reel_id
 `
 
 type MarkNotificationAsReadParams struct {
@@ -340,6 +358,10 @@ func (q *Queries) MarkNotificationAsRead(ctx context.Context, arg MarkNotificati
 		&i.CreatedAt,
 		&i.SubType,
 		&i.Sound,
+		&i.ReadAt,
+		&i.SeenAt,
+		&i.RelatedPostID,
+		&i.RelatedReelID,
 	)
 	return i, err
 }

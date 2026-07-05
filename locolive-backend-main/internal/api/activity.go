@@ -41,11 +41,12 @@ func (server *Server) getActivityStatus(ctx *gin.Context) {
 
 			// 3. Check Connection Logic (Friendship)
 			// We allow seeing "Last Active" if you are connected
-			conn, err := server.store.GetConnection(ctx, db.GetConnectionParams{
-				RequesterID: authPayload.UserID,
-				TargetID:    targetID,
+			rel, err := server.store.GetRelationship(ctx, db.GetRelationshipParams{
+				UserID:       authPayload.UserID,
+				TargetUserID: targetID,
+				Type:         "follow",
 			})
-			isConnectedAndAccepted := err == nil && conn.Status == "accepted"
+			isConnectedAndAccepted := err == nil && rel.Status == "active"
 
 			// Determine Visibility
 			isVisible := false

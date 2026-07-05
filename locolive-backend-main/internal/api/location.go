@@ -161,15 +161,16 @@ type getNearbyUsersRequest struct {
 }
 
 type nearbyUserResponse struct {
-	UserID    string  `json:"id"`
-	Distance  float64 `json:"distance_km"`
-	Latitude  float64 `json:"lat"`
-	Longitude float64 `json:"lng"`
-	Username  string  `json:"username"`
-	FullName  string  `json:"full_name"`
-	AvatarUrl string  `json:"avatar_url"`
-	Bio       string  `json:"bio"`
-	Online    bool    `json:"online"`
+	UserID           string  `json:"id"`
+	Distance         float64 `json:"distance_km"`
+	Latitude         float64 `json:"lat"`
+	Longitude        float64 `json:"lng"`
+	Username         string  `json:"username"`
+	FullName         string  `json:"full_name"`
+	AvatarUrl        string  `json:"avatar_url"`
+	Bio              string  `json:"bio"`
+	Online           bool    `json:"online"`
+	ConnectionStatus string  `json:"connection_status"`
 }
 
 func (server *Server) getNearbyUsers(ctx *gin.Context) {
@@ -241,16 +242,29 @@ func (server *Server) getNearbyUsers(ctx *gin.Context) {
 			continue
 		}
 
+		connStatus := "none"
+		rel, err1 := server.store.GetRelationship(ctx, db.GetRelationshipParams{
+			UserID:       authPayload.UserID,
+			TargetUserID: targetID,
+			Type:         "follow",
+		})
+		if err1 == nil && rel.Status == "active" {
+			connStatus = "accepted"
+		} else if err1 == nil && rel.Status == "pending" {
+			connStatus = "pending"
+		}
+
 		rsp = append(rsp, nearbyUserResponse{
-			UserID:    match.Name,
-			Distance:  match.Dist,
-			Latitude:  match.Latitude,
-			Longitude: match.Longitude,
-			Username:  user.Username,
-			FullName:  user.FullName,
-			AvatarUrl: avatar,
-			Bio:       bio,
-			Online:    online,
+			UserID:           match.Name,
+			Distance:         match.Dist,
+			Latitude:         match.Latitude,
+			Longitude:        match.Longitude,
+			Username:         user.Username,
+			FullName:         user.FullName,
+			AvatarUrl:        avatar,
+			Bio:              bio,
+			Online:           online,
+			ConnectionStatus: connStatus,
 		})
 		seen[match.Name] = true
 	}

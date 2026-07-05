@@ -70,7 +70,7 @@ func (q *Queries) CountSavedPosts(ctx context.Context, userID uuid.UUID) (int64,
 }
 
 const createPost = `-- name: CreatePost :one
-INSERT INTO posts (user_id, media_url, media_type, caption, body_text, location_name, geohash, geom, crop_settings, category_id)
+INSERT INTO posts (user_id, media_url, media_type, caption, body_text, location_name, geohash, geom, crop_settings, category_id, width, height, aspect_ratio, thumbnail_url, blur_hash, duration, file_size, mime_type)
 VALUES (
     $1, $2, $3,
     $4, $5, $6, $7,
@@ -79,9 +79,10 @@ VALUES (
          THEN ST_SetSRID(ST_MakePoint($9::float8, $10::float8), 4326)
          ELSE NULL END,
     $11,
-    $12
+    $12,
+    $13, $14, $15, $16, $17, $18, $19, $20
 )
-RETURNING id, user_id, media_url, media_type, caption, location_name, geohash, geom, likes_count, comments_count, created_at, updated_at, body_text, shares_count, crop_settings, saves_count, category_id,
+RETURNING id, user_id, media_url, media_type, caption, location_name, geohash, geom, likes_count, comments_count, created_at, updated_at, body_text, shares_count, crop_settings, saves_count, category_id, width, height, aspect_ratio, thumbnail_url, blur_hash, duration, file_size, mime_type, engagement_score, watch_time_score,
     CASE WHEN geom IS NOT NULL THEN ST_Y(geom::geometry) ELSE NULL END as lat_out,
     CASE WHEN geom IS NOT NULL THEN ST_X(geom::geometry) ELSE NULL END as lng_out
 `
@@ -99,28 +100,46 @@ type CreatePostParams struct {
 	Lat          float64               `json:"lat"`
 	CropSettings pqtype.NullRawMessage `json:"crop_settings"`
 	CategoryID   uuid.NullUUID         `json:"category_id"`
+	Width        sql.NullInt32         `json:"width"`
+	Height       sql.NullInt32         `json:"height"`
+	AspectRatio  sql.NullFloat64       `json:"aspect_ratio"`
+	ThumbnailUrl sql.NullString        `json:"thumbnail_url"`
+	BlurHash     sql.NullString        `json:"blur_hash"`
+	Duration     sql.NullInt32         `json:"duration"`
+	FileSize     sql.NullInt32         `json:"file_size"`
+	MimeType     sql.NullString        `json:"mime_type"`
 }
 
 type CreatePostRow struct {
-	ID            uuid.UUID             `json:"id"`
-	UserID        uuid.UUID             `json:"user_id"`
-	MediaUrl      string                `json:"media_url"`
-	MediaType     string                `json:"media_type"`
-	Caption       sql.NullString        `json:"caption"`
-	LocationName  sql.NullString        `json:"location_name"`
-	Geohash       sql.NullString        `json:"geohash"`
-	Geom          interface{}           `json:"geom"`
-	LikesCount    int32                 `json:"likes_count"`
-	CommentsCount int32                 `json:"comments_count"`
-	CreatedAt     time.Time             `json:"created_at"`
-	UpdatedAt     time.Time             `json:"updated_at"`
-	BodyText      sql.NullString        `json:"body_text"`
-	SharesCount   int32                 `json:"shares_count"`
-	CropSettings  pqtype.NullRawMessage `json:"crop_settings"`
-	SavesCount    int32                 `json:"saves_count"`
-	CategoryID    uuid.NullUUID         `json:"category_id"`
-	LatOut        interface{}           `json:"lat_out"`
-	LngOut        interface{}           `json:"lng_out"`
+	ID              uuid.UUID             `json:"id"`
+	UserID          uuid.UUID             `json:"user_id"`
+	MediaUrl        string                `json:"media_url"`
+	MediaType       string                `json:"media_type"`
+	Caption         sql.NullString        `json:"caption"`
+	LocationName    sql.NullString        `json:"location_name"`
+	Geohash         sql.NullString        `json:"geohash"`
+	Geom            interface{}           `json:"geom"`
+	LikesCount      int32                 `json:"likes_count"`
+	CommentsCount   int32                 `json:"comments_count"`
+	CreatedAt       time.Time             `json:"created_at"`
+	UpdatedAt       time.Time             `json:"updated_at"`
+	BodyText        sql.NullString        `json:"body_text"`
+	SharesCount     int32                 `json:"shares_count"`
+	CropSettings    pqtype.NullRawMessage `json:"crop_settings"`
+	SavesCount      int32                 `json:"saves_count"`
+	CategoryID      uuid.NullUUID         `json:"category_id"`
+	Width           sql.NullInt32         `json:"width"`
+	Height          sql.NullInt32         `json:"height"`
+	AspectRatio     sql.NullFloat64       `json:"aspect_ratio"`
+	ThumbnailUrl    sql.NullString        `json:"thumbnail_url"`
+	BlurHash        sql.NullString        `json:"blur_hash"`
+	Duration        sql.NullInt32         `json:"duration"`
+	FileSize        sql.NullInt32         `json:"file_size"`
+	MimeType        sql.NullString        `json:"mime_type"`
+	EngagementScore float64               `json:"engagement_score"`
+	WatchTimeScore  float64               `json:"watch_time_score"`
+	LatOut          interface{}           `json:"lat_out"`
+	LngOut          interface{}           `json:"lng_out"`
 }
 
 func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (CreatePostRow, error) {
@@ -137,6 +156,14 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (CreateP
 		arg.Lat,
 		arg.CropSettings,
 		arg.CategoryID,
+		arg.Width,
+		arg.Height,
+		arg.AspectRatio,
+		arg.ThumbnailUrl,
+		arg.BlurHash,
+		arg.Duration,
+		arg.FileSize,
+		arg.MimeType,
 	)
 	var i CreatePostRow
 	err := row.Scan(
@@ -157,6 +184,16 @@ func (q *Queries) CreatePost(ctx context.Context, arg CreatePostParams) (CreateP
 		&i.CropSettings,
 		&i.SavesCount,
 		&i.CategoryID,
+		&i.Width,
+		&i.Height,
+		&i.AspectRatio,
+		&i.ThumbnailUrl,
+		&i.BlurHash,
+		&i.Duration,
+		&i.FileSize,
+		&i.MimeType,
+		&i.EngagementScore,
+		&i.WatchTimeScore,
 		&i.LatOut,
 		&i.LngOut,
 	)
@@ -236,7 +273,7 @@ func (q *Queries) DeletePostComment(ctx context.Context, arg DeletePostCommentPa
 }
 
 const getPost = `-- name: GetPost :one
-SELECT id, user_id, media_url, media_type, caption, location_name, geohash, geom, likes_count, comments_count, created_at, updated_at, body_text, shares_count, crop_settings, saves_count, category_id FROM posts WHERE id = $1 LIMIT 1
+SELECT id, user_id, media_url, media_type, caption, location_name, geohash, geom, likes_count, comments_count, created_at, updated_at, body_text, shares_count, crop_settings, saves_count, category_id, width, height, aspect_ratio, thumbnail_url, blur_hash, duration, file_size, mime_type, engagement_score, watch_time_score FROM posts WHERE id = $1 LIMIT 1
 `
 
 func (q *Queries) GetPost(ctx context.Context, id uuid.UUID) (Post, error) {
@@ -260,6 +297,16 @@ func (q *Queries) GetPost(ctx context.Context, id uuid.UUID) (Post, error) {
 		&i.CropSettings,
 		&i.SavesCount,
 		&i.CategoryID,
+		&i.Width,
+		&i.Height,
+		&i.AspectRatio,
+		&i.ThumbnailUrl,
+		&i.BlurHash,
+		&i.Duration,
+		&i.FileSize,
+		&i.MimeType,
+		&i.EngagementScore,
+		&i.WatchTimeScore,
 	)
 	return i, err
 }
@@ -329,7 +376,7 @@ func (q *Queries) LikePostAtomic(ctx context.Context, arg LikePostAtomicParams) 
 const listAllPostsAdmin = `-- name: ListAllPostsAdmin :many
 SELECT 
     p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.category_id,
-    p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
+    p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at, p.width, p.height, p.aspect_ratio, p.thumbnail_url, p.blur_hash, p.duration, p.file_size, p.mime_type,
     u.username, u.avatar_url
 FROM posts p
 JOIN users u ON p.user_id = u.id
@@ -343,21 +390,29 @@ type ListAllPostsAdminParams struct {
 }
 
 type ListAllPostsAdminRow struct {
-	ID            uuid.UUID      `json:"id"`
-	UserID        uuid.UUID      `json:"user_id"`
-	MediaUrl      string         `json:"media_url"`
-	MediaType     string         `json:"media_type"`
-	Caption       sql.NullString `json:"caption"`
-	BodyText      sql.NullString `json:"body_text"`
-	LocationName  sql.NullString `json:"location_name"`
-	CategoryID    uuid.NullUUID  `json:"category_id"`
-	LikesCount    int32          `json:"likes_count"`
-	CommentsCount int32          `json:"comments_count"`
-	SharesCount   int32          `json:"shares_count"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
-	Username      string         `json:"username"`
-	AvatarUrl     sql.NullString `json:"avatar_url"`
+	ID            uuid.UUID       `json:"id"`
+	UserID        uuid.UUID       `json:"user_id"`
+	MediaUrl      string          `json:"media_url"`
+	MediaType     string          `json:"media_type"`
+	Caption       sql.NullString  `json:"caption"`
+	BodyText      sql.NullString  `json:"body_text"`
+	LocationName  sql.NullString  `json:"location_name"`
+	CategoryID    uuid.NullUUID   `json:"category_id"`
+	LikesCount    int32           `json:"likes_count"`
+	CommentsCount int32           `json:"comments_count"`
+	SharesCount   int32           `json:"shares_count"`
+	CreatedAt     time.Time       `json:"created_at"`
+	UpdatedAt     time.Time       `json:"updated_at"`
+	Width         sql.NullInt32   `json:"width"`
+	Height        sql.NullInt32   `json:"height"`
+	AspectRatio   sql.NullFloat64 `json:"aspect_ratio"`
+	ThumbnailUrl  sql.NullString  `json:"thumbnail_url"`
+	BlurHash      sql.NullString  `json:"blur_hash"`
+	Duration      sql.NullInt32   `json:"duration"`
+	FileSize      sql.NullInt32   `json:"file_size"`
+	MimeType      sql.NullString  `json:"mime_type"`
+	Username      string          `json:"username"`
+	AvatarUrl     sql.NullString  `json:"avatar_url"`
 }
 
 func (q *Queries) ListAllPostsAdmin(ctx context.Context, arg ListAllPostsAdminParams) ([]ListAllPostsAdminRow, error) {
@@ -383,6 +438,14 @@ func (q *Queries) ListAllPostsAdmin(ctx context.Context, arg ListAllPostsAdminPa
 			&i.SharesCount,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Width,
+			&i.Height,
+			&i.AspectRatio,
+			&i.ThumbnailUrl,
+			&i.BlurHash,
+			&i.Duration,
+			&i.FileSize,
+			&i.MimeType,
 			&i.Username,
 			&i.AvatarUrl,
 		); err != nil {
@@ -401,7 +464,7 @@ func (q *Queries) ListAllPostsAdmin(ctx context.Context, arg ListAllPostsAdminPa
 
 const listConnectionsPosts = `-- name: ListConnectionsPosts :many
 SELECT DISTINCT ON (p.id) p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings, p.category_id,
-       p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
+       p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at, p.width, p.height, p.aspect_ratio, p.thumbnail_url, p.blur_hash, p.duration, p.file_size, p.mime_type,
        u.username, u.full_name, u.avatar_url,
        CASE WHEN p.geom IS NOT NULL THEN ST_Y(p.geom::geometry) ELSE NULL END as lat_out,
        CASE WHEN p.geom IS NOT NULL THEN ST_X(p.geom::geometry) ELSE NULL END as lng_out,
@@ -417,19 +480,20 @@ WHERE (
     OR c.status = 'accepted'
     OR (u.is_private = false AND u.is_shadow_banned = false) -- Discovery: Public users
 )
+AND ($2::timestamptz IS NULL OR p.created_at < $2)
 AND NOT EXISTS (
     SELECT 1 FROM blocked_users bu
     WHERE (bu.blocker_id = $1 AND bu.blocked_id = p.user_id)
        OR (bu.blocker_id = p.user_id AND bu.blocked_id = $1)
 )
 ORDER BY p.id, p.created_at DESC
-LIMIT $3 OFFSET $2
+LIMIT $3
 `
 
 type ListConnectionsPostsParams struct {
-	ViewerID uuid.UUID `json:"viewer_id"`
-	Off      int32     `json:"off"`
-	Lim      int32     `json:"lim"`
+	ViewerID uuid.UUID    `json:"viewer_id"`
+	Cursor   sql.NullTime `json:"cursor"`
+	Lim      int32        `json:"lim"`
 }
 
 type ListConnectionsPostsRow struct {
@@ -447,6 +511,14 @@ type ListConnectionsPostsRow struct {
 	SharesCount   int32                 `json:"shares_count"`
 	CreatedAt     time.Time             `json:"created_at"`
 	UpdatedAt     time.Time             `json:"updated_at"`
+	Width         sql.NullInt32         `json:"width"`
+	Height        sql.NullInt32         `json:"height"`
+	AspectRatio   sql.NullFloat64       `json:"aspect_ratio"`
+	ThumbnailUrl  sql.NullString        `json:"thumbnail_url"`
+	BlurHash      sql.NullString        `json:"blur_hash"`
+	Duration      sql.NullInt32         `json:"duration"`
+	FileSize      sql.NullInt32         `json:"file_size"`
+	MimeType      sql.NullString        `json:"mime_type"`
 	Username      string                `json:"username"`
 	FullName      string                `json:"full_name"`
 	AvatarUrl     sql.NullString        `json:"avatar_url"`
@@ -458,7 +530,7 @@ type ListConnectionsPostsRow struct {
 
 // Get posts from connections AND own posts AND nearby discovery (public posts)
 func (q *Queries) ListConnectionsPosts(ctx context.Context, arg ListConnectionsPostsParams) ([]ListConnectionsPostsRow, error) {
-	rows, err := q.db.QueryContext(ctx, listConnectionsPosts, arg.ViewerID, arg.Off, arg.Lim)
+	rows, err := q.db.QueryContext(ctx, listConnectionsPosts, arg.ViewerID, arg.Cursor, arg.Lim)
 	if err != nil {
 		return nil, err
 	}
@@ -481,6 +553,14 @@ func (q *Queries) ListConnectionsPosts(ctx context.Context, arg ListConnectionsP
 			&i.SharesCount,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Width,
+			&i.Height,
+			&i.AspectRatio,
+			&i.ThumbnailUrl,
+			&i.BlurHash,
+			&i.Duration,
+			&i.FileSize,
+			&i.MimeType,
 			&i.Username,
 			&i.FullName,
 			&i.AvatarUrl,
@@ -503,7 +583,7 @@ func (q *Queries) ListConnectionsPosts(ctx context.Context, arg ListConnectionsP
 }
 
 const listLikedPostsByUserID = `-- name: ListLikedPostsByUserID :many
-SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.location_name, p.geohash, p.geom, p.likes_count, p.comments_count, p.created_at, p.updated_at, p.body_text, p.shares_count, p.crop_settings, p.saves_count, p.category_id FROM posts p
+SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.location_name, p.geohash, p.geom, p.likes_count, p.comments_count, p.created_at, p.updated_at, p.body_text, p.shares_count, p.crop_settings, p.saves_count, p.category_id, p.width, p.height, p.aspect_ratio, p.thumbnail_url, p.blur_hash, p.duration, p.file_size, p.mime_type, p.engagement_score, p.watch_time_score FROM posts p
 JOIN post_likes pl ON p.id = pl.post_id
 WHERE pl.user_id = $1
 ORDER BY pl.created_at DESC
@@ -536,6 +616,16 @@ func (q *Queries) ListLikedPostsByUserID(ctx context.Context, userID uuid.UUID) 
 			&i.CropSettings,
 			&i.SavesCount,
 			&i.CategoryID,
+			&i.Width,
+			&i.Height,
+			&i.AspectRatio,
+			&i.ThumbnailUrl,
+			&i.BlurHash,
+			&i.Duration,
+			&i.FileSize,
+			&i.MimeType,
+			&i.EngagementScore,
+			&i.WatchTimeScore,
 		); err != nil {
 			return nil, err
 		}
@@ -552,7 +642,7 @@ func (q *Queries) ListLikedPostsByUserID(ctx context.Context, userID uuid.UUID) 
 
 const listNearbyTrendingPosts = `-- name: ListNearbyTrendingPosts :many
 SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings, p.category_id,
-       p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
+       p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at, p.width, p.height, p.aspect_ratio, p.thumbnail_url, p.blur_hash, p.duration, p.file_size, p.mime_type,
        u.username, u.full_name, u.avatar_url,
        ST_Distance(p.geom, ST_SetSRID(ST_MakePoint($1::float, $2::float), 4326)::geography) AS distance_meters,
        CASE WHEN p.geom IS NOT NULL THEN ST_Y(p.geom::geometry) ELSE NULL END as lat_out,
@@ -596,6 +686,14 @@ type ListNearbyTrendingPostsRow struct {
 	SharesCount    int32                 `json:"shares_count"`
 	CreatedAt      time.Time             `json:"created_at"`
 	UpdatedAt      time.Time             `json:"updated_at"`
+	Width          sql.NullInt32         `json:"width"`
+	Height         sql.NullInt32         `json:"height"`
+	AspectRatio    sql.NullFloat64       `json:"aspect_ratio"`
+	ThumbnailUrl   sql.NullString        `json:"thumbnail_url"`
+	BlurHash       sql.NullString        `json:"blur_hash"`
+	Duration       sql.NullInt32         `json:"duration"`
+	FileSize       sql.NullInt32         `json:"file_size"`
+	MimeType       sql.NullString        `json:"mime_type"`
 	Username       string                `json:"username"`
 	FullName       string                `json:"full_name"`
 	AvatarUrl      sql.NullString        `json:"avatar_url"`
@@ -637,6 +735,14 @@ func (q *Queries) ListNearbyTrendingPosts(ctx context.Context, arg ListNearbyTre
 			&i.SharesCount,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Width,
+			&i.Height,
+			&i.AspectRatio,
+			&i.ThumbnailUrl,
+			&i.BlurHash,
+			&i.Duration,
+			&i.FileSize,
+			&i.MimeType,
 			&i.Username,
 			&i.FullName,
 			&i.AvatarUrl,
@@ -714,7 +820,7 @@ func (q *Queries) ListPostComments(ctx context.Context, postID uuid.UUID) ([]Lis
 
 const listPostsByUserID = `-- name: ListPostsByUserID :many
 SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings, p.category_id,
-       p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
+       p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at, p.width, p.height, p.aspect_ratio, p.thumbnail_url, p.blur_hash, p.duration, p.file_size, p.mime_type,
 
        u.username, u.full_name, u.avatar_url,
        CASE WHEN p.geom IS NOT NULL THEN ST_Y(p.geom::geometry) ELSE NULL END as lat_out,
@@ -750,6 +856,14 @@ type ListPostsByUserIDRow struct {
 	SharesCount   int32                 `json:"shares_count"`
 	CreatedAt     time.Time             `json:"created_at"`
 	UpdatedAt     time.Time             `json:"updated_at"`
+	Width         sql.NullInt32         `json:"width"`
+	Height        sql.NullInt32         `json:"height"`
+	AspectRatio   sql.NullFloat64       `json:"aspect_ratio"`
+	ThumbnailUrl  sql.NullString        `json:"thumbnail_url"`
+	BlurHash      sql.NullString        `json:"blur_hash"`
+	Duration      sql.NullInt32         `json:"duration"`
+	FileSize      sql.NullInt32         `json:"file_size"`
+	MimeType      sql.NullString        `json:"mime_type"`
 	Username      string                `json:"username"`
 	FullName      string                `json:"full_name"`
 	AvatarUrl     sql.NullString        `json:"avatar_url"`
@@ -788,6 +902,14 @@ func (q *Queries) ListPostsByUserID(ctx context.Context, arg ListPostsByUserIDPa
 			&i.SharesCount,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Width,
+			&i.Height,
+			&i.AspectRatio,
+			&i.ThumbnailUrl,
+			&i.BlurHash,
+			&i.Duration,
+			&i.FileSize,
+			&i.MimeType,
 			&i.Username,
 			&i.FullName,
 			&i.AvatarUrl,
@@ -811,7 +933,7 @@ func (q *Queries) ListPostsByUserID(ctx context.Context, arg ListPostsByUserIDPa
 
 const listSavedPosts = `-- name: ListSavedPosts :many
 SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings, p.category_id,
-       p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
+       p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at, p.width, p.height, p.aspect_ratio, p.thumbnail_url, p.blur_hash, p.duration, p.file_size, p.mime_type,
        u.username, u.full_name, u.avatar_url,
        TRUE as is_saved,
        EXISTS(SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = $1) as liked_by_viewer
@@ -844,6 +966,14 @@ type ListSavedPostsRow struct {
 	SharesCount   int32                 `json:"shares_count"`
 	CreatedAt     time.Time             `json:"created_at"`
 	UpdatedAt     time.Time             `json:"updated_at"`
+	Width         sql.NullInt32         `json:"width"`
+	Height        sql.NullInt32         `json:"height"`
+	AspectRatio   sql.NullFloat64       `json:"aspect_ratio"`
+	ThumbnailUrl  sql.NullString        `json:"thumbnail_url"`
+	BlurHash      sql.NullString        `json:"blur_hash"`
+	Duration      sql.NullInt32         `json:"duration"`
+	FileSize      sql.NullInt32         `json:"file_size"`
+	MimeType      sql.NullString        `json:"mime_type"`
 	Username      string                `json:"username"`
 	FullName      string                `json:"full_name"`
 	AvatarUrl     sql.NullString        `json:"avatar_url"`
@@ -875,6 +1005,14 @@ func (q *Queries) ListSavedPosts(ctx context.Context, arg ListSavedPostsParams) 
 			&i.SharesCount,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Width,
+			&i.Height,
+			&i.AspectRatio,
+			&i.ThumbnailUrl,
+			&i.BlurHash,
+			&i.Duration,
+			&i.FileSize,
+			&i.MimeType,
 			&i.Username,
 			&i.FullName,
 			&i.AvatarUrl,
@@ -896,7 +1034,7 @@ func (q *Queries) ListSavedPosts(ctx context.Context, arg ListSavedPostsParams) 
 
 const listTrendingNearbyPosts = `-- name: ListTrendingNearbyPosts :many
 SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings, p.category_id,
-       p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
+       p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at, p.width, p.height, p.aspect_ratio, p.thumbnail_url, p.blur_hash, p.duration, p.file_size, p.mime_type,
        u.username, u.full_name, u.avatar_url,
        ST_Distance(p.geom, ST_SetSRID(ST_MakePoint($1::float, $2::float), 4326)::geography) AS distance_meters,
        CASE WHEN p.geom IS NOT NULL THEN ST_Y(p.geom::geometry) ELSE NULL END as lat_out,
@@ -947,6 +1085,14 @@ type ListTrendingNearbyPostsRow struct {
 	SharesCount    int32                 `json:"shares_count"`
 	CreatedAt      time.Time             `json:"created_at"`
 	UpdatedAt      time.Time             `json:"updated_at"`
+	Width          sql.NullInt32         `json:"width"`
+	Height         sql.NullInt32         `json:"height"`
+	AspectRatio    sql.NullFloat64       `json:"aspect_ratio"`
+	ThumbnailUrl   sql.NullString        `json:"thumbnail_url"`
+	BlurHash       sql.NullString        `json:"blur_hash"`
+	Duration       sql.NullInt32         `json:"duration"`
+	FileSize       sql.NullInt32         `json:"file_size"`
+	MimeType       sql.NullString        `json:"mime_type"`
 	Username       string                `json:"username"`
 	FullName       string                `json:"full_name"`
 	AvatarUrl      sql.NullString        `json:"avatar_url"`
@@ -990,6 +1136,14 @@ func (q *Queries) ListTrendingNearbyPosts(ctx context.Context, arg ListTrendingN
 			&i.SharesCount,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Width,
+			&i.Height,
+			&i.AspectRatio,
+			&i.ThumbnailUrl,
+			&i.BlurHash,
+			&i.Duration,
+			&i.FileSize,
+			&i.MimeType,
 			&i.Username,
 			&i.FullName,
 			&i.AvatarUrl,
@@ -1041,7 +1195,7 @@ func (q *Queries) SavePostAtomic(ctx context.Context, arg SavePostAtomicParams) 
 const searchPosts = `-- name: SearchPosts :many
 SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name,
        p.crop_settings, p.category_id,
-       p.likes_count, p.comments_count, p.shares_count, p.saves_count, p.created_at, p.updated_at,
+       p.likes_count, p.comments_count, p.shares_count, p.saves_count, p.created_at, p.updated_at, p.width, p.height, p.aspect_ratio, p.thumbnail_url, p.blur_hash, p.duration, p.file_size, p.mime_type,
        u.username, u.full_name, u.avatar_url,
        CASE WHEN p.geom IS NOT NULL THEN ST_Y(p.geom::geometry) ELSE NULL END as lat_out,
        CASE WHEN p.geom IS NOT NULL THEN ST_X(p.geom::geometry) ELSE NULL END as lng_out,
@@ -1088,6 +1242,14 @@ type SearchPostsRow struct {
 	SavesCount    int32                 `json:"saves_count"`
 	CreatedAt     time.Time             `json:"created_at"`
 	UpdatedAt     time.Time             `json:"updated_at"`
+	Width         sql.NullInt32         `json:"width"`
+	Height        sql.NullInt32         `json:"height"`
+	AspectRatio   sql.NullFloat64       `json:"aspect_ratio"`
+	ThumbnailUrl  sql.NullString        `json:"thumbnail_url"`
+	BlurHash      sql.NullString        `json:"blur_hash"`
+	Duration      sql.NullInt32         `json:"duration"`
+	FileSize      sql.NullInt32         `json:"file_size"`
+	MimeType      sql.NullString        `json:"mime_type"`
 	Username      string                `json:"username"`
 	FullName      string                `json:"full_name"`
 	AvatarUrl     sql.NullString        `json:"avatar_url"`
@@ -1130,6 +1292,14 @@ func (q *Queries) SearchPosts(ctx context.Context, arg SearchPostsParams) ([]Sea
 			&i.SavesCount,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Width,
+			&i.Height,
+			&i.AspectRatio,
+			&i.ThumbnailUrl,
+			&i.BlurHash,
+			&i.Duration,
+			&i.FileSize,
+			&i.MimeType,
 			&i.Username,
 			&i.FullName,
 			&i.AvatarUrl,
@@ -1205,7 +1375,7 @@ func (q *Queries) UnsavePostAtomic(ctx context.Context, arg UnsavePostAtomicPara
 }
 
 const updatePost = `-- name: UpdatePost :one
-UPDATE posts SET caption = $1, updated_at = now() WHERE id = $2 AND user_id = $3 RETURNING id, user_id, media_url, media_type, caption, location_name, geohash, geom, likes_count, comments_count, created_at, updated_at, body_text, shares_count, crop_settings, saves_count, category_id
+UPDATE posts SET caption = $1, updated_at = now() WHERE id = $2 AND user_id = $3 RETURNING id, user_id, media_url, media_type, caption, location_name, geohash, geom, likes_count, comments_count, created_at, updated_at, body_text, shares_count, crop_settings, saves_count, category_id, width, height, aspect_ratio, thumbnail_url, blur_hash, duration, file_size, mime_type, engagement_score, watch_time_score
 `
 
 type UpdatePostParams struct {
@@ -1235,6 +1405,16 @@ func (q *Queries) UpdatePost(ctx context.Context, arg UpdatePostParams) (Post, e
 		&i.CropSettings,
 		&i.SavesCount,
 		&i.CategoryID,
+		&i.Width,
+		&i.Height,
+		&i.AspectRatio,
+		&i.ThumbnailUrl,
+		&i.BlurHash,
+		&i.Duration,
+		&i.FileSize,
+		&i.MimeType,
+		&i.EngagementScore,
+		&i.WatchTimeScore,
 	)
 	return i, err
 }

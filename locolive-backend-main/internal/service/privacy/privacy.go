@@ -320,9 +320,10 @@ func (s *Service) isBlockedDB(ctx context.Context, viewerID, targetID uuid.UUID)
 }
 
 func (s *Service) isFollower(ctx context.Context, viewerID, targetID uuid.UUID) (bool, error) {
-	conn, err := s.store.GetConnection(ctx, db.GetConnectionParams{
-		RequesterID: viewerID,
-		TargetID:    targetID,
+	rel, err := s.store.GetRelationship(ctx, db.GetRelationshipParams{
+		UserID:       viewerID,
+		TargetUserID: targetID,
+		Type:         "follow",
 	})
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -330,7 +331,7 @@ func (s *Service) isFollower(ctx context.Context, viewerID, targetID uuid.UUID) 
 		}
 		return false, err
 	}
-	return conn.Status == "accepted", nil
+	return rel.Status == "active", nil
 }
 
 func (s *Service) getVisibilityFromState(state *cachedPrivacyState) VisibilityState {

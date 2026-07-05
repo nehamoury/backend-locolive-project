@@ -1,5 +1,5 @@
 -- name: CreatePost :one
-INSERT INTO posts (user_id, media_url, media_type, caption, body_text, location_name, geohash, geom, crop_settings, category_id)
+INSERT INTO posts (user_id, media_url, media_type, caption, body_text, location_name, geohash, geom, crop_settings, category_id, width, height, aspect_ratio, thumbnail_url, blur_hash, duration, file_size, mime_type)
 VALUES (
     sqlc.arg(user_id), sqlc.arg(media_url), sqlc.arg(media_type),
     sqlc.narg(caption), sqlc.narg(body_text), sqlc.narg(location_name), sqlc.narg(geohash),
@@ -8,7 +8,8 @@ VALUES (
          THEN ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float8, sqlc.arg(lat)::float8), 4326)
          ELSE NULL END,
     sqlc.narg(crop_settings),
-    sqlc.narg(category_id)
+    sqlc.narg(category_id),
+    sqlc.narg(width), sqlc.narg(height), sqlc.narg(aspect_ratio), sqlc.narg(thumbnail_url), sqlc.narg(blur_hash), sqlc.narg(duration), sqlc.narg(file_size), sqlc.narg(mime_type)
 )
 RETURNING *,
     CASE WHEN geom IS NOT NULL THEN ST_Y(geom::geometry) ELSE NULL END as lat_out,
@@ -16,7 +17,7 @@ RETURNING *,
 
 -- name: ListPostsByUserID :many
 SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings, p.category_id,
-       p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
+       p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at, p.width, p.height, p.aspect_ratio, p.thumbnail_url, p.blur_hash, p.duration, p.file_size, p.mime_type,
 
        u.username, u.full_name, u.avatar_url,
        CASE WHEN p.geom IS NOT NULL THEN ST_Y(p.geom::geometry) ELSE NULL END as lat_out,
@@ -32,7 +33,7 @@ LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
 -- name: ListConnectionsPosts :many
 -- Get posts from connections AND own posts AND nearby discovery (public posts)
 SELECT DISTINCT ON (p.id) p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings, p.category_id,
-       p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
+       p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at, p.width, p.height, p.aspect_ratio, p.thumbnail_url, p.blur_hash, p.duration, p.file_size, p.mime_type,
        u.username, u.full_name, u.avatar_url,
        CASE WHEN p.geom IS NOT NULL THEN ST_Y(p.geom::geometry) ELSE NULL END as lat_out,
        CASE WHEN p.geom IS NOT NULL THEN ST_X(p.geom::geometry) ELSE NULL END as lng_out,
@@ -48,13 +49,14 @@ WHERE (
     OR c.status = 'accepted'
     OR (u.is_private = false AND u.is_shadow_banned = false) -- Discovery: Public users
 )
+AND (sqlc.narg('cursor')::timestamptz IS NULL OR p.created_at < sqlc.narg('cursor'))
 AND NOT EXISTS (
     SELECT 1 FROM blocked_users bu
     WHERE (bu.blocker_id = sqlc.arg(viewer_id) AND bu.blocked_id = p.user_id)
        OR (bu.blocker_id = p.user_id AND bu.blocked_id = sqlc.arg(viewer_id))
 )
 ORDER BY p.id, p.created_at DESC
-LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
+LIMIT sqlc.arg(lim);
 
 -- name: DeletePost :exec
 DELETE FROM posts WHERE id = sqlc.arg(id) AND user_id = sqlc.arg(user_id);
@@ -162,7 +164,7 @@ RETURNING p.saves_count;
 
 -- name: ListSavedPosts :many
 SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings, p.category_id,
-       p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
+       p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at, p.width, p.height, p.aspect_ratio, p.thumbnail_url, p.blur_hash, p.duration, p.file_size, p.mime_type,
        u.username, u.full_name, u.avatar_url,
        TRUE as is_saved,
        EXISTS(SELECT 1 FROM post_likes pl WHERE pl.post_id = p.id AND pl.user_id = sqlc.arg(viewer_id)) as liked_by_viewer
@@ -179,7 +181,7 @@ SELECT COUNT(*) FROM post_saves WHERE user_id = sqlc.arg(user_id);
 -- name: ListAllPostsAdmin :many
 SELECT 
     p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.category_id,
-    p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
+    p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at, p.width, p.height, p.aspect_ratio, p.thumbnail_url, p.blur_hash, p.duration, p.file_size, p.mime_type,
     u.username, u.avatar_url
 FROM posts p
 JOIN users u ON p.user_id = u.id
@@ -194,7 +196,7 @@ UPDATE posts SET caption = sqlc.arg(caption), updated_at = now() WHERE id = sqlc
 
 -- name: ListNearbyTrendingPosts :many
 SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings, p.category_id,
-       p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
+       p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at, p.width, p.height, p.aspect_ratio, p.thumbnail_url, p.blur_hash, p.duration, p.file_size, p.mime_type,
        u.username, u.full_name, u.avatar_url,
        ST_Distance(p.geom, ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float, sqlc.arg(lat)::float), 4326)::geography) AS distance_meters,
        CASE WHEN p.geom IS NOT NULL THEN ST_Y(p.geom::geometry) ELSE NULL END as lat_out,
@@ -216,7 +218,7 @@ LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
 -- name: SearchPosts :many
 SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name,
        p.crop_settings, p.category_id,
-       p.likes_count, p.comments_count, p.shares_count, p.saves_count, p.created_at, p.updated_at,
+       p.likes_count, p.comments_count, p.shares_count, p.saves_count, p.created_at, p.updated_at, p.width, p.height, p.aspect_ratio, p.thumbnail_url, p.blur_hash, p.duration, p.file_size, p.mime_type,
        u.username, u.full_name, u.avatar_url,
        CASE WHEN p.geom IS NOT NULL THEN ST_Y(p.geom::geometry) ELSE NULL END as lat_out,
        CASE WHEN p.geom IS NOT NULL THEN ST_X(p.geom::geometry) ELSE NULL END as lng_out,
@@ -241,7 +243,7 @@ LIMIT sqlc.arg(lim) OFFSET sqlc.arg(off);
 
 -- name: ListTrendingNearbyPosts :many
 SELECT p.id, p.user_id, p.media_url, p.media_type, p.caption, p.body_text, p.location_name, p.crop_settings, p.category_id,
-       p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at,
+       p.likes_count, p.comments_count, p.shares_count, p.created_at, p.updated_at, p.width, p.height, p.aspect_ratio, p.thumbnail_url, p.blur_hash, p.duration, p.file_size, p.mime_type,
        u.username, u.full_name, u.avatar_url,
        ST_Distance(p.geom, ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float, sqlc.arg(lat)::float), 4326)::geography) AS distance_meters,
        CASE WHEN p.geom IS NOT NULL THEN ST_Y(p.geom::geometry) ELSE NULL END as lat_out,

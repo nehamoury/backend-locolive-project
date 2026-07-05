@@ -31,6 +31,28 @@ type createPostRequest struct {
 	HasLocation  bool            `json:"has_location"`
 	CropSettings json.RawMessage `json:"crop_settings"`
 	CategoryID   string          `json:"category_id"`
+	Width        *int32          `json:"width,omitempty"`
+	Height       *int32          `json:"height,omitempty"`
+	AspectRatio  *float64        `json:"aspect_ratio,omitempty"`
+	ThumbnailUrl *string         `json:"thumbnail_url,omitempty"`
+	BlurHash     *string         `json:"blur_hash,omitempty"`
+	Duration     *int32          `json:"duration,omitempty"`
+	FileSize     *int32          `json:"file_size,omitempty"`
+	MimeType     *string         `json:"mime_type,omitempty"`
+}
+
+
+type MediaItem struct {
+	URL          string   `json:"url"`
+	Type         string   `json:"type"`
+	Width        *int32   `json:"width,omitempty"`
+	Height       *int32   `json:"height,omitempty"`
+	AspectRatio  *float64 `json:"aspect_ratio,omitempty"`
+	ThumbnailUrl *string  `json:"thumbnail_url,omitempty"`
+	BlurHash     *string  `json:"blur_hash,omitempty"`
+	Duration     *int32   `json:"duration,omitempty"`
+	FileSize     *int32   `json:"file_size,omitempty"`
+	MimeType     *string  `json:"mime_type,omitempty"`
 }
 
 type postResponse struct {
@@ -38,6 +60,7 @@ type postResponse struct {
 	UserID        uuid.UUID       `json:"user_id"`
 	MediaUrl      string          `json:"media_url"`
 	MediaType     string          `json:"media_type"`
+	Media         []MediaItem     `json:"media"`
 	Caption       string          `json:"caption"`
 	BodyText      string          `json:"body_text"`
 	LocationName  string          `json:"location_name"`
@@ -72,6 +95,20 @@ func toPostResponse(p db.CreatePostRow) postResponse {
 		UserID:        p.UserID,
 		MediaUrl:      p.MediaUrl,
 		MediaType:     p.MediaType,
+		Media: []MediaItem{
+			{
+				URL:          p.MediaUrl,
+				Type:         p.MediaType,
+				Width:        func() *int32 { if p.Width.Valid { v := p.Width.Int32; return &v }; return nil }(),
+				Height:       func() *int32 { if p.Height.Valid { v := p.Height.Int32; return &v }; return nil }(),
+				AspectRatio:  func() *float64 { if p.AspectRatio.Valid { v := p.AspectRatio.Float64; return &v }; return nil }(),
+				ThumbnailUrl: func() *string { if p.ThumbnailUrl.Valid { v := p.ThumbnailUrl.String; return &v }; return nil }(),
+				BlurHash:     func() *string { if p.BlurHash.Valid { v := p.BlurHash.String; return &v }; return nil }(),
+				Duration:     func() *int32 { if p.Duration.Valid { v := p.Duration.Int32; return &v }; return nil }(),
+				FileSize:     func() *int32 { if p.FileSize.Valid { v := p.FileSize.Int32; return &v }; return nil }(),
+				MimeType:     func() *string { if p.MimeType.Valid { v := p.MimeType.String; return &v }; return nil }(),
+			},
+		},
 		Caption:       p.Caption.String,
 		BodyText:      p.BodyText.String,
 		LocationName:  p.LocationName.String,
@@ -94,6 +131,20 @@ func toPostResponseFromList(p db.ListPostsByUserIDRow) postResponse {
 		UserID:        p.UserID,
 		MediaUrl:      p.MediaUrl,
 		MediaType:     p.MediaType,
+		Media: []MediaItem{
+			{
+				URL:          p.MediaUrl,
+				Type:         p.MediaType,
+				Width:        func() *int32 { if p.Width.Valid { v := p.Width.Int32; return &v }; return nil }(),
+				Height:       func() *int32 { if p.Height.Valid { v := p.Height.Int32; return &v }; return nil }(),
+				AspectRatio:  func() *float64 { if p.AspectRatio.Valid { v := p.AspectRatio.Float64; return &v }; return nil }(),
+				ThumbnailUrl: func() *string { if p.ThumbnailUrl.Valid { v := p.ThumbnailUrl.String; return &v }; return nil }(),
+				BlurHash:     func() *string { if p.BlurHash.Valid { v := p.BlurHash.String; return &v }; return nil }(),
+				Duration:     func() *int32 { if p.Duration.Valid { v := p.Duration.Int32; return &v }; return nil }(),
+				FileSize:     func() *int32 { if p.FileSize.Valid { v := p.FileSize.Int32; return &v }; return nil }(),
+				MimeType:     func() *string { if p.MimeType.Valid { v := p.MimeType.String; return &v }; return nil }(),
+			},
+		},
 		Caption:       p.Caption.String,
 		BodyText:      p.BodyText.String,
 		LocationName:  p.LocationName.String,
@@ -116,6 +167,20 @@ func toPostResponseFromConnections(p db.ListConnectionsPostsRow) postResponse {
 		UserID:        p.UserID,
 		MediaUrl:      p.MediaUrl,
 		MediaType:     p.MediaType,
+		Media: []MediaItem{
+			{
+				URL:          p.MediaUrl,
+				Type:         p.MediaType,
+				Width:        func() *int32 { if p.Width.Valid { v := p.Width.Int32; return &v }; return nil }(),
+				Height:       func() *int32 { if p.Height.Valid { v := p.Height.Int32; return &v }; return nil }(),
+				AspectRatio:  func() *float64 { if p.AspectRatio.Valid { v := p.AspectRatio.Float64; return &v }; return nil }(),
+				ThumbnailUrl: func() *string { if p.ThumbnailUrl.Valid { v := p.ThumbnailUrl.String; return &v }; return nil }(),
+				BlurHash:     func() *string { if p.BlurHash.Valid { v := p.BlurHash.String; return &v }; return nil }(),
+				Duration:     func() *int32 { if p.Duration.Valid { v := p.Duration.Int32; return &v }; return nil }(),
+				FileSize:     func() *int32 { if p.FileSize.Valid { v := p.FileSize.Int32; return &v }; return nil }(),
+				MimeType:     func() *string { if p.MimeType.Valid { v := p.MimeType.String; return &v }; return nil }(),
+			},
+		},
 		Caption:       p.Caption.String,
 		BodyText:      p.BodyText.String,
 		LocationName:  p.LocationName.String,
@@ -138,6 +203,20 @@ func toPostResponseFromSaved(p db.ListSavedPostsRow) postResponse {
 		UserID:        p.UserID,
 		MediaUrl:      p.MediaUrl,
 		MediaType:     p.MediaType,
+		Media: []MediaItem{
+			{
+				URL:          p.MediaUrl,
+				Type:         p.MediaType,
+				Width:        func() *int32 { if p.Width.Valid { v := p.Width.Int32; return &v }; return nil }(),
+				Height:       func() *int32 { if p.Height.Valid { v := p.Height.Int32; return &v }; return nil }(),
+				AspectRatio:  func() *float64 { if p.AspectRatio.Valid { v := p.AspectRatio.Float64; return &v }; return nil }(),
+				ThumbnailUrl: func() *string { if p.ThumbnailUrl.Valid { v := p.ThumbnailUrl.String; return &v }; return nil }(),
+				BlurHash:     func() *string { if p.BlurHash.Valid { v := p.BlurHash.String; return &v }; return nil }(),
+				Duration:     func() *int32 { if p.Duration.Valid { v := p.Duration.Int32; return &v }; return nil }(),
+				FileSize:     func() *int32 { if p.FileSize.Valid { v := p.FileSize.Int32; return &v }; return nil }(),
+				MimeType:     func() *string { if p.MimeType.Valid { v := p.MimeType.String; return &v }; return nil }(),
+			},
+		},
 		Caption:       p.Caption.String,
 		BodyText:      p.BodyText.String,
 		LocationName:  p.LocationName.String,
@@ -196,6 +275,14 @@ func (server *Server) createPost(ctx *gin.Context) {
 		Lng:          req.Longitude,
 		CropSettings: pqtype.NullRawMessage{RawMessage: req.CropSettings, Valid: len(req.CropSettings) > 0},
 		CategoryID:   catID,
+		Width:        sql.NullInt32{Int32: func() int32 { if req.Width != nil { return *req.Width }; return 0 }(), Valid: req.Width != nil},
+		Height:       sql.NullInt32{Int32: func() int32 { if req.Height != nil { return *req.Height }; return 0 }(), Valid: req.Height != nil},
+		AspectRatio:  sql.NullFloat64{Float64: func() float64 { if req.AspectRatio != nil { return *req.AspectRatio }; return 0 }(), Valid: req.AspectRatio != nil},
+		ThumbnailUrl: sql.NullString{String: func() string { if req.ThumbnailUrl != nil { return *req.ThumbnailUrl }; return "" }(), Valid: req.ThumbnailUrl != nil},
+		BlurHash:     sql.NullString{String: func() string { if req.BlurHash != nil { return *req.BlurHash }; return "" }(), Valid: req.BlurHash != nil},
+		Duration:     sql.NullInt32{Int32: func() int32 { if req.Duration != nil { return *req.Duration }; return 0 }(), Valid: req.Duration != nil},
+		FileSize:     sql.NullInt32{Int32: func() int32 { if req.FileSize != nil { return *req.FileSize }; return 0 }(), Valid: req.FileSize != nil},
+		MimeType:     sql.NullString{String: func() string { if req.MimeType != nil { return *req.MimeType }; return "" }(), Valid: req.MimeType != nil},
 	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
@@ -322,19 +409,24 @@ func (server *Server) getMyPosts(ctx *gin.Context) {
 func (server *Server) getConnectionsFeed(ctx *gin.Context) {
 	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
 
-	page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
+	cursorStr := ctx.Query("cursor")
 	pageSize, _ := strconv.Atoi(ctx.DefaultQuery("page_size", "20"))
-	if page < 1 {
-		page = 1
-	}
 	if pageSize < 1 || pageSize > 50 {
 		pageSize = 20
+	}
+
+	var cursor sql.NullTime
+	if cursorStr != "" {
+		parsedTime, err := time.Parse(time.RFC3339Nano, cursorStr)
+		if err == nil {
+			cursor = sql.NullTime{Time: parsedTime, Valid: true}
+		}
 	}
 
 	posts, err := server.store.ListConnectionsPosts(ctx, db.ListConnectionsPostsParams{
 		ViewerID: authPayload.UserID,
 		Lim:      int32(pageSize),
-		Off:      int32((page - 1) * pageSize),
+		Cursor:   cursor,
 	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
@@ -342,11 +434,15 @@ func (server *Server) getConnectionsFeed(ctx *gin.Context) {
 	}
 
 	rsp := make([]postResponse, len(posts))
+	var nextCursor string
 	for i, p := range posts {
 		rsp[i] = toPostResponseFromConnections(p)
+		if i == len(posts)-1 {
+			nextCursor = p.CreatedAt.Format(time.RFC3339Nano)
+		}
 	}
 
-	ctx.JSON(http.StatusOK, successResponse(gin.H{"posts": rsp, "page": page, "page_size": pageSize}))
+	ctx.JSON(http.StatusOK, successResponse(gin.H{"posts": rsp, "next_cursor": nextCursor, "page_size": pageSize}))
 }
 
 // deletePost lets a user delete their own post.

@@ -25,6 +25,14 @@ type createReelRequest struct {
 	Latitude      float64 `json:"latitude"`
 	Longitude     float64 `json:"longitude"`
 	HasLocation   bool    `json:"has_location"`
+	Width         *int32  `json:"width,omitempty"`
+	Height        *int32  `json:"height,omitempty"`
+	AspectRatio   *float64 `json:"aspect_ratio,omitempty"`
+	ThumbnailUrl  *string `json:"thumbnail_url,omitempty"`
+	BlurHash      *string `json:"blur_hash,omitempty"`
+	Duration      *int32  `json:"duration,omitempty"`
+	FileSize      *int32  `json:"file_size,omitempty"`
+	MimeType      *string `json:"mime_type,omitempty"`
 }
 
 type reelCommentRequest struct {
@@ -274,6 +282,14 @@ func (server *Server) createReel(ctx *gin.Context) {
 		IsAiGenerated: req.IsAiGenerated,
 		LocationName:  sql.NullString{String: req.LocationName, Valid: req.LocationName != ""},
 		Geom:          geom,
+		Width:        sql.NullInt32{Int32: func() int32 { if req.Width != nil { return *req.Width }; return 0 }(), Valid: req.Width != nil},
+		Height:       sql.NullInt32{Int32: func() int32 { if req.Height != nil { return *req.Height }; return 0 }(), Valid: req.Height != nil},
+		AspectRatio:  sql.NullFloat64{Float64: func() float64 { if req.AspectRatio != nil { return *req.AspectRatio }; return 0 }(), Valid: req.AspectRatio != nil},
+		ThumbnailUrl: sql.NullString{String: func() string { if req.ThumbnailUrl != nil { return *req.ThumbnailUrl }; return "" }(), Valid: req.ThumbnailUrl != nil},
+		BlurHash:     sql.NullString{String: func() string { if req.BlurHash != nil { return *req.BlurHash }; return "" }(), Valid: req.BlurHash != nil},
+		Duration:     sql.NullInt32{Int32: func() int32 { if req.Duration != nil { return *req.Duration }; return 0 }(), Valid: req.Duration != nil},
+		FileSize:     sql.NullInt32{Int32: func() int32 { if req.FileSize != nil { return *req.FileSize }; return 0 }(), Valid: req.FileSize != nil},
+		MimeType:     sql.NullString{String: func() string { if req.MimeType != nil { return *req.MimeType }; return "" }(), Valid: req.MimeType != nil},
 	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
@@ -318,19 +334,24 @@ func (server *Server) createReel(ctx *gin.Context) {
 func (server *Server) getReelsFeed(ctx *gin.Context) {
 	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
 
-	page, _ := strconv.Atoi(ctx.DefaultQuery("page", "1"))
+	cursorStr := ctx.Query("cursor")
 	pageSize, _ := strconv.Atoi(ctx.DefaultQuery("page_size", "10"))
-	if page < 1 {
-		page = 1
-	}
 	if pageSize < 1 || pageSize > 30 {
 		pageSize = 10
+	}
+
+	var cursor sql.NullTime
+	if cursorStr != "" {
+		parsedTime, err := time.Parse(time.RFC3339Nano, cursorStr)
+		if err == nil {
+			cursor = sql.NullTime{Time: parsedTime, Valid: true}
+		}
 	}
 
 	reels, err := server.store.ListReelsFeed(ctx, db.ListReelsFeedParams{
 		UserID: authPayload.UserID,
 		Limit:  int32(pageSize),
-		Offset: int32((page - 1) * pageSize),
+		Cursor: cursor,
 	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
@@ -338,11 +359,15 @@ func (server *Server) getReelsFeed(ctx *gin.Context) {
 	}
 
 	rsp := make([]reelResponse, len(reels))
+	var nextCursor string
 	for i, r := range reels {
 		rsp[i] = toReelResponseFromFeed(r)
+		if i == len(reels)-1 {
+			nextCursor = r.CreatedAt.Format(time.RFC3339Nano)
+		}
 	}
 
-	ctx.JSON(http.StatusOK, successResponse(gin.H{"reels": rsp, "page": page, "page_size": pageSize}))
+	ctx.JSON(http.StatusOK, successResponse(gin.H{"reels": rsp, "next_cursor": nextCursor, "page_size": pageSize}))
 }
 
 // getNearbyReels returns reels within a certain radius.

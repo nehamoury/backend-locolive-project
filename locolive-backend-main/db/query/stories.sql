@@ -10,9 +10,11 @@ INSERT INTO stories (
   show_location,
   is_premium,
   expires_at,
-  crop_settings
+  crop_settings,
+  width, height, aspect_ratio, thumbnail_url, blur_hash, duration, file_size, mime_type
 ) VALUES (
-  @user_id, @media_url, @media_type, @caption, @geohash, ST_SetSRID(ST_MakePoint(@lng::float8, @lat::float8), 4326), @is_anonymous, @show_location, @is_premium, @expires_at, @crop_settings
+  @user_id, @media_url, @media_type, @caption, @geohash, ST_SetSRID(ST_MakePoint(@lng::float8, @lat::float8), 4326), @is_anonymous, @show_location, @is_premium, @expires_at, @crop_settings,
+  @width, @height, @aspect_ratio, @thumbnail_url, @blur_hash, @duration, @file_size, @mime_type
 ) RETURNING *, ST_Y(geom::geometry) as lat, ST_X(geom::geometry) as lng;
 
 -- name: GetStoryByID :one

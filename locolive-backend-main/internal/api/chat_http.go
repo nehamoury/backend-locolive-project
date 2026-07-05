@@ -224,7 +224,7 @@ func (server *Server) sendMessage(ctx *gin.Context) {
 		}
 	}
 
-	// Handle expiry - DEFAULT TO 24 HOURS (Snapchat-style)
+	// Handle expiry
 	var expiresAt sql.NullTime
 	if req.ExpiresInSeconds > 0 {
 		// Custom expiry time provided
@@ -233,10 +233,9 @@ func (server *Server) sendMessage(ctx *gin.Context) {
 			Valid: true,
 		}
 	} else {
-		// DEFAULT: All messages expire after 24 hours
+		// DEFAULT: Messages do not expire
 		expiresAt = sql.NullTime{
-			Time:  time.Now().UTC().Add(24 * time.Hour),
-			Valid: true,
+			Valid: false,
 		}
 	}
 

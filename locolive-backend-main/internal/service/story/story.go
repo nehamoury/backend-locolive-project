@@ -31,6 +31,13 @@ type CreateStoryParams struct {
 	IsAnonymous  bool
 	ShowLocation bool
 	CropSettings json.RawMessage
+	Width        *int32
+	Height       *int32
+	AspectRatio  *float64
+	BlurHash     *string
+	Duration     *int32
+	FileSize     *int32
+	MimeType     *string
 }
 
 type GetFeedParams struct {
@@ -109,6 +116,13 @@ func (s *ServiceImpl) CreateStory(ctx context.Context, req CreateStoryParams) (*
 		IsPremium:    sql.NullBool{Bool: isPremium, Valid: true},
 		ExpiresAt:    expiresAt,
 		CropSettings: pqtype.NullRawMessage{RawMessage: req.CropSettings, Valid: len(req.CropSettings) > 0},
+		Width:        sql.NullInt32{Int32: func() int32 { if req.Width != nil { return *req.Width }; return 0 }(), Valid: req.Width != nil},
+		Height:       sql.NullInt32{Int32: func() int32 { if req.Height != nil { return *req.Height }; return 0 }(), Valid: req.Height != nil},
+		AspectRatio:  sql.NullFloat64{Float64: func() float64 { if req.AspectRatio != nil { return *req.AspectRatio }; return 0 }(), Valid: req.AspectRatio != nil},
+		BlurHash:     sql.NullString{String: func() string { if req.BlurHash != nil { return *req.BlurHash }; return "" }(), Valid: req.BlurHash != nil},
+		Duration:     sql.NullInt32{Int32: func() int32 { if req.Duration != nil { return *req.Duration }; return 0 }(), Valid: req.Duration != nil},
+		FileSize:     sql.NullInt32{Int32: func() int32 { if req.FileSize != nil { return *req.FileSize }; return 0 }(), Valid: req.FileSize != nil},
+		MimeType:     sql.NullString{String: func() string { if req.MimeType != nil { return *req.MimeType }; return "" }(), Valid: req.MimeType != nil},
 	})
 	if err != nil {
 		return nil, err

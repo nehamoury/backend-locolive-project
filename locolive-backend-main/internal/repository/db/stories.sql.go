@@ -26,10 +26,12 @@ INSERT INTO stories (
   show_location,
   is_premium,
   expires_at,
-  crop_settings
+  crop_settings,
+  width, height, aspect_ratio, thumbnail_url, blur_hash, duration, file_size, mime_type
 ) VALUES (
-  $1, $2, $3, $4, $5, ST_SetSRID(ST_MakePoint($6::float8, $7::float8), 4326), $8, $9, $10, $11, $12
-) RETURNING id, user_id, media_url, media_type, thumbnail_url, caption, geohash, geom, visibility, expires_at, created_at, is_anonymous, is_premium, show_location, crop_settings, ST_Y(geom::geometry) as lat, ST_X(geom::geometry) as lng
+  $1, $2, $3, $4, $5, ST_SetSRID(ST_MakePoint($6::float8, $7::float8), 4326), $8, $9, $10, $11, $12,
+  $13, $14, $15, $16, $17, $18, $19, $20
+) RETURNING id, user_id, media_url, media_type, thumbnail_url, caption, geohash, geom, visibility, expires_at, created_at, is_anonymous, is_premium, show_location, crop_settings, width, height, aspect_ratio, blur_hash, duration, file_size, mime_type, ST_Y(geom::geometry) as lat, ST_X(geom::geometry) as lng
 `
 
 type CreateStoryParams struct {
@@ -45,6 +47,14 @@ type CreateStoryParams struct {
 	IsPremium    sql.NullBool          `json:"is_premium"`
 	ExpiresAt    time.Time             `json:"expires_at"`
 	CropSettings pqtype.NullRawMessage `json:"crop_settings"`
+	Width        sql.NullInt32         `json:"width"`
+	Height       sql.NullInt32         `json:"height"`
+	AspectRatio  sql.NullFloat64       `json:"aspect_ratio"`
+	ThumbnailUrl sql.NullString        `json:"thumbnail_url"`
+	BlurHash     sql.NullString        `json:"blur_hash"`
+	Duration     sql.NullInt32         `json:"duration"`
+	FileSize     sql.NullInt32         `json:"file_size"`
+	MimeType     sql.NullString        `json:"mime_type"`
 }
 
 type CreateStoryRow struct {
@@ -63,6 +73,13 @@ type CreateStoryRow struct {
 	IsPremium    sql.NullBool          `json:"is_premium"`
 	ShowLocation bool                  `json:"show_location"`
 	CropSettings pqtype.NullRawMessage `json:"crop_settings"`
+	Width        sql.NullInt32         `json:"width"`
+	Height       sql.NullInt32         `json:"height"`
+	AspectRatio  sql.NullFloat64       `json:"aspect_ratio"`
+	BlurHash     sql.NullString        `json:"blur_hash"`
+	Duration     sql.NullInt32         `json:"duration"`
+	FileSize     sql.NullInt32         `json:"file_size"`
+	MimeType     sql.NullString        `json:"mime_type"`
 	Lat          interface{}           `json:"lat"`
 	Lng          interface{}           `json:"lng"`
 }
@@ -81,6 +98,14 @@ func (q *Queries) CreateStory(ctx context.Context, arg CreateStoryParams) (Creat
 		arg.IsPremium,
 		arg.ExpiresAt,
 		arg.CropSettings,
+		arg.Width,
+		arg.Height,
+		arg.AspectRatio,
+		arg.ThumbnailUrl,
+		arg.BlurHash,
+		arg.Duration,
+		arg.FileSize,
+		arg.MimeType,
 	)
 	var i CreateStoryRow
 	err := row.Scan(
@@ -99,6 +124,13 @@ func (q *Queries) CreateStory(ctx context.Context, arg CreateStoryParams) (Creat
 		&i.IsPremium,
 		&i.ShowLocation,
 		&i.CropSettings,
+		&i.Width,
+		&i.Height,
+		&i.AspectRatio,
+		&i.BlurHash,
+		&i.Duration,
+		&i.FileSize,
+		&i.MimeType,
 		&i.Lat,
 		&i.Lng,
 	)
@@ -127,7 +159,7 @@ func (q *Queries) DeleteStory(ctx context.Context, id uuid.UUID) error {
 }
 
 const getActiveStoriesByUserID = `-- name: GetActiveStoriesByUserID :many
-SELECT s.id, s.user_id, s.media_url, s.media_type, s.thumbnail_url, s.caption, s.geohash, s.geom, s.visibility, s.expires_at, s.created_at, s.is_anonymous, s.is_premium, s.show_location, s.crop_settings, u.username, u.avatar_url, u.is_premium,
+SELECT s.id, s.user_id, s.media_url, s.media_type, s.thumbnail_url, s.caption, s.geohash, s.geom, s.visibility, s.expires_at, s.created_at, s.is_anonymous, s.is_premium, s.show_location, s.crop_settings, s.width, s.height, s.aspect_ratio, s.blur_hash, s.duration, s.file_size, s.mime_type, u.username, u.avatar_url, u.is_premium,
        ST_Y(s.geom::geometry) as lat, ST_X(s.geom::geometry) as lng
 FROM stories s
 JOIN users u ON s.user_id = u.id
@@ -151,6 +183,13 @@ type GetActiveStoriesByUserIDRow struct {
 	IsPremium    sql.NullBool          `json:"is_premium"`
 	ShowLocation bool                  `json:"show_location"`
 	CropSettings pqtype.NullRawMessage `json:"crop_settings"`
+	Width        sql.NullInt32         `json:"width"`
+	Height       sql.NullInt32         `json:"height"`
+	AspectRatio  sql.NullFloat64       `json:"aspect_ratio"`
+	BlurHash     sql.NullString        `json:"blur_hash"`
+	Duration     sql.NullInt32         `json:"duration"`
+	FileSize     sql.NullInt32         `json:"file_size"`
+	MimeType     sql.NullString        `json:"mime_type"`
 	Username     string                `json:"username"`
 	AvatarUrl    sql.NullString        `json:"avatar_url"`
 	IsPremium_2  sql.NullBool          `json:"is_premium_2"`
@@ -183,6 +222,13 @@ func (q *Queries) GetActiveStoriesByUserID(ctx context.Context, userID uuid.UUID
 			&i.IsPremium,
 			&i.ShowLocation,
 			&i.CropSettings,
+			&i.Width,
+			&i.Height,
+			&i.AspectRatio,
+			&i.BlurHash,
+			&i.Duration,
+			&i.FileSize,
+			&i.MimeType,
 			&i.Username,
 			&i.AvatarUrl,
 			&i.IsPremium_2,
@@ -203,7 +249,7 @@ func (q *Queries) GetActiveStoriesByUserID(ctx context.Context, userID uuid.UUID
 }
 
 const getConnectionStories = `-- name: GetConnectionStories :many
-SELECT s.id, s.user_id, s.media_url, s.media_type, s.thumbnail_url, s.caption, s.geohash, s.geom, s.visibility, s.expires_at, s.created_at, s.is_anonymous, s.is_premium, s.show_location, s.crop_settings, u.username, u.avatar_url, u.is_premium,
+SELECT s.id, s.user_id, s.media_url, s.media_type, s.thumbnail_url, s.caption, s.geohash, s.geom, s.visibility, s.expires_at, s.created_at, s.is_anonymous, s.is_premium, s.show_location, s.crop_settings, s.width, s.height, s.aspect_ratio, s.blur_hash, s.duration, s.file_size, s.mime_type, u.username, u.avatar_url, u.is_premium,
        ST_Y(s.geom::geometry) as lat, ST_X(s.geom::geometry) as lng
 FROM stories s
 JOIN users u ON s.user_id = u.id
@@ -242,6 +288,13 @@ type GetConnectionStoriesRow struct {
 	IsPremium    sql.NullBool          `json:"is_premium"`
 	ShowLocation bool                  `json:"show_location"`
 	CropSettings pqtype.NullRawMessage `json:"crop_settings"`
+	Width        sql.NullInt32         `json:"width"`
+	Height       sql.NullInt32         `json:"height"`
+	AspectRatio  sql.NullFloat64       `json:"aspect_ratio"`
+	BlurHash     sql.NullString        `json:"blur_hash"`
+	Duration     sql.NullInt32         `json:"duration"`
+	FileSize     sql.NullInt32         `json:"file_size"`
+	MimeType     sql.NullString        `json:"mime_type"`
 	Username     string                `json:"username"`
 	AvatarUrl    sql.NullString        `json:"avatar_url"`
 	IsPremium_2  sql.NullBool          `json:"is_premium_2"`
@@ -275,6 +328,13 @@ func (q *Queries) GetConnectionStories(ctx context.Context, userID uuid.UUID) ([
 			&i.IsPremium,
 			&i.ShowLocation,
 			&i.CropSettings,
+			&i.Width,
+			&i.Height,
+			&i.AspectRatio,
+			&i.BlurHash,
+			&i.Duration,
+			&i.FileSize,
+			&i.MimeType,
 			&i.Username,
 			&i.AvatarUrl,
 			&i.IsPremium_2,
@@ -295,7 +355,7 @@ func (q *Queries) GetConnectionStories(ctx context.Context, userID uuid.UUID) ([
 }
 
 const getStoriesInBounds = `-- name: GetStoriesInBounds :many
-SELECT s.id, s.user_id, s.media_url, s.media_type, s.thumbnail_url, s.caption, s.geohash, s.geom, s.visibility, s.expires_at, s.created_at, s.is_anonymous, s.is_premium, s.show_location, s.crop_settings, u.username, u.avatar_url,
+SELECT s.id, s.user_id, s.media_url, s.media_type, s.thumbnail_url, s.caption, s.geohash, s.geom, s.visibility, s.expires_at, s.created_at, s.is_anonymous, s.is_premium, s.show_location, s.crop_settings, s.width, s.height, s.aspect_ratio, s.blur_hash, s.duration, s.file_size, s.mime_type, u.username, u.avatar_url,
        ST_Y(s.geom::geometry) as lat, ST_X(s.geom::geometry) as lng
 FROM stories s
 JOIN users u ON s.user_id = u.id
@@ -356,6 +416,13 @@ type GetStoriesInBoundsRow struct {
 	IsPremium    sql.NullBool          `json:"is_premium"`
 	ShowLocation bool                  `json:"show_location"`
 	CropSettings pqtype.NullRawMessage `json:"crop_settings"`
+	Width        sql.NullInt32         `json:"width"`
+	Height       sql.NullInt32         `json:"height"`
+	AspectRatio  sql.NullFloat64       `json:"aspect_ratio"`
+	BlurHash     sql.NullString        `json:"blur_hash"`
+	Duration     sql.NullInt32         `json:"duration"`
+	FileSize     sql.NullInt32         `json:"file_size"`
+	MimeType     sql.NullString        `json:"mime_type"`
 	Username     string                `json:"username"`
 	AvatarUrl    sql.NullString        `json:"avatar_url"`
 	Lat          interface{}           `json:"lat"`
@@ -395,6 +462,13 @@ func (q *Queries) GetStoriesInBounds(ctx context.Context, arg GetStoriesInBounds
 			&i.IsPremium,
 			&i.ShowLocation,
 			&i.CropSettings,
+			&i.Width,
+			&i.Height,
+			&i.AspectRatio,
+			&i.BlurHash,
+			&i.Duration,
+			&i.FileSize,
+			&i.MimeType,
 			&i.Username,
 			&i.AvatarUrl,
 			&i.Lat,
@@ -414,7 +488,7 @@ func (q *Queries) GetStoriesInBounds(ctx context.Context, arg GetStoriesInBounds
 }
 
 const getStoriesWithinRadius = `-- name: GetStoriesWithinRadius :many
-SELECT s.id, s.user_id, s.media_url, s.media_type, s.thumbnail_url, s.caption, s.geohash, s.geom, s.visibility, s.expires_at, s.created_at, s.is_anonymous, s.is_premium, s.show_location, s.crop_settings, u.username, u.avatar_url, u.is_premium,
+SELECT s.id, s.user_id, s.media_url, s.media_type, s.thumbnail_url, s.caption, s.geohash, s.geom, s.visibility, s.expires_at, s.created_at, s.is_anonymous, s.is_premium, s.show_location, s.crop_settings, s.width, s.height, s.aspect_ratio, s.blur_hash, s.duration, s.file_size, s.mime_type, u.username, u.avatar_url, u.is_premium,
        ST_Y(s.geom::geometry) as lat, ST_X(s.geom::geometry) as lng
 FROM stories s
 JOIN users u ON s.user_id = u.id
@@ -489,6 +563,13 @@ type GetStoriesWithinRadiusRow struct {
 	IsPremium    sql.NullBool          `json:"is_premium"`
 	ShowLocation bool                  `json:"show_location"`
 	CropSettings pqtype.NullRawMessage `json:"crop_settings"`
+	Width        sql.NullInt32         `json:"width"`
+	Height       sql.NullInt32         `json:"height"`
+	AspectRatio  sql.NullFloat64       `json:"aspect_ratio"`
+	BlurHash     sql.NullString        `json:"blur_hash"`
+	Duration     sql.NullInt32         `json:"duration"`
+	FileSize     sql.NullInt32         `json:"file_size"`
+	MimeType     sql.NullString        `json:"mime_type"`
 	Username     string                `json:"username"`
 	AvatarUrl    sql.NullString        `json:"avatar_url"`
 	IsPremium_2  sql.NullBool          `json:"is_premium_2"`
@@ -526,6 +607,13 @@ func (q *Queries) GetStoriesWithinRadius(ctx context.Context, arg GetStoriesWith
 			&i.IsPremium,
 			&i.ShowLocation,
 			&i.CropSettings,
+			&i.Width,
+			&i.Height,
+			&i.AspectRatio,
+			&i.BlurHash,
+			&i.Duration,
+			&i.FileSize,
+			&i.MimeType,
 			&i.Username,
 			&i.AvatarUrl,
 			&i.IsPremium_2,
@@ -546,7 +634,7 @@ func (q *Queries) GetStoriesWithinRadius(ctx context.Context, arg GetStoriesWith
 }
 
 const getStoryByID = `-- name: GetStoryByID :one
-SELECT id, user_id, media_url, media_type, thumbnail_url, caption, geohash, geom, visibility, expires_at, created_at, is_anonymous, is_premium, show_location, crop_settings, ST_Y(geom::geometry) as lat, ST_X(geom::geometry) as lng FROM stories
+SELECT id, user_id, media_url, media_type, thumbnail_url, caption, geohash, geom, visibility, expires_at, created_at, is_anonymous, is_premium, show_location, crop_settings, width, height, aspect_ratio, blur_hash, duration, file_size, mime_type, ST_Y(geom::geometry) as lat, ST_X(geom::geometry) as lng FROM stories
 WHERE id = $1 LIMIT 1
 `
 
@@ -566,6 +654,13 @@ type GetStoryByIDRow struct {
 	IsPremium    sql.NullBool          `json:"is_premium"`
 	ShowLocation bool                  `json:"show_location"`
 	CropSettings pqtype.NullRawMessage `json:"crop_settings"`
+	Width        sql.NullInt32         `json:"width"`
+	Height       sql.NullInt32         `json:"height"`
+	AspectRatio  sql.NullFloat64       `json:"aspect_ratio"`
+	BlurHash     sql.NullString        `json:"blur_hash"`
+	Duration     sql.NullInt32         `json:"duration"`
+	FileSize     sql.NullInt32         `json:"file_size"`
+	MimeType     sql.NullString        `json:"mime_type"`
 	Lat          interface{}           `json:"lat"`
 	Lng          interface{}           `json:"lng"`
 }
@@ -589,6 +684,13 @@ func (q *Queries) GetStoryByID(ctx context.Context, id uuid.UUID) (GetStoryByIDR
 		&i.IsPremium,
 		&i.ShowLocation,
 		&i.CropSettings,
+		&i.Width,
+		&i.Height,
+		&i.AspectRatio,
+		&i.BlurHash,
+		&i.Duration,
+		&i.FileSize,
+		&i.MimeType,
 		&i.Lat,
 		&i.Lng,
 	)
@@ -633,7 +735,7 @@ func (q *Queries) HasValidStory(ctx context.Context, userID uuid.UUID) (bool, er
 }
 
 const listAllStories = `-- name: ListAllStories :many
-SELECT s.id, s.user_id, s.media_url, s.media_type, s.thumbnail_url, s.caption, s.geohash, s.geom, s.visibility, s.expires_at, s.created_at, s.is_anonymous, s.is_premium, s.show_location, s.crop_settings, u.username
+SELECT s.id, s.user_id, s.media_url, s.media_type, s.thumbnail_url, s.caption, s.geohash, s.geom, s.visibility, s.expires_at, s.created_at, s.is_anonymous, s.is_premium, s.show_location, s.crop_settings, s.width, s.height, s.aspect_ratio, s.blur_hash, s.duration, s.file_size, s.mime_type, u.username
 FROM stories s
 JOIN users u ON s.user_id = u.id
 ORDER BY s.created_at DESC
@@ -661,6 +763,13 @@ type ListAllStoriesRow struct {
 	IsPremium    sql.NullBool          `json:"is_premium"`
 	ShowLocation bool                  `json:"show_location"`
 	CropSettings pqtype.NullRawMessage `json:"crop_settings"`
+	Width        sql.NullInt32         `json:"width"`
+	Height       sql.NullInt32         `json:"height"`
+	AspectRatio  sql.NullFloat64       `json:"aspect_ratio"`
+	BlurHash     sql.NullString        `json:"blur_hash"`
+	Duration     sql.NullInt32         `json:"duration"`
+	FileSize     sql.NullInt32         `json:"file_size"`
+	MimeType     sql.NullString        `json:"mime_type"`
 	Username     string                `json:"username"`
 }
 
@@ -690,6 +799,13 @@ func (q *Queries) ListAllStories(ctx context.Context, arg ListAllStoriesParams) 
 			&i.IsPremium,
 			&i.ShowLocation,
 			&i.CropSettings,
+			&i.Width,
+			&i.Height,
+			&i.AspectRatio,
+			&i.BlurHash,
+			&i.Duration,
+			&i.FileSize,
+			&i.MimeType,
 			&i.Username,
 		); err != nil {
 			return nil, err
@@ -715,7 +831,7 @@ WHERE id = $1
   AND user_id = $2
   AND created_at > NOW() - INTERVAL '15 minutes'
   AND expires_at > NOW()
-RETURNING id, user_id, media_url, media_type, thumbnail_url, caption, geohash, geom, visibility, expires_at, created_at, is_anonymous, is_premium, show_location, crop_settings, ST_Y(geom::geometry) as lat, ST_X(geom::geometry) as lng
+RETURNING id, user_id, media_url, media_type, thumbnail_url, caption, geohash, geom, visibility, expires_at, created_at, is_anonymous, is_premium, show_location, crop_settings, width, height, aspect_ratio, blur_hash, duration, file_size, mime_type, ST_Y(geom::geometry) as lat, ST_X(geom::geometry) as lng
 `
 
 type UpdateStoryParams struct {
@@ -742,6 +858,13 @@ type UpdateStoryRow struct {
 	IsPremium    sql.NullBool          `json:"is_premium"`
 	ShowLocation bool                  `json:"show_location"`
 	CropSettings pqtype.NullRawMessage `json:"crop_settings"`
+	Width        sql.NullInt32         `json:"width"`
+	Height       sql.NullInt32         `json:"height"`
+	AspectRatio  sql.NullFloat64       `json:"aspect_ratio"`
+	BlurHash     sql.NullString        `json:"blur_hash"`
+	Duration     sql.NullInt32         `json:"duration"`
+	FileSize     sql.NullInt32         `json:"file_size"`
+	MimeType     sql.NullString        `json:"mime_type"`
 	Lat          interface{}           `json:"lat"`
 	Lng          interface{}           `json:"lng"`
 }
@@ -771,6 +894,13 @@ func (q *Queries) UpdateStory(ctx context.Context, arg UpdateStoryParams) (Updat
 		&i.IsPremium,
 		&i.ShowLocation,
 		&i.CropSettings,
+		&i.Width,
+		&i.Height,
+		&i.AspectRatio,
+		&i.BlurHash,
+		&i.Duration,
+		&i.FileSize,
+		&i.MimeType,
 		&i.Lat,
 		&i.Lng,
 	)

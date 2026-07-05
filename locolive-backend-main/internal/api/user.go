@@ -566,15 +566,18 @@ func (server *Server) searchUsers(ctx *gin.Context) {
 			avatarUrl = "/" + avatarUrl
 		}
 
-		// Get connection status
+		// Get connection status from relationships
 		connStatus := "none"
 		if authExists {
-			conn, err := server.store.GetConnection(ctx, db.GetConnectionParams{
-				RequesterID: currentUserID,
-				TargetID:    u.ID,
+			rel, err1 := server.store.GetRelationship(ctx, db.GetRelationshipParams{
+				UserID:       currentUserID,
+				TargetUserID: u.ID,
+				Type:         "follow",
 			})
-			if err == nil {
-				connStatus = string(conn.Status)
+			if err1 == nil && rel.Status == "active" {
+				connStatus = "accepted"
+			} else if err1 == nil && rel.Status == "pending" {
+				connStatus = "pending"
 			}
 
 			// Check if blocked

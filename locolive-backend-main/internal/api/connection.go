@@ -154,18 +154,15 @@ func (server *Server) listMeFollowers(ctx *gin.Context) {
 	query := `
 		SELECT u.id, u.username, u.full_name, u.avatar_url, u.last_active_at,
                EXISTS(
-                 SELECT 1 FROM connections 
-                 WHERE requester_id = $1 AND target_id = u.id
-                 AND status = 'accepted'
+                 SELECT 1 FROM relationships 
+                 WHERE user_id = $1 AND target_user_id = u.id
+                 AND type = 'follow' AND status = 'active'
                ) as you_follow,
-               EXISTS(
-                 SELECT 1 FROM connections 
-                 WHERE requester_id = $1 AND target_id = u.id AND status = 'pending'
-               ) as requested
-		FROM connections c
-		JOIN users u ON u.id = c.requester_id
-		WHERE c.target_id = $1
-		  AND c.status = 'accepted'
+               false as requested -- 'requested' is not currently used in the new follow model, can add later if needed
+		FROM relationships r
+		JOIN users u ON u.id = r.user_id
+		WHERE r.target_user_id = $1
+		  AND r.type = 'follow' AND r.status = 'active'
 	`
 	rows, err := server.store.GetDB().QueryContext(ctx, query, viewerID)
 	if err != nil {
@@ -231,10 +228,10 @@ func (server *Server) listUserFollowers(ctx *gin.Context) {
 
 	query := `
 		SELECT u.id, u.username, u.full_name, u.avatar_url, u.last_active_at
-		FROM connections c
-		JOIN users u ON u.id = c.requester_id
-		WHERE c.target_id = $1
-		  AND c.status = 'accepted'
+		FROM relationships r
+		JOIN users u ON u.id = r.user_id
+		WHERE r.target_user_id = $1
+		  AND r.type = 'follow' AND r.status = 'active'
 	`
 	rows, err := server.store.GetDB().QueryContext(ctx, query, targetID)
 	if err != nil {
@@ -276,12 +273,12 @@ func (server *Server) listMeFollowing(ctx *gin.Context) {
 
 	query := `
 		SELECT u.id, u.username, u.full_name, u.avatar_url, u.last_active_at,
-               EXISTS(SELECT 1 FROM connections WHERE requester_id = u.id AND target_id = $1 AND status = 'accepted') as follows_you,
-               EXISTS(SELECT 1 FROM connections WHERE requester_id = $1 AND target_id = u.id AND status = 'pending') as requested_by_them
-		FROM connections c
-		JOIN users u ON u.id = c.target_id
-		WHERE c.requester_id = $1
-		  AND c.status = 'accepted'
+               EXISTS(SELECT 1 FROM relationships WHERE user_id = u.id AND target_user_id = $1 AND type = 'follow' AND status = 'active') as follows_you,
+               false as requested_by_them
+		FROM relationships r
+		JOIN users u ON u.id = r.target_user_id
+		WHERE r.user_id = $1
+		  AND r.type = 'follow' AND r.status = 'active'
 	`
 	rows, err := server.store.GetDB().QueryContext(ctx, query, viewerID)
 	if err != nil {
@@ -348,10 +345,10 @@ func (server *Server) listUserFollowing(ctx *gin.Context) {
 
 	query := `
 		SELECT u.id, u.username, u.full_name, u.avatar_url, u.last_active_at
-		FROM connections c
-		JOIN users u ON u.id = c.target_id
-		WHERE c.requester_id = $1
-		  AND c.status = 'accepted'
+		FROM relationships r
+		JOIN users u ON u.id = r.target_user_id
+		WHERE r.user_id = $1
+		  AND r.type = 'follow' AND r.status = 'active'
 	`
 	rows, err := server.store.GetDB().QueryContext(ctx, query, targetID)
 	if err != nil {
@@ -381,7 +378,11 @@ func (server *Server) listUserFollowing(ctx *gin.Context) {
 func (server *Server) listPendingRequests(ctx *gin.Context) {
 	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
 
-	requests, err := server.store.ListPendingRequests(ctx, authPayload.UserID)
+	requests, err := server.store.ListPendingFollowRequests(ctx, db.ListPendingFollowRequestsParams{
+		TargetUserID: authPayload.UserID,
+		Limit:        50,
+		Offset:       0,
+	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
@@ -389,13 +390,6 @@ func (server *Server) listPendingRequests(ctx *gin.Context) {
 
 	rsp := make([]connectionResponse, len(requests))
 	for i, r := range requests {
-		var mutualFriends []friendResponse
-		if mfBytes, ok := r.MutualFriends.([]byte); ok && len(mfBytes) > 0 {
-			if err := json.Unmarshal(mfBytes, &mutualFriends); err != nil {
-				log.Error().Err(err).Msg("failed to unmarshal mutual friends")
-			}
-		}
-
 		rsp[i] = connectionResponse{
 			RequesterID:   r.RequesterID,
 			TargetID:      r.TargetID,
@@ -404,8 +398,8 @@ func (server *Server) listPendingRequests(ctx *gin.Context) {
 			Username:      r.Username,
 			FullName:      r.FullName,
 			AvatarUrl:     r.AvatarUrl.String,
-			MutualFriends: mutualFriends,
-			MutualCount:   r.MutualCount,
+			MutualFriends: []friendResponse{},
+			MutualCount:   0,
 		}
 	}
 
@@ -415,7 +409,11 @@ func (server *Server) listPendingRequests(ctx *gin.Context) {
 func (server *Server) listSentRequests(ctx *gin.Context) {
 	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
 
-	requests, err := server.store.ListSentConnectionRequests(ctx, authPayload.UserID)
+	requests, err := server.store.ListSentFollowRequests(ctx, db.ListSentFollowRequestsParams{
+		UserID: authPayload.UserID,
+		Limit:  50,
+		Offset: 0,
+	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
 		return
@@ -633,17 +631,25 @@ func (server *Server) updateConnection(ctx *gin.Context) {
 	}
 	authPayload := getAuthPayload(ctx)
 
-	var conn db.Connection
+	var status string
 	err := server.store.ExecTx(ctx, func(q *db.Queries) error {
 		var err error
-		conn, err = q.UpdateConnectionStatus(ctx, db.UpdateConnectionStatusParams{
-			RequesterID: requesterID,
-			TargetID:    authPayload.UserID,
-			Status:      db.ConnectionStatus(req.Status),
+		var relStatus db.RelationshipStatus
+		if req.Status == "accepted" {
+			relStatus = db.RelationshipStatusActive
+		} else {
+			relStatus = db.RelationshipStatusBlocked
+		}
+
+		rel, err := q.UpdateRelationshipStatus(ctx, db.UpdateRelationshipStatusParams{
+			UserID:       requesterID,
+			TargetUserID: authPayload.UserID,
+			Status:       relStatus,
 		})
 		if err != nil {
 			return err
 		}
+		status = string(rel.Status)
 
 		// Remove the 'connection_request' notification as it's now handled
 		return q.DeleteConnectionRequestNotifications(ctx, db.DeleteConnectionRequestNotificationsParams{
@@ -654,7 +660,7 @@ func (server *Server) updateConnection(ctx *gin.Context) {
 
 	if err != nil {
 		if err == sql.ErrNoRows {
-			ctx.JSON(http.StatusNotFound, gin.H{"error": "connection request not found or already handled"})
+			ctx.JSON(http.StatusNotFound, gin.H{"error": "follow request not found or already handled"})
 			return
 		}
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
@@ -686,15 +692,16 @@ func (server *Server) updateConnection(ctx *gin.Context) {
 			"payload": gin.H{
 				"requester_id":       requesterID,
 				"target_id":          authPayload.UserID,
-				"requester_username": "the other user", // Simplified, frontend can refetch
-				"target_username":    accepter.Username,
 			},
 		})
 		server.hub.SendToUser(requesterID, msg)
 		server.hub.SendToUser(authPayload.UserID, msg)
 	}
 
-	ctx.JSON(http.StatusOK, successResponse(conn))
+	ctx.JSON(http.StatusOK, successResponse(gin.H{
+		"status":   status,
+		"is_match": false, // follow does not imply match now
+	}))
 }
 
 func (server *Server) deleteConnection(ctx *gin.Context) {
@@ -707,9 +714,10 @@ func (server *Server) deleteConnection(ctx *gin.Context) {
 
 	authPayload := ctx.MustGet(authorizationPayloadKey).(*token.Payload)
 
-	err = server.store.DeleteConnection(ctx, db.DeleteConnectionParams{
-		RequesterID: authPayload.UserID,
-		TargetID:    targetUserID,
+	err = server.store.DeleteRelationship(ctx, db.DeleteRelationshipParams{
+		UserID:       targetUserID,
+		TargetUserID: authPayload.UserID,
+		Type:         db.RelationshipTypeFollow,
 	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))
@@ -742,8 +750,8 @@ func (server *Server) getSuggestedConnections(ctx *gin.Context) {
 
 	// 1. Fetch Mutual Friend Suggestions
 	suggestions, err := server.store.GetSuggestedConnections(ctx, db.GetSuggestedConnectionsParams{
-		RequesterID: authPayload.UserID,
-		Limit:       12,
+		UserID: authPayload.UserID,
+		Limit:  12,
 	})
 
 	var rsp []suggestedConnectionResponse
@@ -811,13 +819,19 @@ func (server *Server) getSuggestedConnections(ctx *gin.Context) {
 					continue
 				}
 
-				// Check connection status
-				_, err := server.store.GetConnection(ctx, db.GetConnectionParams{
-					RequesterID: authPayload.UserID,
-					TargetID:    uid,
+				// Check relationship status (both directions)
+				_, err1 := server.store.GetRelationship(ctx, db.GetRelationshipParams{
+					UserID:       authPayload.UserID,
+					TargetUserID: uid,
+					Type:         "follow",
 				})
-				if err == nil {
-					continue // Already requested/connected
+				_, err2 := server.store.GetRelationship(ctx, db.GetRelationshipParams{
+					UserID:       uid,
+					TargetUserID: authPayload.UserID,
+					Type:         "follow",
+				})
+				if err1 == nil || err2 == nil {
+					continue // Already connected or follow request pending
 				}
 
 				// Get user details

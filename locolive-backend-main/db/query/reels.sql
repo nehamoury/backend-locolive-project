@@ -1,23 +1,23 @@
 -- name: CreateReel :one
 INSERT INTO reels (
-    user_id, video_url, caption, is_ai_generated, location_name, geohash, geom, category_id
+    user_id, video_url, caption, is_ai_generated, location_name, geohash, geom, category_id, width, height, aspect_ratio, thumbnail_url, blur_hash, duration, file_size, mime_type
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
 ) RETURNING id, user_id, video_url, caption, is_ai_generated, location_name, geohash, category_id,
     COALESCE(ST_Y(geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(geom::geometry)::float8, 0.0)::float8 AS lng,
-    likes_count, comments_count, shares_count, saves_count, created_at, updated_at;
+    likes_count, comments_count, shares_count, saves_count, created_at, updated_at, width, height, aspect_ratio, thumbnail_url, blur_hash, duration, file_size, mime_type;
 
 -- name: GetReel :one
 SELECT id, user_id, video_url, caption, is_ai_generated, location_name, geohash, category_id,
     COALESCE(ST_Y(geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(geom::geometry)::float8, 0.0)::float8 AS lng,
-    likes_count, comments_count, shares_count, saves_count, created_at, updated_at 
+    likes_count, comments_count, shares_count, saves_count, created_at, updated_at, width, height, aspect_ratio, thumbnail_url, blur_hash, duration, file_size, mime_type 
 FROM reels WHERE id = $1 LIMIT 1;
 
 -- name: ListReelsFeed :many
 SELECT 
     r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.category_id,
     COALESCE(ST_Y(r.geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(r.geom::geometry)::float8, 0.0)::float8 AS lng,
-    r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
+    r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at, r.width, r.height, r.aspect_ratio, r.thumbnail_url, r.blur_hash, r.duration, r.file_size, r.mime_type,
     u.username,
     u.avatar_url,
     EXISTS (SELECT 1 FROM reel_likes rl WHERE rl.reel_id = r.id AND rl.user_id = $1) AS is_liked,
@@ -25,14 +25,15 @@ SELECT
     COALESCE((SELECT status FROM connections c WHERE (c.requester_id = $1 AND c.target_id = r.user_id) OR (c.requester_id = r.user_id AND c.target_id = $1) LIMIT 1)::text, 'none') AS connection_status
 FROM reels r
 JOIN users u ON r.user_id = u.id
+WHERE (sqlc.narg('cursor')::timestamptz IS NULL OR r.created_at < sqlc.narg('cursor'))
 ORDER BY r.created_at DESC
-LIMIT $2 OFFSET $3;
+LIMIT sqlc.arg('limit');
 
 -- name: ListNearbyReels :many
 SELECT 
     r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.category_id,
     COALESCE(ST_Y(r.geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(r.geom::geometry)::float8, 0.0)::float8 AS lng,
-    r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
+    r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at, r.width, r.height, r.aspect_ratio, r.thumbnail_url, r.blur_hash, r.duration, r.file_size, r.mime_type,
     u.username,
     u.avatar_url,
     ST_Distance(r.geom, ST_SetSRID(ST_MakePoint(sqlc.arg(lng)::float, sqlc.arg(lat)::float), 4326)::geography) AS distance_meters,
@@ -50,7 +51,7 @@ LIMIT $1 OFFSET $2;
 SELECT 
     r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.category_id,
     COALESCE(ST_Y(r.geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(r.geom::geometry)::float8, 0.0)::float8 AS lng,
-    r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
+    r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at, r.width, r.height, r.aspect_ratio, r.thumbnail_url, r.blur_hash, r.duration, r.file_size, r.mime_type,
     u.username,
     u.avatar_url,
     EXISTS (SELECT 1 FROM reel_likes rl WHERE rl.reel_id = r.id AND rl.user_id = sqlc.arg(viewer_id)) AS is_liked,
@@ -160,7 +161,7 @@ DELETE FROM reels WHERE id = $1;
 SELECT 
     r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.category_id,
     COALESCE(ST_Y(r.geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(r.geom::geometry)::float8, 0.0)::float8 AS lng,
-    r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
+    r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at, r.width, r.height, r.aspect_ratio, r.thumbnail_url, r.blur_hash, r.duration, r.file_size, r.mime_type,
     u.username,
     u.avatar_url,
     TRUE AS is_saved,
@@ -188,7 +189,7 @@ SELECT COUNT(*) FROM reel_saves WHERE user_id = sqlc.arg(user_id);
 -- name: ListAllReelsAdmin :many
 SELECT 
     r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.category_id,
-    r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
+    r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at, r.width, r.height, r.aspect_ratio, r.thumbnail_url, r.blur_hash, r.duration, r.file_size, r.mime_type,
     u.username, u.avatar_url
 FROM reels r
 JOIN users u ON r.user_id = u.id
@@ -204,7 +205,7 @@ UPDATE reels SET caption = sqlc.arg(caption), updated_at = now() WHERE id = sqlc
 -- name: SearchReels :many
 SELECT r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.category_id,
        COALESCE(ST_Y(r.geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(r.geom::geometry)::float8, 0.0)::float8 AS lng,
-       r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
+       r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at, r.width, r.height, r.aspect_ratio, r.thumbnail_url, r.blur_hash, r.duration, r.file_size, r.mime_type,
        u.username, u.avatar_url,
        EXISTS (SELECT 1 FROM reel_likes rl WHERE rl.reel_id = r.id AND rl.user_id = sqlc.arg(viewer_id)) AS is_liked,
        EXISTS (SELECT 1 FROM reel_saves rs WHERE rs.reel_id = r.id AND rs.user_id = sqlc.arg(viewer_id)) AS is_saved,

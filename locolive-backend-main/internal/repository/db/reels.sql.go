@@ -69,42 +69,58 @@ func (q *Queries) CountSavedReels(ctx context.Context, userID uuid.UUID) (int64,
 
 const createReel = `-- name: CreateReel :one
 INSERT INTO reels (
-    user_id, video_url, caption, is_ai_generated, location_name, geohash, geom, category_id
+    user_id, video_url, caption, is_ai_generated, location_name, geohash, geom, category_id, width, height, aspect_ratio, thumbnail_url, blur_hash, duration, file_size, mime_type
 ) VALUES (
-    $1, $2, $3, $4, $5, $6, $7, $8
+    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16
 ) RETURNING id, user_id, video_url, caption, is_ai_generated, location_name, geohash, category_id,
     COALESCE(ST_Y(geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(geom::geometry)::float8, 0.0)::float8 AS lng,
-    likes_count, comments_count, shares_count, saves_count, created_at, updated_at
+    likes_count, comments_count, shares_count, saves_count, created_at, updated_at, width, height, aspect_ratio, thumbnail_url, blur_hash, duration, file_size, mime_type
 `
 
 type CreateReelParams struct {
-	UserID        uuid.UUID      `json:"user_id"`
-	VideoUrl      string         `json:"video_url"`
-	Caption       sql.NullString `json:"caption"`
-	IsAiGenerated bool           `json:"is_ai_generated"`
-	LocationName  sql.NullString `json:"location_name"`
-	Geohash       sql.NullString `json:"geohash"`
-	Geom          interface{}    `json:"geom"`
-	CategoryID    uuid.NullUUID  `json:"category_id"`
+	UserID        uuid.UUID       `json:"user_id"`
+	VideoUrl      string          `json:"video_url"`
+	Caption       sql.NullString  `json:"caption"`
+	IsAiGenerated bool            `json:"is_ai_generated"`
+	LocationName  sql.NullString  `json:"location_name"`
+	Geohash       sql.NullString  `json:"geohash"`
+	Geom          interface{}     `json:"geom"`
+	CategoryID    uuid.NullUUID   `json:"category_id"`
+	Width         sql.NullInt32   `json:"width"`
+	Height        sql.NullInt32   `json:"height"`
+	AspectRatio   sql.NullFloat64 `json:"aspect_ratio"`
+	ThumbnailUrl  sql.NullString  `json:"thumbnail_url"`
+	BlurHash      sql.NullString  `json:"blur_hash"`
+	Duration      sql.NullInt32   `json:"duration"`
+	FileSize      sql.NullInt32   `json:"file_size"`
+	MimeType      sql.NullString  `json:"mime_type"`
 }
 
 type CreateReelRow struct {
-	ID            uuid.UUID      `json:"id"`
-	UserID        uuid.UUID      `json:"user_id"`
-	VideoUrl      string         `json:"video_url"`
-	Caption       sql.NullString `json:"caption"`
-	IsAiGenerated bool           `json:"is_ai_generated"`
-	LocationName  sql.NullString `json:"location_name"`
-	Geohash       sql.NullString `json:"geohash"`
-	CategoryID    uuid.NullUUID  `json:"category_id"`
-	Lat           float64        `json:"lat"`
-	Lng           float64        `json:"lng"`
-	LikesCount    int32          `json:"likes_count"`
-	CommentsCount int32          `json:"comments_count"`
-	SharesCount   int32          `json:"shares_count"`
-	SavesCount    int32          `json:"saves_count"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
+	ID            uuid.UUID       `json:"id"`
+	UserID        uuid.UUID       `json:"user_id"`
+	VideoUrl      string          `json:"video_url"`
+	Caption       sql.NullString  `json:"caption"`
+	IsAiGenerated bool            `json:"is_ai_generated"`
+	LocationName  sql.NullString  `json:"location_name"`
+	Geohash       sql.NullString  `json:"geohash"`
+	CategoryID    uuid.NullUUID   `json:"category_id"`
+	Lat           float64         `json:"lat"`
+	Lng           float64         `json:"lng"`
+	LikesCount    int32           `json:"likes_count"`
+	CommentsCount int32           `json:"comments_count"`
+	SharesCount   int32           `json:"shares_count"`
+	SavesCount    int32           `json:"saves_count"`
+	CreatedAt     time.Time       `json:"created_at"`
+	UpdatedAt     time.Time       `json:"updated_at"`
+	Width         sql.NullInt32   `json:"width"`
+	Height        sql.NullInt32   `json:"height"`
+	AspectRatio   sql.NullFloat64 `json:"aspect_ratio"`
+	ThumbnailUrl  sql.NullString  `json:"thumbnail_url"`
+	BlurHash      sql.NullString  `json:"blur_hash"`
+	Duration      sql.NullInt32   `json:"duration"`
+	FileSize      sql.NullInt32   `json:"file_size"`
+	MimeType      sql.NullString  `json:"mime_type"`
 }
 
 func (q *Queries) CreateReel(ctx context.Context, arg CreateReelParams) (CreateReelRow, error) {
@@ -117,6 +133,14 @@ func (q *Queries) CreateReel(ctx context.Context, arg CreateReelParams) (CreateR
 		arg.Geohash,
 		arg.Geom,
 		arg.CategoryID,
+		arg.Width,
+		arg.Height,
+		arg.AspectRatio,
+		arg.ThumbnailUrl,
+		arg.BlurHash,
+		arg.Duration,
+		arg.FileSize,
+		arg.MimeType,
 	)
 	var i CreateReelRow
 	err := row.Scan(
@@ -136,6 +160,14 @@ func (q *Queries) CreateReel(ctx context.Context, arg CreateReelParams) (CreateR
 		&i.SavesCount,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Width,
+		&i.Height,
+		&i.AspectRatio,
+		&i.ThumbnailUrl,
+		&i.BlurHash,
+		&i.Duration,
+		&i.FileSize,
+		&i.MimeType,
 	)
 	return i, err
 }
@@ -215,27 +247,35 @@ func (q *Queries) DeleteReelComment(ctx context.Context, arg DeleteReelCommentPa
 const getReel = `-- name: GetReel :one
 SELECT id, user_id, video_url, caption, is_ai_generated, location_name, geohash, category_id,
     COALESCE(ST_Y(geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(geom::geometry)::float8, 0.0)::float8 AS lng,
-    likes_count, comments_count, shares_count, saves_count, created_at, updated_at 
+    likes_count, comments_count, shares_count, saves_count, created_at, updated_at, width, height, aspect_ratio, thumbnail_url, blur_hash, duration, file_size, mime_type 
 FROM reels WHERE id = $1 LIMIT 1
 `
 
 type GetReelRow struct {
-	ID            uuid.UUID      `json:"id"`
-	UserID        uuid.UUID      `json:"user_id"`
-	VideoUrl      string         `json:"video_url"`
-	Caption       sql.NullString `json:"caption"`
-	IsAiGenerated bool           `json:"is_ai_generated"`
-	LocationName  sql.NullString `json:"location_name"`
-	Geohash       sql.NullString `json:"geohash"`
-	CategoryID    uuid.NullUUID  `json:"category_id"`
-	Lat           float64        `json:"lat"`
-	Lng           float64        `json:"lng"`
-	LikesCount    int32          `json:"likes_count"`
-	CommentsCount int32          `json:"comments_count"`
-	SharesCount   int32          `json:"shares_count"`
-	SavesCount    int32          `json:"saves_count"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
+	ID            uuid.UUID       `json:"id"`
+	UserID        uuid.UUID       `json:"user_id"`
+	VideoUrl      string          `json:"video_url"`
+	Caption       sql.NullString  `json:"caption"`
+	IsAiGenerated bool            `json:"is_ai_generated"`
+	LocationName  sql.NullString  `json:"location_name"`
+	Geohash       sql.NullString  `json:"geohash"`
+	CategoryID    uuid.NullUUID   `json:"category_id"`
+	Lat           float64         `json:"lat"`
+	Lng           float64         `json:"lng"`
+	LikesCount    int32           `json:"likes_count"`
+	CommentsCount int32           `json:"comments_count"`
+	SharesCount   int32           `json:"shares_count"`
+	SavesCount    int32           `json:"saves_count"`
+	CreatedAt     time.Time       `json:"created_at"`
+	UpdatedAt     time.Time       `json:"updated_at"`
+	Width         sql.NullInt32   `json:"width"`
+	Height        sql.NullInt32   `json:"height"`
+	AspectRatio   sql.NullFloat64 `json:"aspect_ratio"`
+	ThumbnailUrl  sql.NullString  `json:"thumbnail_url"`
+	BlurHash      sql.NullString  `json:"blur_hash"`
+	Duration      sql.NullInt32   `json:"duration"`
+	FileSize      sql.NullInt32   `json:"file_size"`
+	MimeType      sql.NullString  `json:"mime_type"`
 }
 
 func (q *Queries) GetReel(ctx context.Context, id uuid.UUID) (GetReelRow, error) {
@@ -258,6 +298,14 @@ func (q *Queries) GetReel(ctx context.Context, id uuid.UUID) (GetReelRow, error)
 		&i.SavesCount,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+		&i.Width,
+		&i.Height,
+		&i.AspectRatio,
+		&i.ThumbnailUrl,
+		&i.BlurHash,
+		&i.Duration,
+		&i.FileSize,
+		&i.MimeType,
 	)
 	return i, err
 }
@@ -338,7 +386,7 @@ func (q *Queries) LikeReelAtomic(ctx context.Context, arg LikeReelAtomicParams) 
 const listAllReelsAdmin = `-- name: ListAllReelsAdmin :many
 SELECT 
     r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.category_id,
-    r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
+    r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at, r.width, r.height, r.aspect_ratio, r.thumbnail_url, r.blur_hash, r.duration, r.file_size, r.mime_type,
     u.username, u.avatar_url
 FROM reels r
 JOIN users u ON r.user_id = u.id
@@ -352,22 +400,30 @@ type ListAllReelsAdminParams struct {
 }
 
 type ListAllReelsAdminRow struct {
-	ID            uuid.UUID      `json:"id"`
-	UserID        uuid.UUID      `json:"user_id"`
-	VideoUrl      string         `json:"video_url"`
-	Caption       sql.NullString `json:"caption"`
-	IsAiGenerated bool           `json:"is_ai_generated"`
-	LocationName  sql.NullString `json:"location_name"`
-	Geohash       sql.NullString `json:"geohash"`
-	CategoryID    uuid.NullUUID  `json:"category_id"`
-	LikesCount    int32          `json:"likes_count"`
-	CommentsCount int32          `json:"comments_count"`
-	SharesCount   int32          `json:"shares_count"`
-	SavesCount    int32          `json:"saves_count"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
-	Username      string         `json:"username"`
-	AvatarUrl     sql.NullString `json:"avatar_url"`
+	ID            uuid.UUID       `json:"id"`
+	UserID        uuid.UUID       `json:"user_id"`
+	VideoUrl      string          `json:"video_url"`
+	Caption       sql.NullString  `json:"caption"`
+	IsAiGenerated bool            `json:"is_ai_generated"`
+	LocationName  sql.NullString  `json:"location_name"`
+	Geohash       sql.NullString  `json:"geohash"`
+	CategoryID    uuid.NullUUID   `json:"category_id"`
+	LikesCount    int32           `json:"likes_count"`
+	CommentsCount int32           `json:"comments_count"`
+	SharesCount   int32           `json:"shares_count"`
+	SavesCount    int32           `json:"saves_count"`
+	CreatedAt     time.Time       `json:"created_at"`
+	UpdatedAt     time.Time       `json:"updated_at"`
+	Width         sql.NullInt32   `json:"width"`
+	Height        sql.NullInt32   `json:"height"`
+	AspectRatio   sql.NullFloat64 `json:"aspect_ratio"`
+	ThumbnailUrl  sql.NullString  `json:"thumbnail_url"`
+	BlurHash      sql.NullString  `json:"blur_hash"`
+	Duration      sql.NullInt32   `json:"duration"`
+	FileSize      sql.NullInt32   `json:"file_size"`
+	MimeType      sql.NullString  `json:"mime_type"`
+	Username      string          `json:"username"`
+	AvatarUrl     sql.NullString  `json:"avatar_url"`
 }
 
 func (q *Queries) ListAllReelsAdmin(ctx context.Context, arg ListAllReelsAdminParams) ([]ListAllReelsAdminRow, error) {
@@ -394,6 +450,14 @@ func (q *Queries) ListAllReelsAdmin(ctx context.Context, arg ListAllReelsAdminPa
 			&i.SavesCount,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Width,
+			&i.Height,
+			&i.AspectRatio,
+			&i.ThumbnailUrl,
+			&i.BlurHash,
+			&i.Duration,
+			&i.FileSize,
+			&i.MimeType,
 			&i.Username,
 			&i.AvatarUrl,
 		); err != nil {
@@ -411,7 +475,7 @@ func (q *Queries) ListAllReelsAdmin(ctx context.Context, arg ListAllReelsAdminPa
 }
 
 const listLikedReelsByUserID = `-- name: ListLikedReelsByUserID :many
-SELECT r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.geom, r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at, r.category_id FROM reels r
+SELECT r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.geom, r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at, r.category_id, r.width, r.height, r.aspect_ratio, r.thumbnail_url, r.blur_hash, r.duration, r.file_size, r.mime_type, r.engagement_score, r.watch_time_score FROM reels r
 JOIN reel_likes rl ON r.id = rl.reel_id
 WHERE rl.user_id = $1
 ORDER BY rl.created_at DESC
@@ -442,6 +506,16 @@ func (q *Queries) ListLikedReelsByUserID(ctx context.Context, userID uuid.UUID) 
 			&i.CreatedAt,
 			&i.UpdatedAt,
 			&i.CategoryID,
+			&i.Width,
+			&i.Height,
+			&i.AspectRatio,
+			&i.ThumbnailUrl,
+			&i.BlurHash,
+			&i.Duration,
+			&i.FileSize,
+			&i.MimeType,
+			&i.EngagementScore,
+			&i.WatchTimeScore,
 		); err != nil {
 			return nil, err
 		}
@@ -460,7 +534,7 @@ const listNearbyReels = `-- name: ListNearbyReels :many
 SELECT 
     r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.category_id,
     COALESCE(ST_Y(r.geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(r.geom::geometry)::float8, 0.0)::float8 AS lng,
-    r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
+    r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at, r.width, r.height, r.aspect_ratio, r.thumbnail_url, r.blur_hash, r.duration, r.file_size, r.mime_type,
     u.username,
     u.avatar_url,
     ST_Distance(r.geom, ST_SetSRID(ST_MakePoint($3::float, $4::float), 4326)::geography) AS distance_meters,
@@ -485,28 +559,36 @@ type ListNearbyReelsParams struct {
 }
 
 type ListNearbyReelsRow struct {
-	ID               uuid.UUID      `json:"id"`
-	UserID           uuid.UUID      `json:"user_id"`
-	VideoUrl         string         `json:"video_url"`
-	Caption          sql.NullString `json:"caption"`
-	IsAiGenerated    bool           `json:"is_ai_generated"`
-	LocationName     sql.NullString `json:"location_name"`
-	Geohash          sql.NullString `json:"geohash"`
-	CategoryID       uuid.NullUUID  `json:"category_id"`
-	Lat              float64        `json:"lat"`
-	Lng              float64        `json:"lng"`
-	LikesCount       int32          `json:"likes_count"`
-	CommentsCount    int32          `json:"comments_count"`
-	SharesCount      int32          `json:"shares_count"`
-	SavesCount       int32          `json:"saves_count"`
-	CreatedAt        time.Time      `json:"created_at"`
-	UpdatedAt        time.Time      `json:"updated_at"`
-	Username         string         `json:"username"`
-	AvatarUrl        sql.NullString `json:"avatar_url"`
-	DistanceMeters   interface{}    `json:"distance_meters"`
-	IsLiked          bool           `json:"is_liked"`
-	IsSaved          bool           `json:"is_saved"`
-	ConnectionStatus interface{}    `json:"connection_status"`
+	ID               uuid.UUID       `json:"id"`
+	UserID           uuid.UUID       `json:"user_id"`
+	VideoUrl         string          `json:"video_url"`
+	Caption          sql.NullString  `json:"caption"`
+	IsAiGenerated    bool            `json:"is_ai_generated"`
+	LocationName     sql.NullString  `json:"location_name"`
+	Geohash          sql.NullString  `json:"geohash"`
+	CategoryID       uuid.NullUUID   `json:"category_id"`
+	Lat              float64         `json:"lat"`
+	Lng              float64         `json:"lng"`
+	LikesCount       int32           `json:"likes_count"`
+	CommentsCount    int32           `json:"comments_count"`
+	SharesCount      int32           `json:"shares_count"`
+	SavesCount       int32           `json:"saves_count"`
+	CreatedAt        time.Time       `json:"created_at"`
+	UpdatedAt        time.Time       `json:"updated_at"`
+	Width            sql.NullInt32   `json:"width"`
+	Height           sql.NullInt32   `json:"height"`
+	AspectRatio      sql.NullFloat64 `json:"aspect_ratio"`
+	ThumbnailUrl     sql.NullString  `json:"thumbnail_url"`
+	BlurHash         sql.NullString  `json:"blur_hash"`
+	Duration         sql.NullInt32   `json:"duration"`
+	FileSize         sql.NullInt32   `json:"file_size"`
+	MimeType         sql.NullString  `json:"mime_type"`
+	Username         string          `json:"username"`
+	AvatarUrl        sql.NullString  `json:"avatar_url"`
+	DistanceMeters   interface{}     `json:"distance_meters"`
+	IsLiked          bool            `json:"is_liked"`
+	IsSaved          bool            `json:"is_saved"`
+	ConnectionStatus interface{}     `json:"connection_status"`
 }
 
 func (q *Queries) ListNearbyReels(ctx context.Context, arg ListNearbyReelsParams) ([]ListNearbyReelsRow, error) {
@@ -542,6 +624,14 @@ func (q *Queries) ListNearbyReels(ctx context.Context, arg ListNearbyReelsParams
 			&i.SavesCount,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Width,
+			&i.Height,
+			&i.AspectRatio,
+			&i.ThumbnailUrl,
+			&i.BlurHash,
+			&i.Duration,
+			&i.FileSize,
+			&i.MimeType,
 			&i.Username,
 			&i.AvatarUrl,
 			&i.DistanceMeters,
@@ -620,7 +710,7 @@ const listReelsFeed = `-- name: ListReelsFeed :many
 SELECT 
     r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.category_id,
     COALESCE(ST_Y(r.geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(r.geom::geometry)::float8, 0.0)::float8 AS lng,
-    r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
+    r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at, r.width, r.height, r.aspect_ratio, r.thumbnail_url, r.blur_hash, r.duration, r.file_size, r.mime_type,
     u.username,
     u.avatar_url,
     EXISTS (SELECT 1 FROM reel_likes rl WHERE rl.reel_id = r.id AND rl.user_id = $1) AS is_liked,
@@ -628,42 +718,51 @@ SELECT
     COALESCE((SELECT status FROM connections c WHERE (c.requester_id = $1 AND c.target_id = r.user_id) OR (c.requester_id = r.user_id AND c.target_id = $1) LIMIT 1)::text, 'none') AS connection_status
 FROM reels r
 JOIN users u ON r.user_id = u.id
+WHERE ($2::timestamptz IS NULL OR r.created_at < $2)
 ORDER BY r.created_at DESC
-LIMIT $2 OFFSET $3
+LIMIT $3
 `
 
 type ListReelsFeedParams struct {
-	UserID uuid.UUID `json:"user_id"`
-	Limit  int32     `json:"limit"`
-	Offset int32     `json:"offset"`
+	UserID uuid.UUID    `json:"user_id"`
+	Cursor sql.NullTime `json:"cursor"`
+	Limit  int32        `json:"limit"`
 }
 
 type ListReelsFeedRow struct {
-	ID               uuid.UUID      `json:"id"`
-	UserID           uuid.UUID      `json:"user_id"`
-	VideoUrl         string         `json:"video_url"`
-	Caption          sql.NullString `json:"caption"`
-	IsAiGenerated    bool           `json:"is_ai_generated"`
-	LocationName     sql.NullString `json:"location_name"`
-	Geohash          sql.NullString `json:"geohash"`
-	CategoryID       uuid.NullUUID  `json:"category_id"`
-	Lat              float64        `json:"lat"`
-	Lng              float64        `json:"lng"`
-	LikesCount       int32          `json:"likes_count"`
-	CommentsCount    int32          `json:"comments_count"`
-	SharesCount      int32          `json:"shares_count"`
-	SavesCount       int32          `json:"saves_count"`
-	CreatedAt        time.Time      `json:"created_at"`
-	UpdatedAt        time.Time      `json:"updated_at"`
-	Username         string         `json:"username"`
-	AvatarUrl        sql.NullString `json:"avatar_url"`
-	IsLiked          bool           `json:"is_liked"`
-	IsSaved          bool           `json:"is_saved"`
-	ConnectionStatus interface{}    `json:"connection_status"`
+	ID               uuid.UUID       `json:"id"`
+	UserID           uuid.UUID       `json:"user_id"`
+	VideoUrl         string          `json:"video_url"`
+	Caption          sql.NullString  `json:"caption"`
+	IsAiGenerated    bool            `json:"is_ai_generated"`
+	LocationName     sql.NullString  `json:"location_name"`
+	Geohash          sql.NullString  `json:"geohash"`
+	CategoryID       uuid.NullUUID   `json:"category_id"`
+	Lat              float64         `json:"lat"`
+	Lng              float64         `json:"lng"`
+	LikesCount       int32           `json:"likes_count"`
+	CommentsCount    int32           `json:"comments_count"`
+	SharesCount      int32           `json:"shares_count"`
+	SavesCount       int32           `json:"saves_count"`
+	CreatedAt        time.Time       `json:"created_at"`
+	UpdatedAt        time.Time       `json:"updated_at"`
+	Width            sql.NullInt32   `json:"width"`
+	Height           sql.NullInt32   `json:"height"`
+	AspectRatio      sql.NullFloat64 `json:"aspect_ratio"`
+	ThumbnailUrl     sql.NullString  `json:"thumbnail_url"`
+	BlurHash         sql.NullString  `json:"blur_hash"`
+	Duration         sql.NullInt32   `json:"duration"`
+	FileSize         sql.NullInt32   `json:"file_size"`
+	MimeType         sql.NullString  `json:"mime_type"`
+	Username         string          `json:"username"`
+	AvatarUrl        sql.NullString  `json:"avatar_url"`
+	IsLiked          bool            `json:"is_liked"`
+	IsSaved          bool            `json:"is_saved"`
+	ConnectionStatus interface{}     `json:"connection_status"`
 }
 
 func (q *Queries) ListReelsFeed(ctx context.Context, arg ListReelsFeedParams) ([]ListReelsFeedRow, error) {
-	rows, err := q.db.QueryContext(ctx, listReelsFeed, arg.UserID, arg.Limit, arg.Offset)
+	rows, err := q.db.QueryContext(ctx, listReelsFeed, arg.UserID, arg.Cursor, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -688,6 +787,14 @@ func (q *Queries) ListReelsFeed(ctx context.Context, arg ListReelsFeedParams) ([
 			&i.SavesCount,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Width,
+			&i.Height,
+			&i.AspectRatio,
+			&i.ThumbnailUrl,
+			&i.BlurHash,
+			&i.Duration,
+			&i.FileSize,
+			&i.MimeType,
 			&i.Username,
 			&i.AvatarUrl,
 			&i.IsLiked,
@@ -711,7 +818,7 @@ const listSavedReels = `-- name: ListSavedReels :many
 SELECT 
     r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.category_id,
     COALESCE(ST_Y(r.geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(r.geom::geometry)::float8, 0.0)::float8 AS lng,
-    r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
+    r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at, r.width, r.height, r.aspect_ratio, r.thumbnail_url, r.blur_hash, r.duration, r.file_size, r.mime_type,
     u.username,
     u.avatar_url,
     TRUE AS is_saved,
@@ -732,27 +839,35 @@ type ListSavedReelsParams struct {
 }
 
 type ListSavedReelsRow struct {
-	ID               uuid.UUID      `json:"id"`
-	UserID           uuid.UUID      `json:"user_id"`
-	VideoUrl         string         `json:"video_url"`
-	Caption          sql.NullString `json:"caption"`
-	IsAiGenerated    bool           `json:"is_ai_generated"`
-	LocationName     sql.NullString `json:"location_name"`
-	Geohash          sql.NullString `json:"geohash"`
-	CategoryID       uuid.NullUUID  `json:"category_id"`
-	Lat              float64        `json:"lat"`
-	Lng              float64        `json:"lng"`
-	LikesCount       int32          `json:"likes_count"`
-	CommentsCount    int32          `json:"comments_count"`
-	SharesCount      int32          `json:"shares_count"`
-	SavesCount       int32          `json:"saves_count"`
-	CreatedAt        time.Time      `json:"created_at"`
-	UpdatedAt        time.Time      `json:"updated_at"`
-	Username         string         `json:"username"`
-	AvatarUrl        sql.NullString `json:"avatar_url"`
-	IsSaved          bool           `json:"is_saved"`
-	IsLiked          bool           `json:"is_liked"`
-	ConnectionStatus interface{}    `json:"connection_status"`
+	ID               uuid.UUID       `json:"id"`
+	UserID           uuid.UUID       `json:"user_id"`
+	VideoUrl         string          `json:"video_url"`
+	Caption          sql.NullString  `json:"caption"`
+	IsAiGenerated    bool            `json:"is_ai_generated"`
+	LocationName     sql.NullString  `json:"location_name"`
+	Geohash          sql.NullString  `json:"geohash"`
+	CategoryID       uuid.NullUUID   `json:"category_id"`
+	Lat              float64         `json:"lat"`
+	Lng              float64         `json:"lng"`
+	LikesCount       int32           `json:"likes_count"`
+	CommentsCount    int32           `json:"comments_count"`
+	SharesCount      int32           `json:"shares_count"`
+	SavesCount       int32           `json:"saves_count"`
+	CreatedAt        time.Time       `json:"created_at"`
+	UpdatedAt        time.Time       `json:"updated_at"`
+	Width            sql.NullInt32   `json:"width"`
+	Height           sql.NullInt32   `json:"height"`
+	AspectRatio      sql.NullFloat64 `json:"aspect_ratio"`
+	ThumbnailUrl     sql.NullString  `json:"thumbnail_url"`
+	BlurHash         sql.NullString  `json:"blur_hash"`
+	Duration         sql.NullInt32   `json:"duration"`
+	FileSize         sql.NullInt32   `json:"file_size"`
+	MimeType         sql.NullString  `json:"mime_type"`
+	Username         string          `json:"username"`
+	AvatarUrl        sql.NullString  `json:"avatar_url"`
+	IsSaved          bool            `json:"is_saved"`
+	IsLiked          bool            `json:"is_liked"`
+	ConnectionStatus interface{}     `json:"connection_status"`
 }
 
 func (q *Queries) ListSavedReels(ctx context.Context, arg ListSavedReelsParams) ([]ListSavedReelsRow, error) {
@@ -781,6 +896,14 @@ func (q *Queries) ListSavedReels(ctx context.Context, arg ListSavedReelsParams) 
 			&i.SavesCount,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Width,
+			&i.Height,
+			&i.AspectRatio,
+			&i.ThumbnailUrl,
+			&i.BlurHash,
+			&i.Duration,
+			&i.FileSize,
+			&i.MimeType,
 			&i.Username,
 			&i.AvatarUrl,
 			&i.IsSaved,
@@ -804,7 +927,7 @@ const listUserReels = `-- name: ListUserReels :many
 SELECT 
     r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.category_id,
     COALESCE(ST_Y(r.geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(r.geom::geometry)::float8, 0.0)::float8 AS lng,
-    r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
+    r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at, r.width, r.height, r.aspect_ratio, r.thumbnail_url, r.blur_hash, r.duration, r.file_size, r.mime_type,
     u.username,
     u.avatar_url,
     EXISTS (SELECT 1 FROM reel_likes rl WHERE rl.reel_id = r.id AND rl.user_id = $3) AS is_liked,
@@ -825,27 +948,35 @@ type ListUserReelsParams struct {
 }
 
 type ListUserReelsRow struct {
-	ID               uuid.UUID      `json:"id"`
-	UserID           uuid.UUID      `json:"user_id"`
-	VideoUrl         string         `json:"video_url"`
-	Caption          sql.NullString `json:"caption"`
-	IsAiGenerated    bool           `json:"is_ai_generated"`
-	LocationName     sql.NullString `json:"location_name"`
-	Geohash          sql.NullString `json:"geohash"`
-	CategoryID       uuid.NullUUID  `json:"category_id"`
-	Lat              float64        `json:"lat"`
-	Lng              float64        `json:"lng"`
-	LikesCount       int32          `json:"likes_count"`
-	CommentsCount    int32          `json:"comments_count"`
-	SharesCount      int32          `json:"shares_count"`
-	SavesCount       int32          `json:"saves_count"`
-	CreatedAt        time.Time      `json:"created_at"`
-	UpdatedAt        time.Time      `json:"updated_at"`
-	Username         string         `json:"username"`
-	AvatarUrl        sql.NullString `json:"avatar_url"`
-	IsLiked          bool           `json:"is_liked"`
-	IsSaved          bool           `json:"is_saved"`
-	ConnectionStatus interface{}    `json:"connection_status"`
+	ID               uuid.UUID       `json:"id"`
+	UserID           uuid.UUID       `json:"user_id"`
+	VideoUrl         string          `json:"video_url"`
+	Caption          sql.NullString  `json:"caption"`
+	IsAiGenerated    bool            `json:"is_ai_generated"`
+	LocationName     sql.NullString  `json:"location_name"`
+	Geohash          sql.NullString  `json:"geohash"`
+	CategoryID       uuid.NullUUID   `json:"category_id"`
+	Lat              float64         `json:"lat"`
+	Lng              float64         `json:"lng"`
+	LikesCount       int32           `json:"likes_count"`
+	CommentsCount    int32           `json:"comments_count"`
+	SharesCount      int32           `json:"shares_count"`
+	SavesCount       int32           `json:"saves_count"`
+	CreatedAt        time.Time       `json:"created_at"`
+	UpdatedAt        time.Time       `json:"updated_at"`
+	Width            sql.NullInt32   `json:"width"`
+	Height           sql.NullInt32   `json:"height"`
+	AspectRatio      sql.NullFloat64 `json:"aspect_ratio"`
+	ThumbnailUrl     sql.NullString  `json:"thumbnail_url"`
+	BlurHash         sql.NullString  `json:"blur_hash"`
+	Duration         sql.NullInt32   `json:"duration"`
+	FileSize         sql.NullInt32   `json:"file_size"`
+	MimeType         sql.NullString  `json:"mime_type"`
+	Username         string          `json:"username"`
+	AvatarUrl        sql.NullString  `json:"avatar_url"`
+	IsLiked          bool            `json:"is_liked"`
+	IsSaved          bool            `json:"is_saved"`
+	ConnectionStatus interface{}     `json:"connection_status"`
 }
 
 func (q *Queries) ListUserReels(ctx context.Context, arg ListUserReelsParams) ([]ListUserReelsRow, error) {
@@ -879,6 +1010,14 @@ func (q *Queries) ListUserReels(ctx context.Context, arg ListUserReelsParams) ([
 			&i.SavesCount,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Width,
+			&i.Height,
+			&i.AspectRatio,
+			&i.ThumbnailUrl,
+			&i.BlurHash,
+			&i.Duration,
+			&i.FileSize,
+			&i.MimeType,
 			&i.Username,
 			&i.AvatarUrl,
 			&i.IsLiked,
@@ -927,7 +1066,7 @@ func (q *Queries) SaveReelAtomic(ctx context.Context, arg SaveReelAtomicParams) 
 const searchReels = `-- name: SearchReels :many
 SELECT r.id, r.user_id, r.video_url, r.caption, r.is_ai_generated, r.location_name, r.geohash, r.category_id,
        COALESCE(ST_Y(r.geom::geometry)::float8, 0.0)::float8 AS lat, COALESCE(ST_X(r.geom::geometry)::float8, 0.0)::float8 AS lng,
-       r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at,
+       r.likes_count, r.comments_count, r.shares_count, r.saves_count, r.created_at, r.updated_at, r.width, r.height, r.aspect_ratio, r.thumbnail_url, r.blur_hash, r.duration, r.file_size, r.mime_type,
        u.username, u.avatar_url,
        EXISTS (SELECT 1 FROM reel_likes rl WHERE rl.reel_id = r.id AND rl.user_id = $3) AS is_liked,
        EXISTS (SELECT 1 FROM reel_saves rs WHERE rs.reel_id = r.id AND rs.user_id = $3) AS is_saved,
@@ -949,27 +1088,35 @@ type SearchReelsParams struct {
 }
 
 type SearchReelsRow struct {
-	ID               uuid.UUID      `json:"id"`
-	UserID           uuid.UUID      `json:"user_id"`
-	VideoUrl         string         `json:"video_url"`
-	Caption          sql.NullString `json:"caption"`
-	IsAiGenerated    bool           `json:"is_ai_generated"`
-	LocationName     sql.NullString `json:"location_name"`
-	Geohash          sql.NullString `json:"geohash"`
-	CategoryID       uuid.NullUUID  `json:"category_id"`
-	Lat              float64        `json:"lat"`
-	Lng              float64        `json:"lng"`
-	LikesCount       int32          `json:"likes_count"`
-	CommentsCount    int32          `json:"comments_count"`
-	SharesCount      int32          `json:"shares_count"`
-	SavesCount       int32          `json:"saves_count"`
-	CreatedAt        time.Time      `json:"created_at"`
-	UpdatedAt        time.Time      `json:"updated_at"`
-	Username         string         `json:"username"`
-	AvatarUrl        sql.NullString `json:"avatar_url"`
-	IsLiked          bool           `json:"is_liked"`
-	IsSaved          bool           `json:"is_saved"`
-	ConnectionStatus interface{}    `json:"connection_status"`
+	ID               uuid.UUID       `json:"id"`
+	UserID           uuid.UUID       `json:"user_id"`
+	VideoUrl         string          `json:"video_url"`
+	Caption          sql.NullString  `json:"caption"`
+	IsAiGenerated    bool            `json:"is_ai_generated"`
+	LocationName     sql.NullString  `json:"location_name"`
+	Geohash          sql.NullString  `json:"geohash"`
+	CategoryID       uuid.NullUUID   `json:"category_id"`
+	Lat              float64         `json:"lat"`
+	Lng              float64         `json:"lng"`
+	LikesCount       int32           `json:"likes_count"`
+	CommentsCount    int32           `json:"comments_count"`
+	SharesCount      int32           `json:"shares_count"`
+	SavesCount       int32           `json:"saves_count"`
+	CreatedAt        time.Time       `json:"created_at"`
+	UpdatedAt        time.Time       `json:"updated_at"`
+	Width            sql.NullInt32   `json:"width"`
+	Height           sql.NullInt32   `json:"height"`
+	AspectRatio      sql.NullFloat64 `json:"aspect_ratio"`
+	ThumbnailUrl     sql.NullString  `json:"thumbnail_url"`
+	BlurHash         sql.NullString  `json:"blur_hash"`
+	Duration         sql.NullInt32   `json:"duration"`
+	FileSize         sql.NullInt32   `json:"file_size"`
+	MimeType         sql.NullString  `json:"mime_type"`
+	Username         string          `json:"username"`
+	AvatarUrl        sql.NullString  `json:"avatar_url"`
+	IsLiked          bool            `json:"is_liked"`
+	IsSaved          bool            `json:"is_saved"`
+	ConnectionStatus interface{}     `json:"connection_status"`
 }
 
 func (q *Queries) SearchReels(ctx context.Context, arg SearchReelsParams) ([]SearchReelsRow, error) {
@@ -1003,6 +1150,14 @@ func (q *Queries) SearchReels(ctx context.Context, arg SearchReelsParams) ([]Sea
 			&i.SavesCount,
 			&i.CreatedAt,
 			&i.UpdatedAt,
+			&i.Width,
+			&i.Height,
+			&i.AspectRatio,
+			&i.ThumbnailUrl,
+			&i.BlurHash,
+			&i.Duration,
+			&i.FileSize,
+			&i.MimeType,
 			&i.Username,
 			&i.AvatarUrl,
 			&i.IsLiked,
@@ -1073,7 +1228,7 @@ func (q *Queries) UnsaveReelAtomic(ctx context.Context, arg UnsaveReelAtomicPara
 }
 
 const updateReel = `-- name: UpdateReel :one
-UPDATE reels SET caption = $1, updated_at = now() WHERE id = $2 AND user_id = $3 RETURNING id, user_id, video_url, caption, is_ai_generated, location_name, geohash, geom, likes_count, comments_count, shares_count, saves_count, created_at, updated_at, category_id
+UPDATE reels SET caption = $1, updated_at = now() WHERE id = $2 AND user_id = $3 RETURNING id, user_id, video_url, caption, is_ai_generated, location_name, geohash, geom, likes_count, comments_count, shares_count, saves_count, created_at, updated_at, category_id, width, height, aspect_ratio, thumbnail_url, blur_hash, duration, file_size, mime_type, engagement_score, watch_time_score
 `
 
 type UpdateReelParams struct {
@@ -1101,6 +1256,16 @@ func (q *Queries) UpdateReel(ctx context.Context, arg UpdateReelParams) (Reel, e
 		&i.CreatedAt,
 		&i.UpdatedAt,
 		&i.CategoryID,
+		&i.Width,
+		&i.Height,
+		&i.AspectRatio,
+		&i.ThumbnailUrl,
+		&i.BlurHash,
+		&i.Duration,
+		&i.FileSize,
+		&i.MimeType,
+		&i.EngagementScore,
+		&i.WatchTimeScore,
 	)
 	return i, err
 }

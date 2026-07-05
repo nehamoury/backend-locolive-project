@@ -15,6 +15,7 @@ type StoryResponse struct {
 	UserID       uuid.UUID       `json:"user_id"`
 	MediaURL     string          `json:"media_url"`
 	MediaType    string          `json:"media_type"`
+	Media         []MediaItem     `json:"media"`
 	ThumbnailURL *string         `json:"thumbnail_url"`
 	Caption      *string         `json:"caption"`
 	Geohash      string          `json:"geohash"`
@@ -38,6 +39,7 @@ type ArchivedStoryResponse struct {
 	StoryID           uuid.UUID  `json:"story_id"`
 	MediaUrl          string     `json:"media_url"`
 	MediaType         string     `json:"media_type"`
+	Media         []MediaItem     `json:"media"`
 	Caption           *string    `json:"caption"`
 	Geohash           string     `json:"geohash"`
 	IsAnonymous       bool       `json:"is_anonymous"`
@@ -81,7 +83,21 @@ func toStoryResponse(row db.GetStoriesWithinRadiusRow) StoryResponse {
 		ID:           row.ID,
 		UserID:       row.UserID,
 		MediaURL:     row.MediaUrl,
-		MediaType:    row.MediaType,
+		MediaType:     row.MediaType,
+		Media: []MediaItem{
+			{
+				URL:          row.MediaUrl,
+				Type:         row.MediaType,
+				Width:        func() *int32 { if row.Width.Valid { v := row.Width.Int32; return &v }; return nil }(),
+				Height:       func() *int32 { if row.Height.Valid { v := row.Height.Int32; return &v }; return nil }(),
+				AspectRatio:  func() *float64 { if row.AspectRatio.Valid { v := row.AspectRatio.Float64; return &v }; return nil }(),
+				ThumbnailUrl: func() *string { if row.ThumbnailUrl.Valid { v := row.ThumbnailUrl.String; return &v }; return nil }(),
+				BlurHash:     func() *string { if row.BlurHash.Valid { v := row.BlurHash.String; return &v }; return nil }(),
+				Duration:     func() *int32 { if row.Duration.Valid { v := row.Duration.Int32; return &v }; return nil }(),
+				FileSize:     func() *int32 { if row.FileSize.Valid { v := row.FileSize.Int32; return &v }; return nil }(),
+				MimeType:     func() *string { if row.MimeType.Valid { v := row.MimeType.String; return &v }; return nil }(),
+			},
+		},
 		Geohash:      row.Geohash,
 		Visibility:   string(row.Visibility),
 		ExpiresAt:    row.ExpiresAt,
@@ -167,7 +183,21 @@ func toStoryResponseFromBounds(row db.GetStoriesInBoundsRow) StoryResponse {
 		ID:           row.ID,
 		UserID:       row.UserID,
 		MediaURL:     row.MediaUrl,
-		MediaType:    row.MediaType,
+		MediaType:     row.MediaType,
+		Media: []MediaItem{
+			{
+				URL:          row.MediaUrl,
+				Type:         row.MediaType,
+				Width:        func() *int32 { if row.Width.Valid { v := row.Width.Int32; return &v }; return nil }(),
+				Height:       func() *int32 { if row.Height.Valid { v := row.Height.Int32; return &v }; return nil }(),
+				AspectRatio:  func() *float64 { if row.AspectRatio.Valid { v := row.AspectRatio.Float64; return &v }; return nil }(),
+				ThumbnailUrl: func() *string { if row.ThumbnailUrl.Valid { v := row.ThumbnailUrl.String; return &v }; return nil }(),
+				BlurHash:     func() *string { if row.BlurHash.Valid { v := row.BlurHash.String; return &v }; return nil }(),
+				Duration:     func() *int32 { if row.Duration.Valid { v := row.Duration.Int32; return &v }; return nil }(),
+				FileSize:     func() *int32 { if row.FileSize.Valid { v := row.FileSize.Int32; return &v }; return nil }(),
+				MimeType:     func() *string { if row.MimeType.Valid { v := row.MimeType.String; return &v }; return nil }(),
+			},
+		},
 		Geohash:      row.Geohash,
 		Visibility:   string(row.Visibility),
 		ExpiresAt:    row.ExpiresAt,
@@ -206,7 +236,21 @@ func toStoryResponseFromCreate(row db.CreateStoryRow) StoryResponse {
 		ID:           row.ID,
 		UserID:       row.UserID,
 		MediaURL:     row.MediaUrl,
-		MediaType:    row.MediaType,
+		MediaType:     row.MediaType,
+		Media: []MediaItem{
+			{
+				URL:          row.MediaUrl,
+				Type:         row.MediaType,
+				Width:        func() *int32 { if row.Width.Valid { v := row.Width.Int32; return &v }; return nil }(),
+				Height:       func() *int32 { if row.Height.Valid { v := row.Height.Int32; return &v }; return nil }(),
+				AspectRatio:  func() *float64 { if row.AspectRatio.Valid { v := row.AspectRatio.Float64; return &v }; return nil }(),
+				ThumbnailUrl: func() *string { if row.ThumbnailUrl.Valid { v := row.ThumbnailUrl.String; return &v }; return nil }(),
+				BlurHash:     func() *string { if row.BlurHash.Valid { v := row.BlurHash.String; return &v }; return nil }(),
+				Duration:     func() *int32 { if row.Duration.Valid { v := row.Duration.Int32; return &v }; return nil }(),
+				FileSize:     func() *int32 { if row.FileSize.Valid { v := row.FileSize.Int32; return &v }; return nil }(),
+				MimeType:     func() *string { if row.MimeType.Valid { v := row.MimeType.String; return &v }; return nil }(),
+			},
+		},
 		Geohash:      row.Geohash,
 		Visibility:   string(row.Visibility),
 		ExpiresAt:    row.ExpiresAt,
@@ -245,7 +289,21 @@ func toStoryResponseFromGet(row db.GetStoryByIDRow) StoryResponse {
 		ID:           row.ID,
 		UserID:       row.UserID,
 		MediaURL:     row.MediaUrl,
-		MediaType:    row.MediaType,
+		MediaType:     row.MediaType,
+		Media: []MediaItem{
+			{
+				URL:          row.MediaUrl,
+				Type:         row.MediaType,
+				Width:        func() *int32 { if row.Width.Valid { v := row.Width.Int32; return &v }; return nil }(),
+				Height:       func() *int32 { if row.Height.Valid { v := row.Height.Int32; return &v }; return nil }(),
+				AspectRatio:  func() *float64 { if row.AspectRatio.Valid { v := row.AspectRatio.Float64; return &v }; return nil }(),
+				ThumbnailUrl: func() *string { if row.ThumbnailUrl.Valid { v := row.ThumbnailUrl.String; return &v }; return nil }(),
+				BlurHash:     func() *string { if row.BlurHash.Valid { v := row.BlurHash.String; return &v }; return nil }(),
+				Duration:     func() *int32 { if row.Duration.Valid { v := row.Duration.Int32; return &v }; return nil }(),
+				FileSize:     func() *int32 { if row.FileSize.Valid { v := row.FileSize.Int32; return &v }; return nil }(),
+				MimeType:     func() *string { if row.MimeType.Valid { v := row.MimeType.String; return &v }; return nil }(),
+			},
+		},
 		Geohash:      row.Geohash,
 		Visibility:   string(row.Visibility),
 		ExpiresAt:    row.ExpiresAt,
@@ -284,7 +342,21 @@ func toStoryResponseFromUpdate(row db.UpdateStoryRow) StoryResponse {
 		ID:           row.ID,
 		UserID:       row.UserID,
 		MediaURL:     row.MediaUrl,
-		MediaType:    row.MediaType,
+		MediaType:     row.MediaType,
+		Media: []MediaItem{
+			{
+				URL:          row.MediaUrl,
+				Type:         row.MediaType,
+				Width:        func() *int32 { if row.Width.Valid { v := row.Width.Int32; return &v }; return nil }(),
+				Height:       func() *int32 { if row.Height.Valid { v := row.Height.Int32; return &v }; return nil }(),
+				AspectRatio:  func() *float64 { if row.AspectRatio.Valid { v := row.AspectRatio.Float64; return &v }; return nil }(),
+				ThumbnailUrl: func() *string { if row.ThumbnailUrl.Valid { v := row.ThumbnailUrl.String; return &v }; return nil }(),
+				BlurHash:     func() *string { if row.BlurHash.Valid { v := row.BlurHash.String; return &v }; return nil }(),
+				Duration:     func() *int32 { if row.Duration.Valid { v := row.Duration.Int32; return &v }; return nil }(),
+				FileSize:     func() *int32 { if row.FileSize.Valid { v := row.FileSize.Int32; return &v }; return nil }(),
+				MimeType:     func() *string { if row.MimeType.Valid { v := row.MimeType.String; return &v }; return nil }(),
+			},
+		},
 		Geohash:      row.Geohash,
 		Visibility:   string(row.Visibility),
 		ExpiresAt:    row.ExpiresAt,
@@ -322,7 +394,21 @@ func toStoryResponseFromActive(row db.GetActiveStoriesByUserIDRow) StoryResponse
 		ID:           row.ID,
 		UserID:       row.UserID,
 		MediaURL:     row.MediaUrl,
-		MediaType:    row.MediaType,
+		MediaType:     row.MediaType,
+		Media: []MediaItem{
+			{
+				URL:          row.MediaUrl,
+				Type:         row.MediaType,
+				Width:        func() *int32 { if row.Width.Valid { v := row.Width.Int32; return &v }; return nil }(),
+				Height:       func() *int32 { if row.Height.Valid { v := row.Height.Int32; return &v }; return nil }(),
+				AspectRatio:  func() *float64 { if row.AspectRatio.Valid { v := row.AspectRatio.Float64; return &v }; return nil }(),
+				ThumbnailUrl: func() *string { if row.ThumbnailUrl.Valid { v := row.ThumbnailUrl.String; return &v }; return nil }(),
+				BlurHash:     func() *string { if row.BlurHash.Valid { v := row.BlurHash.String; return &v }; return nil }(),
+				Duration:     func() *int32 { if row.Duration.Valid { v := row.Duration.Int32; return &v }; return nil }(),
+				FileSize:     func() *int32 { if row.FileSize.Valid { v := row.FileSize.Int32; return &v }; return nil }(),
+				MimeType:     func() *string { if row.MimeType.Valid { v := row.MimeType.String; return &v }; return nil }(),
+			},
+		},
 		Geohash:      row.Geohash,
 		Visibility:   string(row.Visibility),
 		ExpiresAt:    row.ExpiresAt,

@@ -66,6 +66,7 @@ type ProfileResponse struct {
 	YouFollow         bool       `json:"you_follow"`
 	FollowsYou        bool       `json:"follows_you"`
 	IsMutual          bool       `json:"is_mutual"`
+	RelationshipType  string     `json:"relationship_type"`
 	IsProfileComplete bool       `json:"is_profile_complete"`
 	IsActive          bool       `json:"is_active"`
 }
@@ -214,10 +215,10 @@ func (server *Server) getUserProfile(ctx *gin.Context) {
 
 		// FORCE Correct Counts (Unidirectional)
 		var followersCount, followingCount int64
-		// Followers = only those who were accepted (target_id is me)
-		server.store.GetDB().QueryRowContext(ctx, "SELECT COUNT(*) FROM connections WHERE target_id = $1 AND status = 'accepted'", userID).Scan(&followersCount)
-		// Following = only those I have requested and they accepted (requester_id is me)
-		server.store.GetDB().QueryRowContext(ctx, "SELECT COUNT(*) FROM connections WHERE requester_id = $1 AND status = 'accepted'", userID).Scan(&followingCount)
+		// Followers = those who follow me (target_id is me)
+		server.store.GetDB().QueryRowContext(ctx, "SELECT COUNT(*) FROM relationships WHERE target_user_id = $1 AND type = 'follow' AND status = 'active'", userID).Scan(&followersCount)
+		// Following = those I follow (user_id is me)
+		server.store.GetDB().QueryRowContext(ctx, "SELECT COUNT(*) FROM relationships WHERE user_id = $1 AND type = 'follow' AND status = 'active'", userID).Scan(&followingCount)
 		
 		rsp.FollowersCount = followersCount
 		rsp.FollowingCount = followingCount
@@ -242,27 +243,28 @@ func (server *Server) getUserProfile(ctx *gin.Context) {
 		if payload.UserID == userID {
 			rsp.ConnectionStatus = "self"
 		} else {
-			// 1. My connection status towards them (Viewer -> Target)
-			conn, err := server.store.GetConnectionSpecific(ctx, db.GetConnectionSpecificParams{
-				RequesterID: payload.UserID,
-				TargetID:    userID,
-			})
+			// 1. My relationship status towards them (Viewer -> Target)
+			var relStatus string
+			var relType string
+			err = server.store.GetDB().QueryRowContext(ctx, "SELECT status, type FROM relationships WHERE user_id = $1 AND target_user_id = $2 AND type = 'follow'", payload.UserID, userID).Scan(&relStatus, &relType)
 			if err == nil {
-				rsp.ConnectionStatus = string(conn.Status)
-				if conn.Status == db.ConnectionStatusAccepted {
+				switch relStatus {
+				case "active":
+					rsp.ConnectionStatus = "accepted"
 					rsp.YouFollow = true
+				case "pending":
+					rsp.ConnectionStatus = "pending"
 				}
+				rsp.RelationshipType = relType
+			} else {
+				rsp.RelationshipType = "follow" // default
 			}
 
-			// 2. Their connection status towards me (Target -> Viewer)
-			reverseConn, err := server.store.GetConnectionSpecific(ctx, db.GetConnectionSpecificParams{
-				RequesterID: userID,
-				TargetID:    payload.UserID,
-			})
+			// 2. Their relationship status towards me (Target -> Viewer)
+			var reverseStatus string
+			err = server.store.GetDB().QueryRowContext(ctx, "SELECT status FROM relationships WHERE user_id = $1 AND target_user_id = $2 AND type = 'follow' AND status = 'active'", userID, payload.UserID).Scan(&reverseStatus)
 			if err == nil {
-				if reverseConn.Status == db.ConnectionStatusAccepted {
-					rsp.FollowsYou = true
-				}
+				rsp.FollowsYou = true
 			}
 
 			// Check if I blocked them
@@ -286,6 +288,7 @@ func (server *Server) getUserProfile(ctx *gin.Context) {
 
 			if rsp.YouFollow && rsp.FollowsYou {
 				rsp.IsMutual = true
+				rsp.ConnectionStatus = "accepted"
 			}
 		}
 	}
@@ -368,8 +371,8 @@ func (server *Server) getMyProfile(ctx *gin.Context) {
 
 	// FORCE Correct Counts for self (only accepted)
 	var followersCount, followingCount int64
-	server.store.GetDB().QueryRowContext(ctx, "SELECT COUNT(*) FROM connections WHERE target_id = $1 AND status = 'accepted'", authPayload.UserID).Scan(&followersCount)
-	server.store.GetDB().QueryRowContext(ctx, "SELECT COUNT(*) FROM connections WHERE requester_id = $1 AND status = 'accepted'", authPayload.UserID).Scan(&followingCount)
+	server.store.GetDB().QueryRowContext(ctx, "SELECT COUNT(*) FROM relationships WHERE target_user_id = $1 AND type = 'follow' AND status = 'active'", authPayload.UserID).Scan(&followersCount)
+	server.store.GetDB().QueryRowContext(ctx, "SELECT COUNT(*) FROM relationships WHERE user_id = $1 AND type = 'follow' AND status = 'active'", authPayload.UserID).Scan(&followingCount)
 	
 	rsp.FollowersCount = followersCount
 	rsp.FollowingCount = followingCount

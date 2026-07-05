@@ -38,6 +38,8 @@ type Querier interface {
 	CountArchivedStories(ctx context.Context, userID uuid.UUID) (int64, error)
 	CountConnectionRequestsToday(ctx context.Context, requesterID uuid.UUID) (int64, error)
 	CountCrossingsToday(ctx context.Context, userID1 uuid.UUID) (int64, error)
+	CountFollowers(ctx context.Context, targetUserID uuid.UUID) (int64, error)
+	CountFollowing(ctx context.Context, userID uuid.UUID) (int64, error)
 	// Admin: Count notifications
 	CountNotificationsAdmin(ctx context.Context) (int64, error)
 	CountPostsByUserID(ctx context.Context, userID uuid.UUID) (int64, error)
@@ -73,6 +75,7 @@ type Querier interface {
 	CreatePostComment(ctx context.Context, arg CreatePostCommentParams) (PostComment, error)
 	CreateReel(ctx context.Context, arg CreateReelParams) (CreateReelRow, error)
 	CreateReelComment(ctx context.Context, arg CreateReelCommentParams) (ReelComment, error)
+	CreateRelationship(ctx context.Context, arg CreateRelationshipParams) (Relationship, error)
 	CreateReport(ctx context.Context, arg CreateReportParams) (Report, error)
 	CreateSession(ctx context.Context, arg CreateSessionParams) (Session, error)
 	CreateStory(ctx context.Context, arg CreateStoryParams) (CreateStoryRow, error)
@@ -115,6 +118,7 @@ type Querier interface {
 	DeletePostComment(ctx context.Context, arg DeletePostCommentParams) (uuid.UUID, error)
 	DeleteReel(ctx context.Context, arg DeleteReelParams) error
 	DeleteReelComment(ctx context.Context, arg DeleteReelCommentParams) (uuid.UUID, error)
+	DeleteRelationship(ctx context.Context, arg DeleteRelationshipParams) error
 	// Admin: Delete story
 	DeleteStory(ctx context.Context, id uuid.UUID) error
 	DeleteStoryMentions(ctx context.Context, storyID uuid.UUID) error
@@ -176,6 +180,7 @@ type Querier interface {
 	GetRecentProfileVisitors(ctx context.Context, viewedUserID uuid.UUID) ([]GetRecentProfileVisitorsRow, error)
 	GetReel(ctx context.Context, id uuid.UUID) (GetReelRow, error)
 	GetReelComment(ctx context.Context, id uuid.UUID) (ReelComment, error)
+	GetRelationship(ctx context.Context, arg GetRelationshipParams) (Relationship, error)
 	// Get all reserved usernames
 	GetReservedUsernames(ctx context.Context) ([]string, error)
 	GetSession(ctx context.Context, id uuid.UUID) (Session, error)
@@ -258,6 +263,8 @@ type Querier interface {
 	ListConnections(ctx context.Context, requesterID uuid.UUID) ([]ListConnectionsRow, error)
 	// Get posts from connections AND own posts AND nearby discovery (public posts)
 	ListConnectionsPosts(ctx context.Context, arg ListConnectionsPostsParams) ([]ListConnectionsPostsRow, error)
+	ListFollowers(ctx context.Context, arg ListFollowersParams) ([]ListFollowersRow, error)
+	ListFollowing(ctx context.Context, arg ListFollowingParams) ([]ListFollowingRow, error)
 	ListHighlightsByUserID(ctx context.Context, userID uuid.UUID) ([]ListHighlightsByUserIDRow, error)
 	ListLikedPostsByUserID(ctx context.Context, userID uuid.UUID) ([]Post, error)
 	ListLikedReelsByUserID(ctx context.Context, userID uuid.UUID) ([]Reel, error)
@@ -267,6 +274,7 @@ type Querier interface {
 	ListNotifications(ctx context.Context, arg ListNotificationsParams) ([]ListNotificationsRow, error)
 	// Admin: List all notifications (for admin panel)
 	ListNotificationsAdmin(ctx context.Context, arg ListNotificationsAdminParams) ([]ListNotificationsAdminRow, error)
+	ListPendingFollowRequests(ctx context.Context, arg ListPendingFollowRequestsParams) ([]ListPendingFollowRequestsRow, error)
 	ListPendingRequests(ctx context.Context, targetID uuid.UUID) ([]ListPendingRequestsRow, error)
 	ListPostComments(ctx context.Context, postID uuid.UUID) ([]ListPostCommentsRow, error)
 	ListPostsByHashtag(ctx context.Context, arg ListPostsByHashtagParams) ([]ListPostsByHashtagRow, error)
@@ -279,6 +287,7 @@ type Querier interface {
 	ListSavedPosts(ctx context.Context, arg ListSavedPostsParams) ([]ListSavedPostsRow, error)
 	ListSavedReels(ctx context.Context, arg ListSavedReelsParams) ([]ListSavedReelsRow, error)
 	ListSentConnectionRequests(ctx context.Context, requesterID uuid.UUID) ([]ListSentConnectionRequestsRow, error)
+	ListSentFollowRequests(ctx context.Context, arg ListSentFollowRequestsParams) ([]ListSentFollowRequestsRow, error)
 	ListTrendingCategories(ctx context.Context, arg ListTrendingCategoriesParams) ([]ListTrendingCategoriesRow, error)
 	ListTrendingHashtagsPaginated(ctx context.Context, arg ListTrendingHashtagsPaginatedParams) ([]Hashtag, error)
 	ListTrendingNearbyPosts(ctx context.Context, arg ListTrendingNearbyPostsParams) ([]ListTrendingNearbyPostsRow, error)
@@ -335,6 +344,7 @@ type Querier interface {
 	UpdatePostCommentFlag(ctx context.Context, arg UpdatePostCommentFlagParams) error
 	UpdateReel(ctx context.Context, arg UpdateReelParams) (Reel, error)
 	UpdateReelCommentFlag(ctx context.Context, arg UpdateReelCommentFlagParams) error
+	UpdateRelationshipStatus(ctx context.Context, arg UpdateRelationshipStatusParams) (Relationship, error)
 	UpdateStory(ctx context.Context, arg UpdateStoryParams) (UpdateStoryRow, error)
 	UpdateSupportTicketStatus(ctx context.Context, arg UpdateSupportTicketStatusParams) (SupportTicket, error)
 	UpdateTwoFA(ctx context.Context, arg UpdateTwoFAParams) (User, error)

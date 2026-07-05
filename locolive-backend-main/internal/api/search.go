@@ -288,12 +288,15 @@ func (server *Server) searchUsersInternal(ctx *gin.Context, query string, viewer
 		}
 		connStatus := "none"
 		if viewerID != uuid.Nil {
-			conn, err := server.store.GetConnection(ctx, db.GetConnectionParams{
-				RequesterID: viewerID,
-				TargetID:    u.ID,
+			rel, err1 := server.store.GetRelationship(ctx, db.GetRelationshipParams{
+				UserID:       viewerID,
+				TargetUserID: u.ID,
+				Type:         "follow",
 			})
-			if err == nil {
-				connStatus = string(conn.Status)
+			if err1 == nil && rel.Status == "active" {
+				connStatus = "accepted"
+			} else if err1 == nil && rel.Status == "pending" {
+				connStatus = "pending"
 			}
 		}
 

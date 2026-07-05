@@ -112,6 +112,8 @@ func (server *Server) setupRouter() {
 	activeRoutes.GET("/me/following", server.listMeFollowing)
 
 	// Target user endpoints (/users/:id/*) - for viewing other profiles with privacy checks
+	activeRoutes.POST("/users/:id/follow", server.followUser)
+	activeRoutes.POST("/users/:id/unfollow", server.unfollowUser)
 	activeRoutes.GET("/users/:id/connections", server.listUserConnections)
 	activeRoutes.GET("/users/:id/followers", server.listUserFollowers)
 	activeRoutes.GET("/users/:id/following", server.listUserFollowing)

@@ -397,6 +397,36 @@ func (mr *MockStoreMockRecorder) CountCrossingsToday(ctx, userID1 any) *gomock.C
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountCrossingsToday", reflect.TypeOf((*MockStore)(nil).CountCrossingsToday), ctx, userID1)
 }
 
+// CountFollowers mocks base method.
+func (m *MockStore) CountFollowers(ctx context.Context, targetUserID uuid.UUID) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountFollowers", ctx, targetUserID)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountFollowers indicates an expected call of CountFollowers.
+func (mr *MockStoreMockRecorder) CountFollowers(ctx, targetUserID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountFollowers", reflect.TypeOf((*MockStore)(nil).CountFollowers), ctx, targetUserID)
+}
+
+// CountFollowing mocks base method.
+func (m *MockStore) CountFollowing(ctx context.Context, userID uuid.UUID) (int64, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CountFollowing", ctx, userID)
+	ret0, _ := ret[0].(int64)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CountFollowing indicates an expected call of CountFollowing.
+func (mr *MockStoreMockRecorder) CountFollowing(ctx, userID any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CountFollowing", reflect.TypeOf((*MockStore)(nil).CountFollowing), ctx, userID)
+}
+
 // CountNotificationsAdmin mocks base method.
 func (m *MockStore) CountNotificationsAdmin(ctx context.Context) (int64, error) {
 	m.ctrl.T.Helper()
@@ -905,6 +935,21 @@ func (m *MockStore) CreateReelComment(ctx context.Context, arg db.CreateReelComm
 func (mr *MockStoreMockRecorder) CreateReelComment(ctx, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateReelComment", reflect.TypeOf((*MockStore)(nil).CreateReelComment), ctx, arg)
+}
+
+// CreateRelationship mocks base method.
+func (m *MockStore) CreateRelationship(ctx context.Context, arg db.CreateRelationshipParams) (db.Relationship, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateRelationship", ctx, arg)
+	ret0, _ := ret[0].(db.Relationship)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateRelationship indicates an expected call of CreateRelationship.
+func (mr *MockStoreMockRecorder) CreateRelationship(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateRelationship", reflect.TypeOf((*MockStore)(nil).CreateRelationship), ctx, arg)
 }
 
 // CreateReport mocks base method.
@@ -1434,6 +1479,20 @@ func (m *MockStore) DeleteReelComment(ctx context.Context, arg db.DeleteReelComm
 func (mr *MockStoreMockRecorder) DeleteReelComment(ctx, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteReelComment", reflect.TypeOf((*MockStore)(nil).DeleteReelComment), ctx, arg)
+}
+
+// DeleteRelationship mocks base method.
+func (m *MockStore) DeleteRelationship(ctx context.Context, arg db.DeleteRelationshipParams) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteRelationship", ctx, arg)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteRelationship indicates an expected call of DeleteRelationship.
+func (mr *MockStoreMockRecorder) DeleteRelationship(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteRelationship", reflect.TypeOf((*MockStore)(nil).DeleteRelationship), ctx, arg)
 }
 
 // DeleteStory mocks base method.
@@ -2282,6 +2341,21 @@ func (m *MockStore) GetReelComment(ctx context.Context, id uuid.UUID) (db.ReelCo
 func (mr *MockStoreMockRecorder) GetReelComment(ctx, id any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetReelComment", reflect.TypeOf((*MockStore)(nil).GetReelComment), ctx, id)
+}
+
+// GetRelationship mocks base method.
+func (m *MockStore) GetRelationship(ctx context.Context, arg db.GetRelationshipParams) (db.Relationship, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetRelationship", ctx, arg)
+	ret0, _ := ret[0].(db.Relationship)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetRelationship indicates an expected call of GetRelationship.
+func (mr *MockStoreMockRecorder) GetRelationship(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetRelationship", reflect.TypeOf((*MockStore)(nil).GetRelationship), ctx, arg)
 }
 
 // GetReservedUsernames mocks base method.
@@ -3297,6 +3371,36 @@ func (mr *MockStoreMockRecorder) ListConnectionsPosts(ctx, arg any) *gomock.Call
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListConnectionsPosts", reflect.TypeOf((*MockStore)(nil).ListConnectionsPosts), ctx, arg)
 }
 
+// ListFollowers mocks base method.
+func (m *MockStore) ListFollowers(ctx context.Context, arg db.ListFollowersParams) ([]db.ListFollowersRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListFollowers", ctx, arg)
+	ret0, _ := ret[0].([]db.ListFollowersRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListFollowers indicates an expected call of ListFollowers.
+func (mr *MockStoreMockRecorder) ListFollowers(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListFollowers", reflect.TypeOf((*MockStore)(nil).ListFollowers), ctx, arg)
+}
+
+// ListFollowing mocks base method.
+func (m *MockStore) ListFollowing(ctx context.Context, arg db.ListFollowingParams) ([]db.ListFollowingRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListFollowing", ctx, arg)
+	ret0, _ := ret[0].([]db.ListFollowingRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListFollowing indicates an expected call of ListFollowing.
+func (mr *MockStoreMockRecorder) ListFollowing(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListFollowing", reflect.TypeOf((*MockStore)(nil).ListFollowing), ctx, arg)
+}
+
 // ListHighlightsByUserID mocks base method.
 func (m *MockStore) ListHighlightsByUserID(ctx context.Context, userID uuid.UUID) ([]db.ListHighlightsByUserIDRow, error) {
 	m.ctrl.T.Helper()
@@ -3415,6 +3519,21 @@ func (m *MockStore) ListNotificationsAdmin(ctx context.Context, arg db.ListNotif
 func (mr *MockStoreMockRecorder) ListNotificationsAdmin(ctx, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListNotificationsAdmin", reflect.TypeOf((*MockStore)(nil).ListNotificationsAdmin), ctx, arg)
+}
+
+// ListPendingFollowRequests mocks base method.
+func (m *MockStore) ListPendingFollowRequests(ctx context.Context, arg db.ListPendingFollowRequestsParams) ([]db.ListPendingFollowRequestsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListPendingFollowRequests", ctx, arg)
+	ret0, _ := ret[0].([]db.ListPendingFollowRequestsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListPendingFollowRequests indicates an expected call of ListPendingFollowRequests.
+func (mr *MockStoreMockRecorder) ListPendingFollowRequests(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListPendingFollowRequests", reflect.TypeOf((*MockStore)(nil).ListPendingFollowRequests), ctx, arg)
 }
 
 // ListPendingRequests mocks base method.
@@ -3580,6 +3699,21 @@ func (m *MockStore) ListSentConnectionRequests(ctx context.Context, requesterID 
 func (mr *MockStoreMockRecorder) ListSentConnectionRequests(ctx, requesterID any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListSentConnectionRequests", reflect.TypeOf((*MockStore)(nil).ListSentConnectionRequests), ctx, requesterID)
+}
+
+// ListSentFollowRequests mocks base method.
+func (m *MockStore) ListSentFollowRequests(ctx context.Context, arg db.ListSentFollowRequestsParams) ([]db.ListSentFollowRequestsRow, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "ListSentFollowRequests", ctx, arg)
+	ret0, _ := ret[0].([]db.ListSentFollowRequestsRow)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// ListSentFollowRequests indicates an expected call of ListSentFollowRequests.
+func (mr *MockStoreMockRecorder) ListSentFollowRequests(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ListSentFollowRequests", reflect.TypeOf((*MockStore)(nil).ListSentFollowRequests), ctx, arg)
 }
 
 // ListTrendingCategories mocks base method.
@@ -4318,6 +4452,21 @@ func (m *MockStore) UpdateReelCommentFlag(ctx context.Context, arg db.UpdateReel
 func (mr *MockStoreMockRecorder) UpdateReelCommentFlag(ctx, arg any) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateReelCommentFlag", reflect.TypeOf((*MockStore)(nil).UpdateReelCommentFlag), ctx, arg)
+}
+
+// UpdateRelationshipStatus mocks base method.
+func (m *MockStore) UpdateRelationshipStatus(ctx context.Context, arg db.UpdateRelationshipStatusParams) (db.Relationship, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateRelationshipStatus", ctx, arg)
+	ret0, _ := ret[0].(db.Relationship)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateRelationshipStatus indicates an expected call of UpdateRelationshipStatus.
+func (mr *MockStoreMockRecorder) UpdateRelationshipStatus(ctx, arg any) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateRelationshipStatus", reflect.TypeOf((*MockStore)(nil).UpdateRelationshipStatus), ctx, arg)
 }
 
 // UpdateStory mocks base method.

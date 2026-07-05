@@ -31,6 +31,13 @@ type createStoryRequest struct {
 	IsAnonymous  bool            `json:"is_anonymous"`
 	ShowLocation bool            `json:"show_location"`
 	CropSettings json.RawMessage `json:"crop_settings"`
+	Width        *int32          `json:"width,omitempty"`
+	Height       *int32          `json:"height,omitempty"`
+	AspectRatio  *float64        `json:"aspect_ratio,omitempty"`
+	BlurHash     *string         `json:"blur_hash,omitempty"`
+	Duration     *int32          `json:"duration,omitempty"`
+	FileSize     *int32          `json:"file_size,omitempty"`
+	MimeType     *string         `json:"mime_type,omitempty"`
 }
 
 func (server *Server) createStory(ctx *gin.Context) {
@@ -84,6 +91,13 @@ func (server *Server) createStory(ctx *gin.Context) {
 		IsAnonymous:  req.IsAnonymous,
 		ShowLocation: req.ShowLocation,
 		CropSettings: req.CropSettings,
+		Width:        req.Width,
+		Height:       req.Height,
+		AspectRatio:  req.AspectRatio,
+		BlurHash:     req.BlurHash,
+		Duration:     req.Duration,
+		FileSize:     req.FileSize,
+		MimeType:     req.MimeType,
 	})
 	if err != nil {
 		ctx.JSON(http.StatusInternalServerError, errorResponse(err))

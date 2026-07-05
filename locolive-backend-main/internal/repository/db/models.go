@@ -73,6 +73,16 @@ const (
 	NotificationTypeReelLiked          NotificationType = "reel_liked"
 	NotificationTypeReelCommented      NotificationType = "reel_commented"
 	NotificationTypeCommentMention     NotificationType = "comment_mention"
+	NotificationTypeFollow             NotificationType = "follow"
+	NotificationTypeLike               NotificationType = "like"
+	NotificationTypeComment            NotificationType = "comment"
+	NotificationTypePostLiked          NotificationType = "post_liked"
+	NotificationTypePostCommented      NotificationType = "post_commented"
+	NotificationTypeTag                NotificationType = "tag"
+	NotificationTypeShare              NotificationType = "share"
+	NotificationTypeLive               NotificationType = "live"
+	NotificationTypeBusiness           NotificationType = "business"
+	NotificationTypeSystem             NotificationType = "system"
 )
 
 func (e *NotificationType) Scan(src interface{}) error {
@@ -108,6 +118,95 @@ func (ns NullNotificationType) Value() (driver.Value, error) {
 		return nil, nil
 	}
 	return string(ns.NotificationType), nil
+}
+
+type RelationshipStatus string
+
+const (
+	RelationshipStatusPending RelationshipStatus = "pending"
+	RelationshipStatusActive  RelationshipStatus = "active"
+	RelationshipStatusBlocked RelationshipStatus = "blocked"
+)
+
+func (e *RelationshipStatus) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = RelationshipStatus(s)
+	case string:
+		*e = RelationshipStatus(s)
+	default:
+		return fmt.Errorf("unsupported scan type for RelationshipStatus: %T", src)
+	}
+	return nil
+}
+
+type NullRelationshipStatus struct {
+	RelationshipStatus RelationshipStatus `json:"relationship_status"`
+	Valid              bool               `json:"valid"` // Valid is true if RelationshipStatus is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullRelationshipStatus) Scan(value interface{}) error {
+	if value == nil {
+		ns.RelationshipStatus, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.RelationshipStatus.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullRelationshipStatus) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.RelationshipStatus), nil
+}
+
+type RelationshipType string
+
+const (
+	RelationshipTypeFollow      RelationshipType = "follow"
+	RelationshipTypeCloseFriend RelationshipType = "close_friend"
+	RelationshipTypeBusiness    RelationshipType = "business"
+	RelationshipTypeFavorite    RelationshipType = "favorite"
+	RelationshipTypeMute        RelationshipType = "mute"
+	RelationshipTypeBlock       RelationshipType = "block"
+)
+
+func (e *RelationshipType) Scan(src interface{}) error {
+	switch s := src.(type) {
+	case []byte:
+		*e = RelationshipType(s)
+	case string:
+		*e = RelationshipType(s)
+	default:
+		return fmt.Errorf("unsupported scan type for RelationshipType: %T", src)
+	}
+	return nil
+}
+
+type NullRelationshipType struct {
+	RelationshipType RelationshipType `json:"relationship_type"`
+	Valid            bool             `json:"valid"` // Valid is true if RelationshipType is not NULL
+}
+
+// Scan implements the Scanner interface.
+func (ns *NullRelationshipType) Scan(value interface{}) error {
+	if value == nil {
+		ns.RelationshipType, ns.Valid = "", false
+		return nil
+	}
+	ns.Valid = true
+	return ns.RelationshipType.Scan(value)
+}
+
+// Value implements the driver Valuer interface.
+func (ns NullRelationshipType) Value() (driver.Value, error) {
+	if !ns.Valid {
+		return nil, nil
+	}
+	return string(ns.RelationshipType), nil
 }
 
 type ReportReason string
@@ -462,6 +561,10 @@ type Notification struct {
 	CreatedAt         time.Time        `json:"created_at"`
 	SubType           sql.NullString   `json:"sub_type"`
 	Sound             sql.NullString   `json:"sound"`
+	ReadAt            sql.NullTime     `json:"read_at"`
+	SeenAt            sql.NullTime     `json:"seen_at"`
+	RelatedPostID     uuid.NullUUID    `json:"related_post_id"`
+	RelatedReelID     uuid.NullUUID    `json:"related_reel_id"`
 }
 
 type NotificationPreference struct {
@@ -512,23 +615,33 @@ type Place struct {
 }
 
 type Post struct {
-	ID            uuid.UUID             `json:"id"`
-	UserID        uuid.UUID             `json:"user_id"`
-	MediaUrl      string                `json:"media_url"`
-	MediaType     string                `json:"media_type"`
-	Caption       sql.NullString        `json:"caption"`
-	LocationName  sql.NullString        `json:"location_name"`
-	Geohash       sql.NullString        `json:"geohash"`
-	Geom          interface{}           `json:"geom"`
-	LikesCount    int32                 `json:"likes_count"`
-	CommentsCount int32                 `json:"comments_count"`
-	CreatedAt     time.Time             `json:"created_at"`
-	UpdatedAt     time.Time             `json:"updated_at"`
-	BodyText      sql.NullString        `json:"body_text"`
-	SharesCount   int32                 `json:"shares_count"`
-	CropSettings  pqtype.NullRawMessage `json:"crop_settings"`
-	SavesCount    int32                 `json:"saves_count"`
-	CategoryID    uuid.NullUUID         `json:"category_id"`
+	ID              uuid.UUID             `json:"id"`
+	UserID          uuid.UUID             `json:"user_id"`
+	MediaUrl        string                `json:"media_url"`
+	MediaType       string                `json:"media_type"`
+	Caption         sql.NullString        `json:"caption"`
+	LocationName    sql.NullString        `json:"location_name"`
+	Geohash         sql.NullString        `json:"geohash"`
+	Geom            interface{}           `json:"geom"`
+	LikesCount      int32                 `json:"likes_count"`
+	CommentsCount   int32                 `json:"comments_count"`
+	CreatedAt       time.Time             `json:"created_at"`
+	UpdatedAt       time.Time             `json:"updated_at"`
+	BodyText        sql.NullString        `json:"body_text"`
+	SharesCount     int32                 `json:"shares_count"`
+	CropSettings    pqtype.NullRawMessage `json:"crop_settings"`
+	SavesCount      int32                 `json:"saves_count"`
+	CategoryID      uuid.NullUUID         `json:"category_id"`
+	Width           sql.NullInt32         `json:"width"`
+	Height          sql.NullInt32         `json:"height"`
+	AspectRatio     sql.NullFloat64       `json:"aspect_ratio"`
+	ThumbnailUrl    sql.NullString        `json:"thumbnail_url"`
+	BlurHash        sql.NullString        `json:"blur_hash"`
+	Duration        sql.NullInt32         `json:"duration"`
+	FileSize        sql.NullInt32         `json:"file_size"`
+	MimeType        sql.NullString        `json:"mime_type"`
+	EngagementScore float64               `json:"engagement_score"`
+	WatchTimeScore  float64               `json:"watch_time_score"`
 }
 
 type PostComment struct {
@@ -584,21 +697,31 @@ type ProfileView struct {
 }
 
 type Reel struct {
-	ID            uuid.UUID      `json:"id"`
-	UserID        uuid.UUID      `json:"user_id"`
-	VideoUrl      string         `json:"video_url"`
-	Caption       sql.NullString `json:"caption"`
-	IsAiGenerated bool           `json:"is_ai_generated"`
-	LocationName  sql.NullString `json:"location_name"`
-	Geohash       sql.NullString `json:"geohash"`
-	Geom          interface{}    `json:"geom"`
-	LikesCount    int32          `json:"likes_count"`
-	CommentsCount int32          `json:"comments_count"`
-	SharesCount   int32          `json:"shares_count"`
-	SavesCount    int32          `json:"saves_count"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
-	CategoryID    uuid.NullUUID  `json:"category_id"`
+	ID              uuid.UUID       `json:"id"`
+	UserID          uuid.UUID       `json:"user_id"`
+	VideoUrl        string          `json:"video_url"`
+	Caption         sql.NullString  `json:"caption"`
+	IsAiGenerated   bool            `json:"is_ai_generated"`
+	LocationName    sql.NullString  `json:"location_name"`
+	Geohash         sql.NullString  `json:"geohash"`
+	Geom            interface{}     `json:"geom"`
+	LikesCount      int32           `json:"likes_count"`
+	CommentsCount   int32           `json:"comments_count"`
+	SharesCount     int32           `json:"shares_count"`
+	SavesCount      int32           `json:"saves_count"`
+	CreatedAt       time.Time       `json:"created_at"`
+	UpdatedAt       time.Time       `json:"updated_at"`
+	CategoryID      uuid.NullUUID   `json:"category_id"`
+	Width           sql.NullInt32   `json:"width"`
+	Height          sql.NullInt32   `json:"height"`
+	AspectRatio     sql.NullFloat64 `json:"aspect_ratio"`
+	ThumbnailUrl    sql.NullString  `json:"thumbnail_url"`
+	BlurHash        sql.NullString  `json:"blur_hash"`
+	Duration        sql.NullInt32   `json:"duration"`
+	FileSize        sql.NullInt32   `json:"file_size"`
+	MimeType        sql.NullString  `json:"mime_type"`
+	EngagementScore float64         `json:"engagement_score"`
+	WatchTimeScore  float64         `json:"watch_time_score"`
 }
 
 type ReelComment struct {
@@ -627,6 +750,15 @@ type ReelSafe struct {
 	ReelID    uuid.UUID `json:"reel_id"`
 	UserID    uuid.UUID `json:"user_id"`
 	CreatedAt time.Time `json:"created_at"`
+}
+
+type Relationship struct {
+	ID           uuid.UUID          `json:"id"`
+	UserID       uuid.UUID          `json:"user_id"`
+	TargetUserID uuid.UUID          `json:"target_user_id"`
+	Type         RelationshipType   `json:"type"`
+	Status       RelationshipStatus `json:"status"`
+	CreatedAt    time.Time          `json:"created_at"`
 }
 
 type Report struct {
@@ -676,6 +808,13 @@ type Story struct {
 	IsPremium    sql.NullBool          `json:"is_premium"`
 	ShowLocation bool                  `json:"show_location"`
 	CropSettings pqtype.NullRawMessage `json:"crop_settings"`
+	Width        sql.NullInt32         `json:"width"`
+	Height       sql.NullInt32         `json:"height"`
+	AspectRatio  sql.NullFloat64       `json:"aspect_ratio"`
+	BlurHash     sql.NullString        `json:"blur_hash"`
+	Duration     sql.NullInt32         `json:"duration"`
+	FileSize     sql.NullInt32         `json:"file_size"`
+	MimeType     sql.NullString        `json:"mime_type"`
 }
 
 type StoryMention struct {

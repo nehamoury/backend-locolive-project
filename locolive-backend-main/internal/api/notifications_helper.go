@@ -59,6 +59,12 @@ func (server *Server) createNotificationWithSound(
 	if val, ok := relatedIDs["crossing"]; ok {
 		arg.RelatedCrossingID = uuid.NullUUID{UUID: val, Valid: true}
 	}
+	if val, ok := relatedIDs["post"]; ok {
+		arg.RelatedPostID = uuid.NullUUID{UUID: val, Valid: true}
+	}
+	if val, ok := relatedIDs["reel"]; ok {
+		arg.RelatedReelID = uuid.NullUUID{UUID: val, Valid: true}
+	}
 
 	notif, err := server.store.CreateNotification(ctx, arg)
 	if err != nil {
@@ -91,6 +97,8 @@ func (server *Server) createNotificationWithSound(
 				"created_at":      notif.CreatedAt,
 				"is_read":         notif.IsRead,
 				"related_user_id": notif.RelatedUserID.UUID.String(),
+				"related_post_id": notif.RelatedPostID.UUID.String(),
+				"related_reel_id": notif.RelatedReelID.UUID.String(),
 				"sound":           notif.Sound.String,
 			},
 		})
